@@ -1,0 +1,94 @@
+name: Release
+
+# On every push to main: validate (ci.yml), then semantic-release reads the conventional commits since the last tag.
+# When they call for a release (feat, fix, perf, revert, or a breaking change), it writes the version into every
+# manifest listed in .version-bump.json (scripts/bump-version.sh), commits them to main as
+# "chore(release): X.Y.Z [skip ci]", tags that commit X.Y.Z (no "v"), and creates the GitHub release. Then a pull
+# request on waffleparty/marketplace moves the waffle entry's ref to the new tag.
+on:
+  push:
+    branches: [main]
+
+# One run at a time, so 2 runs cannot pick the same version or race on the release commit.
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Semantic release
+    needs: validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the release commit and tag
+      issues: write # @semantic-release/github
+      pull-requests: write # @semantic-release/github
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Run semantic-release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The successCmd in .releaserc.json writes .release-version, only when a release was made.
+      - name: Read released version
+        id: version
+        run: |
+          if [[ -f .release-version ]]; then
+            echo "version=$(cat .release-version)" >>"$GITHUB_OUTPUT"
+          fi
+
+  marketplace:
+    name: Update marketplace
+    needs: release
+    # Needs a waffleparty GitHub App with contents and pull-requests write on waffleparty/marketplace: repository
+    # variable MARKETPLACE_APP_ID and secret MARKETPLACE_APP_PRIVATE_KEY. This job is skipped until they exist.
+    if: needs.release.outputs.version != '' && vars.MARKETPLACE_APP_ID != ''
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/create-github-app-token@v3.4.0
+        id: token
+        with:
+          app-id: ${{ vars.MARKETPLACE_APP_ID }}
+          private-key: ${{ secrets.MARKETPLACE_APP_PRIVATE_KEY }}
+          owner: waffleparty
+          repositories: marketplace
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: waffleparty/marketplace
+          token: ${{ steps.token.outputs.token }}
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          branch="waffle-${VERSION}"
+          file=.claude-plugin/marketplace.json
+          tmp="$(mktemp)"
+          jq --arg v "${VERSION}" \
+            '(.plugins[] | select(.name == "waffle")) |= (.version = $v | .source.ref = $v)' \
+            "${file}" >"${tmp}"
+          cat "${tmp}" >"${file}"
+          git config user.name "waffleparty-release[bot]"
+          git config user.email "waffleparty-release[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git commit -am "feat: waffle ${VERSION}"
+          git push origin "${branch}"
+          gh pr create \
+            --title "feat: waffle ${VERSION}" \
+            --body "Moves the waffle entry to release [${VERSION}](https://github.com/waffleparty/waffle/releases/tag/${VERSION})."
