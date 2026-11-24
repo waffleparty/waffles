@@ -85,7 +85,7 @@ jobs:
             "${file}" >"${tmp}"
           cat "${tmp}" >"${file}"
           git config user.name "waffleparty-release[bot]"
-          git config user.email "waffleparty-release[bot]@users.noreply.github.com"
+          git config user.email "360843544+waffleparty-release[bot]@users.noreply.github.com"
           git switch -c "${branch}"
           git commit -am "feat: waffle ${VERSION}"
           git push origin "${branch}"
