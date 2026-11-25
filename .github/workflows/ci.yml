@@ -17,3 +17,23 @@ jobs:
       # jq (used by scripts/bump-version.sh) and pipx are preinstalled on ubuntu-latest.
       - name: Run pre-commit
         run: pipx run pre-commit==4.7.0 run --all-files --show-diff-on-failure
+
+  plugin:
+    name: Plugin
+    runs-on: ubuntu-latest
+    env:
+      # The Claude Code version that validates the manifests and runs the hook tests.
+      CLAUDE_CODE: "@anthropic-ai/claude-code@2.1.332"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 26
+      - name: Validate the plugin
+        run: npx --yes "$CLAUDE_CODE" plugin validate .
+      # Runs every hooks/**/*.test.ts(x) in Claude Code's hook environment.
+      - name: Test the hooks
+        run: npx --yes "$CLAUDE_CODE" plugin test
+      # Standard library only; python3 is preinstalled on ubuntu-latest.
+      - name: Test the scripts
+        run: python3 -m unittest discover -s scripts -p '*_test.py'
