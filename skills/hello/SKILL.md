@@ -1,6 +1,6 @@
 ---
 name: hello
-description: Test skill that greets its argument. Use only when the user invokes it by name, such as /waffle:hello world.
+description: Test skill that greets its argument. Use only when the user invokes it by name, such as /waffles:hello world.
 ---
 
 # Hello

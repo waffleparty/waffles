@@ -1,0 +1,663 @@
+<title>Surface Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  UX review page template. Copy it, then replace every FILL comment and the example content.
+
+  - Title: "<Surface> Review", two to four words.
+  - Product tokens: set the --p-* values in :root from the styles you measured in the running app,
+    for the theme the crops were taken in. Mockups use only these variables.
+  - Product mockup styles: add your .m-* classes in the marked block. Name them after what they draw
+    (.m-title, .m-row, .m-quote), and keep them faithful to the measured type and spacing.
+  - The carousel shows one .slide at a time: the overview first (what's wrong visually, the areas,
+    then the functional findings), then each suggestion.
+  - Suggestions are grouped by area: put each area's suggestions together and give each one
+    data-area="<area name>". The script shows the area above the title, in the position label, and
+    as a gap in the dots where a new area starts. Shared suggestions (type scale, page shell) use
+    data-area="Across the page" and come first.
+  - Number suggestions 01, 02, … across the whole page. Each is a <section class="slide suggestion" data-suggestion="N" data-area="...">. Inside .frames,
+    every option is a .frame with data-option: "before" for today's crop, then "A", "B", ... Options stack
+    full width with labels left-aligned; a surface narrower than the page is centred in its matte.
+    The script adds each option's checkbox (the picker) and makes clicking an option open it at true size. One frame carries data-recommended. Picking is
+    done by clicking a frame; the script adds that behaviour and the notes field, so write no picker markup.
+  - Before crops: <div class="shot"><img src="shots/<name>.jpg" alt="..."></div>, published via files,
+    captured at 1x so clicking an option shows it at true size.
+  - After mockups: <div class="fit"><div class="m" style="--w:<real surface width>px">...</div></div>.
+    The script scales them to the column; keep --w at the surface's true width.
+  - picks.json is published alongside the page with {"status":"open"}. Submit opens a dialog with the
+    overall notes and the next step: "build" (Finalize) or "regenerate" (Regenerate). Its action
+    republishes only picks.json, with that step in "action", then sends a one-line comment to Claude,
+    which wakes the watching session. Publish with capabilities {artifact: {}, comments: {}}.
+-->
+<style>
+/* Page chrome is light only: warm off-white, ink text, hairlines, small
+   tracked labels, lime only on buttons. Dark product UI (crops and mockups) always sits inside a
+   .shot or .fit frame: a light matte around it. Mockups use the --p-* tokens. */
+:root {
+  color-scheme: light;
+  --bg: #FCFCFB; --wash: #F9F9F7; --ink: #2E2C27; --soft: #6B6A63; --grey: #A9A89E;
+  --hair: #E4E3DC; --edge: #E1E1DF; --fill: #F1F1EC; --lime: #BADA55; --lime-hover: #CCFF00;
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* FILL: the product's own tokens, measured from the running app. */
+  --p-surface: #2E2E2E; --p-sunken: #262626; --p-raised: #343434; --p-border: #424242; --p-sep: #383838;
+  --p-text: #EDEDED; --p-text2: #C9C9C9; --p-quiet: #A3A3A3; --p-accent: #00C4AC;
+  --p-ok: #3ccf8e; --p-warn: #e9a23b; --p-danger: #f0857b;
+  --p-font: -apple-system, "system-ui", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.band-top { background: var(--wash); border-bottom: 1px solid var(--edge); }
+.inner { max-width: 1420px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { padding-block: 34px 30px; display: flex; flex-direction: column; gap: 6px; }
+.page { padding-block: 42px 140px; display: flex; flex-direction: column; gap: 56px; }
+.narrow { max-width: 860px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+h2 { font-size: 11.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; }
+h3 { font-size: 16px; font-weight: 700; letter-spacing: -0.005em; line-height: 1.3; }
+p { margin: 0; }
+a { color: inherit; text-decoration: underline; text-decoration-color: var(--grey); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.meta { color: var(--grey); font-size: 12.5px; }
+.lede { font-size: 15px; color: var(--soft); max-width: 72ch; margin-top: 6px; }
+.section-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.section-head p { color: var(--soft); font-size: 14px; max-width: 74ch; }
+
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px 28px; }
+.principle { display: flex; flex-direction: column; gap: 3px; }
+.principle b { font-size: 15px; font-weight: 700; }
+.principle p { font-size: 14px; color: var(--soft); }
+
+.slide { scroll-margin-top: 24px; }
+.slide[hidden] { display: none; }
+.overview { display: flex; flex-direction: column; gap: 48px; }
+.suggestion { display: flex; flex-direction: column; gap: 20px; }
+.s-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; align-items: center; }
+.s-num { grid-row: span 2; align-self: start; width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid var(--edge); border-radius: 8px; background: var(--fill); font-size: 20px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.s-head:has(.s-area) .s-num { grid-row: span 3; }
+.s-area { font-size: 11.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--grey); }
+.s-head h3 { font-size: 18px; }
+.s-head p { color: var(--soft); font-size: 14px; max-width: 80ch; }
+/* Options stack full width, before first, so labels share one left edge and every matte is the same
+   width. A surface narrower than the page is centred inside its matte. The left gutter (the width of
+   the number tile plus its gap) holds each option's checkbox, under the number; labels line up with
+   the decision title. Clicking an option opens it at true size; only the checkbox picks. */
+.frames { display: flex; flex-direction: column; gap: 44px; padding-left: 64px; }
+.frame { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; border-radius: 8px; outline: 2px solid transparent; outline-offset: 6px; cursor: zoom-in; }
+.frame:hover .shot, .frame:hover .fit { border-color: var(--grey); }
+.frame:focus-visible { outline-color: var(--ink); }
+.check { position: absolute; left: -53px; top: -1px; width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border-radius: 6px; border: 1.5px solid var(--grey); background: #FFFFFF; color: transparent; cursor: pointer; }
+.check svg { width: 17px; height: 17px; }
+.check:hover { border-color: var(--soft); color: var(--hair); }
+.check[aria-checked="true"] { background: var(--lime); border-color: var(--lime); color: #000000; }
+.check:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.scale-note { margin-left: auto; font-size: 12.5px; color: var(--grey); font-variant-numeric: tabular-nums; }
+.scale-note:empty { display: none; }
+.frame-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; }
+.frame-label strong { font-weight: 700; }
+.tag { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+.tag.before { color: var(--grey); }
+.frame-note { font-size: 13.5px; color: var(--soft); max-width: 70ch; }
+.shot, .fit { position: relative; display: flex; justify-content: center; align-items: flex-start; padding: 10px; border-radius: 8px; border: 1px solid var(--edge); background: var(--fill); }
+.shot img { display: block; width: auto; max-width: 100%; height: auto; border-radius: 4px; }
+.fit > .m { flex: none; border-radius: 4px; overflow: hidden; }
+
+/* Open: clicking an option shows it at true size, full screen. It never picks the option. */
+.lightbox { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg); }
+.lightbox[hidden] { display: none; }
+.lightbox-bar { display: flex; align-items: center; gap: 10px; padding: 12px max(16px, env(safe-area-inset-left, 0px)); background: var(--wash); border-bottom: 1px solid var(--edge); font-size: 14px; }
+.lightbox-bar strong { font-weight: 700; }
+.lightbox-bar .meta { margin-left: auto; }
+.lightbox-close { font: 600 13px/1 var(--font); padding: 9px 14px; border-radius: 8px; border: 1px solid var(--edge); background: transparent; color: var(--ink); cursor: pointer; }
+.lightbox-close:hover { background: var(--fill); }
+.lightbox-body { flex: 1; overflow: auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)); }
+.lightbox-body:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.lightbox-stage { width: max-content; margin: 0 auto; padding: 10px; border-radius: 8px; border: 1px solid var(--edge); background: var(--fill); }
+.lightbox-stage img { display: block; max-width: none; border-radius: 4px; }
+.lightbox-stage > .m { border-radius: 4px; overflow: hidden; }
+html.lightbox-open { overflow: hidden; }
+
+/* Notes field, added by the script under each suggestion's frames. */
+.pick { padding-top: 16px; border-top: 1px solid var(--hair); }
+.pick textarea, .submit-dialog textarea { width: 100%; min-height: 34px; resize: vertical; font: 14px/1.45 var(--font); color: var(--ink); background: var(--bg); border: 1px solid var(--edge); border-radius: 8px; padding: 7px 10px; }
+.pick textarea::placeholder, .submit-dialog textarea::placeholder { color: var(--grey); }
+
+.areas { display: flex; flex-direction: column; }
+.areas .row { display: grid; grid-template-columns: 14rem minmax(0, 1fr) auto; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--hair); align-items: baseline; font-size: 14px; }
+.areas .row:first-child { border-top: 1px solid var(--hair); }
+.areas .row span:first-child { font-weight: 700; }
+.areas .row span:last-child { color: var(--grey); font-variant-numeric: tabular-nums; }
+
+.ledger { display: flex; flex-direction: column; }
+.ledger .row { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--hair); align-items: baseline; font-size: 14px; }
+.ledger .row:first-child { border-top: 1px solid var(--hair); }
+.ledger code { font-family: var(--mono); font-size: 12px; color: var(--grey); }
+.sev { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--grey); }
+.sev.high { color: var(--ink); }
+.sev.med { color: var(--soft); }
+
+.submit-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: color-mix(in srgb, var(--wash) 94%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--edge); padding: 12px max(16px, env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)); }
+.submit-inner { max-width: 1420px; margin: 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px 16px; align-items: center; }
+.submit-bar button, .submit-dialog button { font: 600 13px/1 var(--font); padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.submit-bar button[hidden] { display: none; }
+.submit-bar button:disabled, .submit-dialog button:disabled { opacity: 0.4; cursor: default; }
+#pick-submit, #submit-action { border: 1px solid var(--lime); background: var(--lime); color: var(--ink); }
+#pick-submit:not(:disabled):hover, #submit-action:not(:disabled):hover { background: var(--lime-hover); border-color: var(--lime-hover); }
+.submit-bar .secondary, .submit-dialog .secondary { border: 1px solid var(--edge); background: transparent; color: var(--ink); }
+.submit-bar .secondary:not(:disabled):hover, .submit-dialog .secondary:not(:disabled):hover { background: var(--fill); }
+#pick-notify { grid-column: 3; }
+#pick-submit { grid-column: 4; }
+.submit-status { grid-column: 1 / -1; font-size: 12.5px; color: var(--soft); }
+.submit-status:empty { display: none; }
+
+/* Submit dialog: overall notes, then what Claude does next. */
+.submit-dialog { width: min(560px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--edge); border-radius: 12px; background: var(--bg); color: var(--ink); font-family: var(--font); box-shadow: 0 18px 48px rgba(46, 44, 39, 0.18); }
+.submit-dialog::backdrop { background: rgba(46, 44, 39, 0.32); }
+.submit-dialog form { display: flex; flex-direction: column; gap: 18px; }
+.submit-dialog label, .submit-dialog legend { font-size: 14px; }
+.submit-dialog .field { display: flex; flex-direction: column; gap: 6px; }
+.submit-dialog .field > span, .submit-dialog legend { font-weight: 700; }
+.submit-dialog textarea { min-height: 96px; }
+.submit-dialog fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; }
+.submit-dialog legend { padding: 0; margin-bottom: 4px; }
+.submit-dialog .choice { display: flex; align-items: baseline; gap: 10px; cursor: pointer; }
+.submit-dialog .choice input { accent-color: var(--ink); margin: 0; }
+.submit-dialog .choice small { display: block; color: var(--soft); font-size: 13px; }
+.submit-dialog .actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* Carousel: one suggestion at a time; the dots mark where you are in the queue. */
+.carousel-nav { display: flex; align-items: center; gap: 10px; }
+.dots { display: flex; flex-wrap: wrap; align-items: center; max-width: 360px; }
+.dot.area-start { margin-left: 10px; }
+.submit-bar .dot { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; }
+.dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--grey); opacity: 0.55; }
+.dot:hover::before { opacity: 1; }
+.dot[aria-current="step"]::before { width: 8px; height: 8px; background: var(--ink); opacity: 1; }
+.position { font-size: 12.5px; color: var(--grey); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 8.5em; }
+
+@media (max-width: 900px) {
+  .submit-inner { grid-template-columns: minmax(0, 1fr) auto; }
+  .carousel-nav { grid-column: 1 / -1; justify-content: space-between; }
+  .position { display: none; }
+  #pick-notify, #pick-submit { grid-column: auto; }
+}
+
+/* ---------- Product mockups: the app's own surface at real size, scaled by script to the column ---------- */
+.m { width: var(--w, 660px); background: var(--p-surface); color: var(--p-text); font-family: var(--p-font); font-size: 15px; line-height: 1.55; padding: 28px 32px 32px; }
+.m * { box-sizing: border-box; }
+.m a { color: var(--p-accent); text-decoration: none; }
+/* FILL: .m-* classes for this product's mockups. */
+.m-title { font-size: 24px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+.m-quiet { font-size: 13px; color: var(--p-quiet); }
+</style>
+
+<div class="band-top"><div class="inner">
+  <header class="top narrow">
+    <div class="meta"><!-- FILL: product · scope (e.g. "pending changes on ux-refactor") · date --></div>
+    <h1><!-- FILL: same as <title> -->Surface Review</h1>
+    <p class="lede"><!-- FILL: a summary of the findings in two or three sentences: the verdict, how many decisions, the analysis config, whether another pass is advisable, and anything functional worth knowing. --></p>
+  </header>
+</div></div>
+
+<div class="inner"><div class="page">
+
+  <section id="overview" class="slide overview narrow" data-label="Overview" aria-label="Overview">
+    <div>
+      <div class="section-head"><h2>What's wrong visually</h2><p><!-- FILL: one line --></p></div>
+      <div class="principles">
+        <!-- FILL: each area's named problems under its name, each with measured evidence. -->
+        <div class="principle"><b>No type hierarchy</b><p>The title (18px semibold) is the same size as the section headings (18px medium).</p></div>
+      </div>
+    </div>
+    <div>
+      <div class="section-head"><h2>Areas</h2><p>Suggestions are grouped by what the person is doing.</p></div>
+      <div class="areas">
+        <!-- FILL: one row per area, in page order: name, the job in a few words, its decision numbers. -->
+        <div class="row"><span>Act on an approval</span><span>See what's asked, decide, and confirm it ran</span><span>04–06</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="section-head"><h2>Functional findings</h2><p>Found along the way. Not part of the picks.</p></div>
+      <div class="ledger">
+        <!-- FILL: one row per finding. -->
+        <div class="row"><span class="sev med">Medium</span><span>Problem and fix in one line. <code>src/path/to/file:42</code></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- One section per suggestion, shown one at a time by the carousel. Example: -->
+  <section id="s1" class="slide suggestion" data-suggestion="1" data-area="Across the page" aria-labelledby="s1-h">
+    <div class="s-head"><span class="s-num">01</span><h3 id="s1-h">Give the drawer a real type scale</h3><p>What is wrong in this crop, in one or two sentences.</p></div>
+    <div class="frames">
+      <div class="frame" data-option="before">
+        <div class="frame-label"><span class="tag before">Before</span><strong>What the crop shows</strong></div>
+        <div class="shot"><img src="shots/example.jpg" alt="Describe the crop" loading="lazy"></div>
+      </div>
+      <div class="frame" data-option="A" data-recommended>
+        <div class="frame-label"><span class="tag">After A</span><strong>Name of this direction</strong><span class="meta">Recommended</span></div>
+        <div class="fit"><div class="m" style="--w:660px">
+          <div class="m-title">checkout-api</div>
+          <div class="m-quiet">Payment services · Item</div>
+        </div></div>
+        <p class="frame-note">Why it works, and what it costs.</p>
+      </div>
+    </div>
+  </section>
+</div></div>
+
+<div class="submit-bar" role="region" aria-label="Submit picks">
+  <div class="submit-inner">
+    <nav class="carousel-nav" aria-label="Suggestions">
+      <button type="button" class="secondary" id="nav-prev">‹ Previous</button>
+      <div class="dots" id="nav-dots"></div>
+      <button type="button" class="secondary" id="nav-next">Next ›</button>
+      <span class="position" id="nav-position" aria-live="polite"></span>
+    </nav>
+    <button type="button" id="pick-submit">Submit</button>
+    <div class="submit-status" id="pick-status" role="status"></div>
+  </div>
+</div>
+
+<dialog class="submit-dialog" id="submit-dialog" aria-labelledby="submit-dialog-title">
+  <form method="dialog" id="submit-form">
+    <h3 id="submit-dialog-title">Submit</h3>
+    <label class="field"><span>Notes for the whole review</span>
+      <textarea id="pick-overall" rows="4" placeholder="Optional"></textarea>
+    </label>
+    <fieldset>
+      <legend>Next step</legend>
+      <label class="choice"><input type="radio" name="submit-action" value="build" checked><span>Finalize and build<small>Build the picks, with every note applied.</small></span></label>
+      <label class="choice"><input type="radio" name="submit-action" value="regenerate"><span>Regenerate options with feedback<small>Publish a new review page that redraws the options from these picks and notes.</small></span></label>
+    </fieldset>
+    <div class="actions">
+      <button type="button" class="secondary" id="submit-cancel">Cancel</button>
+      <button type="submit" id="submit-action">Finalize</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" hidden>
+  <div class="lightbox-bar">
+    <span id="lightbox-title"></span>
+    <span class="meta">True size · Esc to close</span>
+    <button type="button" class="lightbox-close" id="lightbox-close">Close</button>
+  </div>
+  <div class="lightbox-body" id="lightbox-body" tabindex="0"><div class="lightbox-stage" id="lightbox-stage"></div></div>
+</div>
+
+<script>
+(function () {
+  // Scale each mockup to its column; mockups are authored at the surface's real width.
+  function fitAll() {
+    document.querySelectorAll('.fit').forEach(function (box) {
+      var inner = box.firstElementChild;
+      if (!inner) return;
+      inner.style.zoom = '';
+      var style = getComputedStyle(box);
+      var natural = inner.offsetWidth;
+      var available = box.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      if (natural > 0 && available > 0) inner.style.zoom = Math.min(1, available / natural);
+    });
+  }
+  window.addEventListener('resize', fitAll);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fitAll); else fitAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
+})();
+
+(function () {
+  // Picker: one choice and an optional note per suggestion. Submit opens a dialog for the overall
+  // notes and the next step; its action publishes picks.json only.
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.suggestion[data-suggestion]'));
+  var state = { picks: {}, notes: '', action: 'build' };
+  var statusEl = document.getElementById('pick-status');
+  var submitEl = document.getElementById('pick-submit');
+  var overallEl = document.getElementById('pick-overall');
+  var dialogEl = document.getElementById('submit-dialog');
+  var formEl = document.getElementById('submit-form');
+  var actionEl = document.getElementById('submit-action');
+  var cancelEl = document.getElementById('submit-cancel');
+  var actionLabels = { build: 'Finalize', regenerate: 'Regenerate' };
+
+  function optionLabel(option) { return option === 'before' ? 'Keep as is' : option; }
+
+  function render() {
+    sections.forEach(function (section) {
+      var id = section.dataset.suggestion, pick = state.picks[id];
+      section.querySelectorAll('.frame[data-option]').forEach(function (frame) {
+        var picked = !!pick && pick.choice === frame.dataset.option;
+        frame.classList.toggle('picked', picked);
+        var check = frame.querySelector('.check');
+        if (check) check.setAttribute('aria-checked', String(picked));
+      });
+      var note = section.querySelector('.pick textarea');
+      if (note && note.value !== (pick ? pick.notes : '')) note.value = pick ? pick.notes : '';
+    });
+    if (overallEl.value !== state.notes) overallEl.value = state.notes;
+    formEl.querySelectorAll('input[name="submit-action"]').forEach(function (input) { input.checked = input.value === state.action; });
+    actionEl.textContent = actionLabels[state.action];
+  }
+
+  function choose(id, option) {
+    var pick = state.picks[id] || { choice: option, notes: '' };
+    pick.choice = option;
+    state.picks[id] = pick;
+    render();
+  }
+
+  sections.forEach(function (section) {
+    var id = section.dataset.suggestion;
+    var frames = Array.prototype.slice.call(section.querySelectorAll('.frame[data-option]'));
+    var recommended = frames.filter(function (f) { return f.hasAttribute('data-recommended'); })[0];
+    if (recommended) state.picks[id] = { choice: recommended.dataset.option, notes: '' };
+
+    var framesEl = section.querySelector('.frames');
+    framesEl.setAttribute('role', 'radiogroup');
+    framesEl.setAttribute('aria-label', 'Pick for suggestion ' + id);
+    frames.forEach(function (frame) {
+      var label = frame.querySelector('.frame-label');
+      var tag = label && label.querySelector('.tag');
+      if (frame.dataset.option === 'before' && label) {
+        var hint = document.createElement('span');
+        hint.className = 'meta';
+        hint.textContent = 'Check to keep as is';
+        label.appendChild(hint);
+      }
+      // The checkbox is the only picker; it behaves as a radio within the decision.
+      var check = document.createElement('button');
+      check.type = 'button';
+      check.className = 'check';
+      check.setAttribute('role', 'radio');
+      check.setAttribute('aria-label', 'Pick ' + (tag ? tag.textContent : frame.dataset.option));
+      check.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.5"/></svg>';
+      check.addEventListener('click', function (event) {
+        event.stopPropagation();
+        choose(id, frame.dataset.option);
+      });
+      // Pinned to the top of the grey matte (appended last so the mockup stays its first child).
+      (frame.querySelector('.shot, .fit') || frame).appendChild(check);
+    });
+
+    var pick = document.createElement('div');
+    pick.className = 'pick';
+    var note = document.createElement('textarea');
+    note.rows = 1;
+    note.placeholder = 'Notes on this decision (optional): what to change in the pick';
+    note.addEventListener('input', function () {
+      var current = state.picks[id] || { choice: null, notes: '' };
+      current.notes = note.value;
+      state.picks[id] = current;
+    });
+    pick.appendChild(note);
+    section.querySelector('.frames').insertAdjacentElement('afterend', pick);
+  });
+  overallEl.addEventListener('input', function () { state.notes = overallEl.value; });
+  formEl.querySelectorAll('input[name="submit-action"]').forEach(function (input) {
+    input.addEventListener('change', function () { if (input.checked) { state.action = input.value; render(); } });
+  });
+
+  // Carousel: one slide at a time (overview, then each suggestion), driven by Previous/Next, the dots,
+  // arrow keys and #<slide id> links.
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var prevEl = document.getElementById('nav-prev');
+  var nextEl = document.getElementById('nav-next');
+  var dotsEl = document.getElementById('nav-dots');
+  var positionEl = document.getElementById('nav-position');
+  var current = 0;
+  // Areas: each suggestion's area shows above its title, and a gap in the dots marks where one starts.
+  sections.forEach(function (section) {
+    var head = section.querySelector('.s-head'), title = head && head.querySelector('h3');
+    if (!section.dataset.area || !title) return;
+    var area = document.createElement('p');
+    area.className = 's-area';
+    area.textContent = section.dataset.area;
+    title.insertAdjacentElement('beforebegin', area);
+  });
+  var dots = slides.map(function (slide, index) {
+    var dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'dot';
+    var previous = slides[index - 1];
+    if (slide.dataset.area && previous && previous.dataset.area && previous.dataset.area !== slide.dataset.area) dot.classList.add('area-start');
+    var title = slide.querySelector('h3');
+    dot.setAttribute('aria-label', slide.dataset.label || (title ? title.textContent : 'Slide ' + (index + 1)));
+    dot.addEventListener('click', function () { show(index); });
+    dotsEl.appendChild(dot);
+    return dot;
+  });
+
+  function show(index) {
+    if (!slides.length) return;
+    current = Math.max(0, Math.min(slides.length - 1, index));
+    slides.forEach(function (slide, i) { slide.hidden = i !== current; });
+    dots.forEach(function (dot, i) {
+      if (i === current) dot.setAttribute('aria-current', 'step'); else dot.removeAttribute('aria-current');
+    });
+    prevEl.disabled = current === 0;
+    nextEl.disabled = current === slides.length - 1;
+    var decision = sections.indexOf(slides[current]);
+    var area = slides[current].dataset.area;
+    positionEl.textContent = decision < 0 ? 'Overview' : (area ? area + ' · ' : '') + 'Decision ' + (decision + 1) + ' of ' + sections.length;
+    try { history.replaceState(null, '', '#' + slides[current].id); } catch (e) {}
+    window.dispatchEvent(new Event('resize'));
+    if (slides[current].getBoundingClientRect().top < 0) slides[current].scrollIntoView({ block: 'start' });
+  }
+
+  function indexForHash() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    return slides.findIndex(function (s) { return s.id === id; });
+  }
+
+  prevEl.addEventListener('click', function () { show(current - 1); });
+  nextEl.addEventListener('click', function () { show(current + 1); });
+  window.addEventListener('hashchange', function () {
+    var index = indexForHash();
+    if (index >= 0) { show(index); slides[index].scrollIntoView({ block: 'start' }); }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (document.documentElement.classList.contains('lightbox-open') || dialogEl.open) return;
+    if (event.target.closest('textarea, input, [contenteditable]') || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'ArrowLeft') { event.preventDefault(); show(current - 1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); show(current + 1); }
+  });
+  show(Math.max(0, indexForHash()));
+
+  // Restore the last submission, so reopening the page shows what was sent.
+  fetch('picks.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (saved) {
+    if (!saved || saved.status !== 'submitted') return;
+    Object.keys(saved.picks || {}).forEach(function (id) { state.picks[id] = saved.picks[id]; });
+    state.notes = saved.notes || '';
+    if (actionLabels[saved.action]) state.action = saved.action;
+    statusEl.textContent = 'Submitted ' + new Date(saved.submittedAt).toLocaleString() + ' (' + actionLabels[state.action].toLowerCase() + '). Submit again to replace it.';
+    render();
+  }).catch(function () {});
+  render();
+
+  // Submit saves picks.json (the record Claude reads), then sends a one-line comment to Claude,
+  // which is what wakes the session that published this page. A new version alone notifies no one.
+  function use(name) {
+    return window.claude && typeof window.claude.use === 'function'
+      ? window.claude.use(name).catch(function () { return null; })
+      : Promise.resolve(null);
+  }
+  var artifactPromise = use('artifact');
+  var commentsPromise = use('comments');
+  artifactPromise.then(function (artifact) {
+    if (!artifact) {
+      submitEl.disabled = true;
+      statusEl.textContent = 'Open this page on claude.ai to submit.';
+    }
+  });
+
+  var errors = {
+    conflict: 'The page changed while you were picking. It will reload; pick again and resubmit.',
+    not_writer: 'Only the page owner can submit picks.',
+    not_granted: 'Saving is turned off for this page.',
+    capability_disabled: 'Saving is not available in this view. Open the page on claude.ai.',
+    rate_limited: 'Too many submits in a row. Wait a moment and try again.',
+    consent_required: 'Allow this page to post comments (Permissions menu), then notify Claude again.'
+  };
+  function errorText(error) {
+    return errors[error && error.code] || ('Something went wrong: ' + ((error && error.message) || 'unknown error') + '.');
+  }
+
+  var lastSummary = '', lastAction = 'build';
+  var notifyEl = document.createElement('button');
+  notifyEl.type = 'button';
+  notifyEl.className = 'secondary';
+  notifyEl.id = 'pick-notify';
+  notifyEl.textContent = 'Notify Claude';
+  notifyEl.hidden = true;
+  submitEl.insertAdjacentElement('beforebegin', notifyEl);
+
+  function notifyClaude() {
+    var action = lastAction;
+    return commentsPromise.then(function (comments) {
+      if (!comments) throw { code: 'no_comments' };
+      return comments.canSendToClaude().then(function (can) {
+        if (can !== 'available') throw { code: 'cannot_send', can: can };
+        return comments.anchorFor(submitEl);
+      }).then(function (anchor) {
+        return comments.sendToClaude({ anchor: anchor, text: lastSummary });
+      });
+    }).then(function () {
+      notifyEl.hidden = true;
+      statusEl.textContent = action === 'regenerate'
+        ? 'Submitted and sent to Claude. It will publish a new review page with redrawn options.'
+        : 'Submitted and sent to Claude. It will build from these picks.';
+    }).catch(function (error) {
+      var code = error && error.code;
+      if (code === 'no_comments' || code === 'cannot_send') {
+        statusEl.textContent = 'Picks saved, but Claude could not be notified from here' + (error.can === 'no_session' ? ' (no Claude session is watching this page)' : '') + '. Tell Claude "' + (action === 'regenerate' ? 'regenerate' : 'picks submitted') + '" in chat.';
+        return;
+      }
+      notifyEl.hidden = false;
+      statusEl.textContent = 'Picks saved. ' + (code === 'claude_unavailable' ? 'Press Notify Claude to send them.' : errorText(error));
+    });
+  }
+
+  notifyEl.addEventListener('click', function () { notifyClaude(); });
+
+  submitEl.addEventListener('click', function () {
+    render();
+    dialogEl.showModal();
+    overallEl.focus();
+  });
+  cancelEl.addEventListener('click', function () { dialogEl.close(); });
+
+  formEl.addEventListener('submit', function (event) {
+    event.preventDefault();
+    dialogEl.close();
+    artifactPromise.then(function (artifact) {
+      if (!artifact) return;
+      var picks = {}, parts = [];
+      sections.forEach(function (s) {
+        var id = s.dataset.suggestion, p = state.picks[id];
+        if (!p || !p.choice) return;
+        picks[id] = { choice: p.choice, notes: (p.notes || '').trim() };
+        parts.push(id + ' ' + optionLabel(p.choice).toLowerCase() + (picks[id].notes ? ' (note)' : ''));
+      });
+      var body = { status: 'submitted', action: state.action, submittedAt: new Date().toISOString(), picks: picks, notes: state.notes.trim() };
+      var lead = state.action === 'regenerate' ? 'UX review regenerate requested: ' : 'UX review picks submitted: ';
+      lastAction = state.action;
+      lastSummary = (lead + parts.join(', ') + (body.notes ? '; plus overall notes' : '') + '. Full picks and notes are in picks.json.').slice(0, 1000);
+      submitEl.disabled = true;
+      statusEl.textContent = 'Submitting…';
+      return artifact.publish({ 'picks.json': { content: JSON.stringify(body, null, 2), contentType: 'application/json' } })
+        .then(notifyClaude, function (error) { statusEl.textContent = errorText(error); })
+        .then(function () { submitEl.disabled = false; });
+    });
+  });
+})();
+
+(function () {
+  // Open: clicking an option (anywhere but its checkbox) shows it at true size, full screen. The
+  // checkbox stops its click from reaching the frame, so picking never opens and opening never picks.
+  var box = document.getElementById('lightbox');
+  var titleEl = document.getElementById('lightbox-title');
+  var stage = document.getElementById('lightbox-stage');
+  var body = document.getElementById('lightbox-body');
+  var closeEl = document.getElementById('lightbox-close');
+  var returnTo = null;
+
+  function scaleOf(media) {
+    if (media.classList.contains('fit')) {
+      var m = media.firstElementChild;
+      return m ? parseFloat(m.style.zoom || '1') : 1;
+    }
+    var img = media.querySelector('img');
+    return img && img.naturalWidth ? img.clientWidth / img.naturalWidth : 1;
+  }
+
+  var notes = [];
+  document.querySelectorAll('.frame').forEach(function (frame) {
+    var media = frame.querySelector('.shot, .fit');
+    var label = frame.querySelector('.frame-label');
+    if (!media || !label) return;
+    var tag = label.querySelector('.tag');
+    frame.tabIndex = 0;
+    frame.setAttribute('role', 'button');
+    frame.setAttribute('aria-label', 'Open ' + (tag ? tag.textContent : 'option') + ' at true size');
+    frame.addEventListener('click', function (event) {
+      if (event.target.closest('a, button, textarea')) return;
+      open(frame, media, frame);
+    });
+    frame.addEventListener('keydown', function (event) {
+      if (event.target !== frame) return;
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(frame, media, frame); }
+    });
+    var note = document.createElement('span');
+    note.className = 'scale-note';
+    label.appendChild(note);
+    notes.push({ note: note, media: media });
+    var img = media.querySelector('img');
+    if (img && !img.complete) img.addEventListener('load', updateScales);
+  });
+
+  function updateScales() {
+    notes.forEach(function (n) {
+      var scale = scaleOf(n.media);
+      n.note.textContent = scale < 0.995 ? 'Shown at ' + Math.round(scale * 100) + '%' : '';
+    });
+  }
+  window.addEventListener('resize', updateScales);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', updateScales); else updateScales();
+
+  function open(frame, media, button) {
+    stage.textContent = '';
+    if (media.classList.contains('fit')) {
+      var m = media.firstElementChild.cloneNode(true);
+      m.style.zoom = '';
+      stage.appendChild(m);
+    } else {
+      var img = media.querySelector('img').cloneNode(true);
+      img.removeAttribute('loading');
+      img.style.width = img.naturalWidth ? img.naturalWidth + 'px' : '';
+      stage.appendChild(img);
+    }
+    var label = frame.querySelector('.frame-label');
+    var tag = label.querySelector('.tag'), name = label.querySelector('strong');
+    titleEl.innerHTML = '';
+    if (tag) titleEl.appendChild(tag.cloneNode(true));
+    if (name) { titleEl.appendChild(document.createTextNode(' ')); titleEl.appendChild(name.cloneNode(true)); }
+    returnTo = button;
+    box.hidden = false;
+    document.documentElement.classList.add('lightbox-open');
+    body.scrollTop = 0; body.scrollLeft = 0;
+    closeEl.focus();
+  }
+
+  function close() {
+    if (box.hidden) return;
+    box.hidden = true;
+    document.documentElement.classList.remove('lightbox-open');
+    stage.textContent = '';
+    if (returnTo) returnTo.focus();
+  }
+
+  closeEl.addEventListener('click', close);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !box.hidden) { event.preventDefault(); close(); }
+  });
+})();
+</script>
