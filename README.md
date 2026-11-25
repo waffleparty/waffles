@@ -1,14 +1,86 @@
 # Waffles
 
-Skills, agents, and hooks for coding agents. One `skills/` folder serves every supported agent; each agent reads its own small manifest.
+Skills, agents, and hooks for coding agents. Waffles gives a coding session a backlog and a loop that builds it, a plan outline that survives `/clear` and compaction, modes for careful and for rapid work, and unattended runs that finish a task through pull requests while you are away. One `skills/` folder serves every supported agent; each agent reads its own small manifest.
 
 ## Install
 
 | Agent | Command |
 | --- | --- |
 | Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
-| Codex | Not in a marketplace yet. |
-| Cursor | Not in a marketplace yet. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
+| Codex | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. |
+| Cursor | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
+
+Skills follow the open Agent Skills format. The hooks (modes, plan outline, auto effort, checkpoint, dev servers pane) and the agents load only in Claude Code. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code.
+
+## Requirements
+
+| Requirement | Needed for |
+| --- | --- |
+| Claude Code | The hooks and the agents. |
+| `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
+| `python3` | The scripts in `scripts/`: the checkpoint, the merge guard, builders, the merge queue, the review branch, the backlog queue, the outline from a plan, and the CI watcher. They use the standard library only. |
+| `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, the merge guard, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
+| The [superpowers](https://github.com/obra/superpowers) plugin, version 7.0.2 | `/waffles:design`, and unattended runs, which design items that need it. |
+| `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
+
+Run `/waffles:init-check` to check the session for these.
+
+## Skills
+
+Run a skill as `/waffles:<name>`. Claude also runs some of them on its own when your request matches. The ones marked "explicit" run only when you type them.
+
+| Command | Purpose |
+| --- | --- |
+| `/waffles:backlog <text>` | Split text into backlog items, or adopt a tracker item by ID. |
+| `/waffles:backlog-review` | Groom items that are not ready by asking you questions one at a time. Explicit. |
+| `/waffles:work-loop` | Build the backlog: background items to builders, the rest with you. Explicit. |
+| `/waffles:design <item>` | Design and plan an item with superpowers before building it. |
+| `/waffles:non-interactive [task]` | Finish a task while you are away, through pull requests. Explicit. |
+| `/waffles:commit-prep` | Get pending changes ready to commit and hand you a paste-ready commit command. Explicit. |
+| `/waffles:dev-server [app]` | Start the project's dev server as a background task. |
+| `/waffles:watch-ci [target]` | Watch the CI/CD runs for the work just pushed, and fix failures. |
+| `/waffles:debate [question]` | Argue a decision from several viewpoints and give a verdict. |
+| `/waffles:ask [topic or file]` | Put the open items of the conversation to you as multiple-choice questions. |
+| `/waffles:ux-review [pages or link]` | Review a web app's UI with before and after mockups you pick from. |
+| `/waffles:init-check` | Check that the session has what waffles needs. |
+| `/waffles:plan` | Open or close the plan outline pane. Explicit. |
+| `/waffles:hello <name>` | Test skill that greets its argument. |
+
+Three commands come from hooks and have no prefix: `/prod`, `/rapid`, and `/backlog-entry` switch modes, and `/auto-effort` turns auto effort on or off.
+
+## Agents
+
+The agents load with the plugin and are available outside the skills that start them. A subagent follows the brief of the agent that started it, and the modes and the plan outline do not apply to it.
+
+| Agent | Model, effort | Purpose |
+| --- | --- | --- |
+| `waffles:test-runner` | Haiku, low | Run tests, linters, and type checks; report failures. Read-only. |
+| `waffles:ci-watcher` | Haiku, low | Wait on CI/CD runs for `watch-ci`; never fixes or approves. |
+| `waffles:implementer` | Sonnet, medium | Build a fully specified piece of work. |
+| `waffles:implementer-hard` | Opus, high | Build a piece that needs judgment: unknown bugs, multi-file refactors, risky areas. |
+| `waffles:reviewer` | Opus, high | Review finished work with fresh eyes. Read-only. |
+| `waffles:decider` | Not set, high | Make one hard decision on someone's behalf. Read-only. Started with the most capable model available. |
+| `waffles:run-reviewer` | Not set, high | Approve a spec or a plan in your place during a run. Read-only. Started with the most capable model available. |
+
+## Hooks
+
+| Hook | What it adds | Documentation |
+| --- | --- | --- |
+| Modes | `/prod`, `/rapid`, and `/backlog-entry`, and a statement of the current mode in every conversation. | [Modes](docs/modes.md) |
+| Plan outline | The `mcp__waffles__plan` tool, the pane, the footer item, and the pull request checklist. | [Plan outline](docs/plan-outline.md) |
+| Auto effort | A per-prompt effort pick, and the footer row. | [Modes](docs/modes.md#auto-effort) |
+| Checkpoint | After `git push` and `gh pr create`, the plan outline is rendered into the pull request; before `gh pr merge`, a guard refuses a merge that would carry `.tmp/`. | [Plan outline](docs/plan-outline.md#the-checklist-in-the-pull-request) |
+| Dev servers | A footer item that lists the dev servers running from the project, and opens one in the browser. | [Skills](docs/skills.md#dev-server) |
+| Unattended runs | Refuses permission prompts and questions during a run, and holds each turn at Extra high effort. | [Unattended runs](docs/unattended-runs.md) |
+
+## Documentation
+
+- [Backlog](docs/backlog.md): the backlog, grooming, the work loop, the adapter, the initialization check, and the tracker fallback.
+- [Design](docs/design.md): designing and planning an item with superpowers.
+- [Modes](docs/modes.md): production, rapid, and backlog mode, mode statements, and auto effort.
+- [Plan outline](docs/plan-outline.md): the tree of goals and steps, the pane, and the pull request checklist.
+- [Unattended runs](docs/unattended-runs.md): what a run does, what stays with you, and the permissions you grant it.
+- [Skills](docs/skills.md): commit prep, dev server, watch CI, debate, ask, and UX review.
 
 ## Layout
 
@@ -19,7 +91,13 @@ waffles/
 ├── .cursor-plugin/plugin.json   Cursor manifest
 ├── skills/<name>/SKILL.md       Agent Skills (https://agentskills.io/specification)
 ├── agents/                      Claude Code subagents
-├── scripts/bump-version.sh      Writes or checks the version in every manifest
+├── hooks/                       Claude Code hooks: modes, plan outline, auto effort, checkpoint, dev servers
+│   ├── hooks.json               Names the module that registers the hooks
+│   └── *.test.ts(x)             Hook tests, run by `claude plugin test`
+├── scripts/                     Python scripts the skills and hooks call, with their tests (*_test.py)
+│   └── bump-version.sh          Writes or checks the version in every manifest
+├── types/                       Type declarations for the hooks
+├── docs/                        User documentation
 └── .version-bump.json           The files and fields that hold the version
 ```
 
@@ -42,7 +120,7 @@ Do not edit `version` fields by hand. To add a file that holds the version, add 
 
 ## Development
 
-Requirements: Node.js 26.13 or later, `jq`, and [pre-commit](https://pre-commit.com/).
+Requirements: Node.js 26.13 or later, `jq`, `python3`, [Claude Code](https://claude.com/claude-code), and [pre-commit](https://pre-commit.com/).
 
 ```sh
 npm ci
@@ -50,6 +128,17 @@ pre-commit install    # installs the pre-commit and commit-msg hooks
 ```
 
 The hooks check JSON and YAML, run ShellCheck, require conventional commit messages, and run `scripts/bump-version.sh --check`.
+
+Check a change before you push it:
+
+```sh
+claude plugin validate .                                     # the manifests, skills, agents, and hooks
+claude plugin test                                           # the hooks' tests
+python3 -m unittest discover -s scripts -p '*_test.py'       # the scripts' tests
+claude --plugin-dir .                                        # try the plugin from this checkout
+```
+
+Inside a session, `/reload-plugins` picks up changes.
 
 ## License
 

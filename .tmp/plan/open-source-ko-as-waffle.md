@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 2
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-25T02:53:08.076Z
+updated: 2026-11-25T02:57:57.913Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -17,5 +17,5 @@ updated: 2026-11-25T02:53:08.076Z
   - [x] 2.4 Import and scrub the scripts
   - [x] 2.5 Import and scrub the skills and agents
   - [x] 2.6 Run the hook and script tests in CI
-  - [ ] 2.7 Document the plugin in the README
+  - [x] 2.7 Document the plugin in the README
 - [ ] 3 Remove the working files
