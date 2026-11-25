@@ -1,7 +1,7 @@
 {
-  "name": "waffle",
+  "name": "waffles",
   "private": true,
-  "description": "Release tooling for the waffle plugin. This file does not publish a package.",
+  "description": "Release tooling for the waffles plugin. This file does not publish a package.",
   "license": "MIT",
   "engines": {
     "node": ">=26.13"

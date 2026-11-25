@@ -1,4 +1,4 @@
-# Waffle
+# Waffles
 
 Skills, agents, and hooks for coding agents. One `skills/` folder serves every supported agent; each agent reads its own small manifest.
 
@@ -6,14 +6,14 @@ Skills, agents, and hooks for coding agents. One `skills/` folder serves every s
 
 | Agent | Command |
 | --- | --- |
-| Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffle@waffleparty` |
+| Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
 | Codex | Not in a marketplace yet. |
-| Cursor | Not in a marketplace yet. For local use, link this repo to `~/.cursor/plugins/local/waffle` and reload the window. |
+| Cursor | Not in a marketplace yet. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
 
 ## Layout
 
 ```text
-waffle/
+waffles/
 ├── .claude-plugin/plugin.json   Claude Code manifest
 ├── .codex-plugin/plugin.json    Codex manifest
 ├── .cursor-plugin/plugin.json   Cursor manifest
@@ -36,7 +36,7 @@ Releases are automatic. On each push to `main`, [semantic-release](https://seman
 | `!` after the type, or a `BREAKING CHANGE:` footer | Major |
 | `docs:`, `chore:`, `ci:`, `test:`, `refactor:`, `style:`, `build:` | None |
 
-When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffle` entry to the new tag.
+When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffles` entry to the new tag.
 
 Do not edit `version` fields by hand. To add a file that holds the version, add it to `.version-bump.json` and to the `@semantic-release/git` `assets` in `.releaserc.json`; `scripts/bump-version.sh --check` fails until both lists agree.
 

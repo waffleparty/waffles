@@ -4,7 +4,7 @@ name: Release
 # When they call for a release (feat, fix, perf, revert, or a breaking change), it writes the version into every
 # manifest listed in .version-bump.json (scripts/bump-version.sh), commits them to main as
 # "chore(release): X.Y.Z [skip ci]", tags that commit X.Y.Z (no "v"), and creates the GitHub release. Then a pull
-# request on waffleparty/marketplace moves the waffle entry's ref to the new tag.
+# request on waffleparty/marketplace moves the waffles entry's ref to the new tag.
 on:
   push:
     branches: [main]
@@ -77,18 +77,18 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
-          branch="waffle-${VERSION}"
+          branch="waffles-${VERSION}"
           file=.claude-plugin/marketplace.json
           tmp="$(mktemp)"
           jq --arg v "${VERSION}" \
-            '(.plugins[] | select(.name == "waffle")) |= (.version = $v | .source.ref = $v)' \
+            '(.plugins[] | select(.name == "waffles")) |= (.version = $v | .source.ref = $v)' \
             "${file}" >"${tmp}"
           cat "${tmp}" >"${file}"
           git config user.name "waffleparty-release[bot]"
           git config user.email "360843544+waffleparty-release[bot]@users.noreply.github.com"
           git switch -c "${branch}"
-          git commit -am "feat: waffle ${VERSION}"
+          git commit -am "feat: waffles ${VERSION}"
           git push origin "${branch}"
           gh pr create \
-            --title "feat: waffle ${VERSION}" \
-            --body "Moves the waffle entry to release [${VERSION}](https://github.com/waffleparty/waffle/releases/tag/${VERSION})."
+            --title "feat: waffles ${VERSION}" \
+            --body "Moves the waffles entry to release [${VERSION}](https://github.com/waffleparty/waffles/releases/tag/${VERSION})."

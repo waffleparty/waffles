@@ -1,13 +1,13 @@
 {
-  "name": "waffle",
+  "name": "waffles",
   "description": "Skills, agents, and hooks for coding agents",
   "version": "0.1.0",
   "author": {
     "name": "Luke Fritz",
     "url": "https://github.com/lukiffer"
   },
-  "homepage": "https://github.com/waffleparty/waffle",
-  "repository": "https://github.com/waffleparty/waffle",
+  "homepage": "https://github.com/waffleparty/waffles",
+  "repository": "https://github.com/waffleparty/waffles",
   "license": "MIT",
   "keywords": [
     "skills",
