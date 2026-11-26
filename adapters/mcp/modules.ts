@@ -1,12 +1,13 @@
 import { modesModule } from './modes.ts'
 import { planModule } from './plan.ts'
 import type { Module } from './registry.ts'
+import { toolsModule } from './tools.ts'
 
 /**
  * The modules the MCP server can offer, in the order their instructions, tools, prompts, and resources
- * are listed: the modes first, since the plan outline's rules refer to them.
+ * are listed: the modes first, since the plan outline's rules refer to them, then the core's other tools.
  */
-export const MODULES: readonly Module[] = [modesModule, planModule]
+export const MODULES: readonly Module[] = [modesModule, planModule, toolsModule]
 
 /**
  * The modules this process offers: every one, or those `WAFFLES_MCP_MODULES` names (comma-separated).

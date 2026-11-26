@@ -1,16 +1,24 @@
 import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { test } from 'node:test'
 
+import { MERGE_QUEUE_TOOL } from '../../core/merge-queue.ts'
 import { MODES_TEXT } from '../../core/modes.ts'
 import { SUBAGENT } from '../../core/plan.ts'
+import { TOOLS } from '../../core/tools.ts'
 import plugin, { NAMES, pluginRoot, readSkills, sessionState, skillHeader } from './server.ts'
 
 type Json = Record<string, unknown>
 
-type Tool = { name: string; description?: string; input?: unknown; execute: (input: unknown, context: Json) => Promise<{ content: string }> }
+type Tool = {
+  name: string
+  description?: string
+  input?: unknown
+  output?: unknown
+  execute: (input: unknown, context: Json) => Promise<{ content: string; output?: unknown }>
+}
 
 // A stand-in for OpenCode's plugin context: it keeps what the plugin registers, and a session record per ID.
 // `emit` sends an event to the plugin's subscription; `question` is OpenCode's built-in question tool,
@@ -161,7 +169,7 @@ test('the session keeps its mode on its record, and the values a view draws from
 
 test('setup registers the plan outline tool, the mode commands, the skills, and the hooks', async () => {
   const { registered, cleanup } = await fakeContext()
-  assert.deepEqual(registered.tools.map(t => t.name), [NAMES.planTool])
+  assert.deepEqual(registered.tools.map(t => t.name), [NAMES.planTool, ...TOOLS.map(t => `waffles_${t.name}`)])
   assert.deepEqual(registered.commands.map(c => c.name).sort(), ['auto-effort', 'backlog-entry', 'prod', 'rapid'])
   assert.ok(registered.skills.length >= 10)
   assert.deepEqual(Object.keys(registered.hooks).sort(), ['permission.evaluate', 'session.context', 'session.prompt', 'tool.execute.after'])
@@ -191,6 +199,35 @@ test('the plan outline tool works for the main session and refuses a subagent', 
   // The first event of the session told the model its mode.
   assert.equal(entries.get('s1')?.get('waffles-mode'), 'waffles mode: production')
   await cleanup()
+})
+
+test('a core tool answers the main session and a subagent alike, and a refusal is thrown', async () => {
+  const { root, registered, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  // A gh on the PATH that answers pull request 12 of o/r as merged, and fails every other call.
+  const bin = join(root, 'bin')
+  await fs.mkdir(bin)
+  const gh = `#!/usr/bin/env node
+const args = process.argv.slice(2)
+if (args[0] === 'pr' && args[1] === 'view') console.log(JSON.stringify({ number: 12, url: 'https://github.com/o/r/pull/12', baseRefName: 'main', reviewDecision: '' }))
+else if (args[0] === 'api' && args[1] === 'graphql') console.log(JSON.stringify({ data: { repository: { pullRequest: { state: 'MERGED', merged: true, isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest: null, timelineItems: { nodes: [] } } } } }))
+else { console.error('gh: HTTP 502'); process.exit(1) }
+`
+  await fs.writeFile(join(bin, 'gh'), gh, { mode: 0o755 })
+  const path = process.env.PATH
+  process.env.PATH = `${bin}${delimiter}${path}`
+  try {
+    const tool = registered.tools.find(t => t.name === 'waffles_merge_queue')!
+    assert.equal(tool.description, MERGE_QUEUE_TOOL.description)
+    assert.deepEqual([tool.input, tool.output], [MERGE_QUEUE_TOOL.inputSchema, MERGE_QUEUE_TOOL.outputSchema])
+    for (const sessionID of ['s1', 'child']) {
+      const merged = await tool.execute({ op: 'state', pr: '12' }, { sessionID })
+      assert.deepEqual(merged, { output: { state: 'merged', number: 12 }, content: '{"state":"merged","number":12}' }, sessionID)
+    }
+    await assert.rejects(tool.execute({ op: 'mode', pr: '12' }, { sessionID: 's1' }), /gh api rules\/branches\/main failed: gh: HTTP 502/)
+  } finally {
+    process.env.PATH = path
+    await cleanup()
+  }
 })
 
 test('/rapid then /prod keeps the mode on the session and hands the rapid work to the model', async () => {

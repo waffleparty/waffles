@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { mergeQueue } from './merge-queue.ts'
+import { MERGE_QUEUE_TOOL, mergeQueue } from './merge-queue.ts'
 import { fakeHost, type Answer } from './testing.ts'
+import { TOOLS } from './tools.ts'
 
 // What gh answers for pull request 12 of o/r: `pr view` with the base and review decision, the base branch's
 // rules (or a failure), and the GraphQL query's pull request.
@@ -27,9 +28,15 @@ function gh({ base = 'main', review = '', rules = [], pr = {} }: Gh = {}) {
 const QUEUE = { type: 'merge_queue', parameters: { merge_method: 'SQUASH' } }
 const OPEN = { state: 'OPEN', merged: false, isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest: null, timelineItems: { nodes: [] } }
 
+test('the merge queue is one of the core tools', () => {
+  assert.ok(TOOLS.includes(MERGE_QUEUE_TOOL))
+  assert.equal(MERGE_QUEUE_TOOL.name, 'merge_queue')
+  assert.deepEqual(MERGE_QUEUE_TOOL.inputSchema.required, ['op', 'pr'])
+})
+
 test('mode: an approved pull request on a branch with a queue is added to the queue', async () => {
   const $ = gh({ base: 'release/1.0', review: 'APPROVED', rules: [{ type: 'pull_request' }, QUEUE] })
-  const answer = await mergeQueue($, { op: 'mode', pr: '12' })
+  const answer = await MERGE_QUEUE_TOOL.call($, { op: 'mode', pr: '12' })
   assert.ok('value' in answer)
   assert.deepEqual(answer.value, {
     queue: true,
@@ -74,7 +81,7 @@ test('a gh that cannot start is a refusal, not a failure of the tool', async () 
 test('state: removed with GitHub’s reason, and the query sends owner and name as strings', async () => {
   const removed = { __typename: 'RemovedFromMergeQueueEvent', createdAt: '2026-11-23T05:00:00Z', reason: 'The merge commit failed the required check test' }
   const $ = gh({ pr: { ...OPEN, timelineItems: { nodes: [removed] } } })
-  assert.deepEqual(await mergeQueue($, { op: 'state', pr: '12', repo: 'o/r' }), {
+  assert.deepEqual(await MERGE_QUEUE_TOOL.call($, { op: 'state', pr: 12, repo: 'o/r' }), {
     value: { state: 'removed', number: 12, reason: 'The merge commit failed the required check test', at: '2026-11-23T05:00:00Z' },
   })
   assert.deepEqual($.ran[0]?.argv.slice(0, 6), ['gh', 'pr', 'view', '12', '-R', 'o/r'])
@@ -84,4 +91,19 @@ test('state: removed with GitHub’s reason, and the query sends owner and name 
 test('state: queued, with its place in the queue', async () => {
   const $ = gh({ pr: { ...OPEN, isInMergeQueue: true, mergeQueueEntry: { state: 'QUEUED', position: 3 } } })
   assert.deepEqual(await mergeQueue($, { op: 'state', pr: '12' }), { value: { state: 'queued', number: 12, position: 3, entry: 'QUEUED' } })
+})
+
+test('an input the tool cannot use is refused before gh runs', async () => {
+  const $ = gh()
+  for (const [input, refusal] of [
+    [{ pr: '12' }, 'op must be one of mode, state.'],
+    [{ op: 'merge', pr: '12' }, 'op must be one of mode, state.'],
+    [{ op: 'mode' }, 'pr must name 1 pull request: its number, its URL, or its branch.'],
+    [{ op: 'mode', pr: ' ' }, 'pr must name 1 pull request: its number, its URL, or its branch.'],
+    [{ op: 'mode', pr: '12', repo: 'r' }, 'repo must be OWNER/NAME, or left out.'],
+    [{ op: 'mode', pr: '12', number: 12 }, 'The merge_queue tool takes op, pr, and repo, not number.'],
+  ] as const) {
+    assert.deepEqual(await MERGE_QUEUE_TOOL.call($, input), { refusal }, JSON.stringify(input))
+  }
+  assert.deepEqual($.ran, [])
 })

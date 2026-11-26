@@ -1,8 +1,9 @@
 import type { Host } from './host.ts'
+import type { CoreTool, Json, ToolAnswer } from './tools.ts'
 
 /*
  * Tells how a pull request merges (directly, or through its base branch's merge queue), and where it stands.
- * scripts/merge-queue.ts answers with it on the command line.
+ * The `merge_queue` tool answers with it on every platform, and scripts/merge-queue.ts on the command line.
  *
  * The pull request is a number, a URL, or a branch, as gh takes it. The repo is needed when it is not a URL and the
  * session's folder is not the repo.
@@ -163,4 +164,69 @@ export async function mergeQueue($: Host, { op, pr, repo }: MergeQueueInput): Pr
     if (error instanceof Failed) return { refusal: error.message }
     throw error
   }
+}
+
+/** The input as the tool takes it; a string that tells what is wrong with it otherwise. */
+export function inputOf(input: Json): MergeQueueInput | string {
+  const { op, pr, repo, ...extra } = input
+  if (typeof op !== 'string' || !(OPS as readonly string[]).includes(op)) return `op must be one of ${OPS.join(', ')}.`
+  // A model may send the number as a number; gh takes it as text.
+  const selector = typeof pr === 'number' && Number.isInteger(pr) ? String(pr) : pr
+  if (typeof selector !== 'string' || !selector.trim()) return 'pr must name 1 pull request: its number, its URL, or its branch.'
+  if (repo !== undefined && (typeof repo !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repo))) return 'repo must be OWNER/NAME, or left out.'
+  const unknown = Object.keys(extra)
+  if (unknown.length) return `The merge_queue tool takes op, pr, and repo, not ${unknown.join(', ')}.`
+  return { op: op as MergeQueueOp, pr: selector.trim(), ...(repo === undefined ? {} : { repo }) }
+}
+
+const MODE_ANSWER = {
+  type: 'object',
+  required: ['queue', 'base', 'command', 'why'],
+  properties: {
+    queue: { type: 'boolean', description: 'The base branch has a merge queue.' },
+    base: { type: 'string', description: "The pull request's base branch." },
+    approved: { type: 'boolean', description: 'With a queue: the pull request has a valid approval, or needs none.' },
+    review: { type: ['string', 'null'], description: "With a queue: GitHub's review decision; null when it has none." },
+    command: { type: 'string', description: 'The command that merges the pull request, or adds it to the queue.' },
+    why: { type: 'string' },
+  },
+  additionalProperties: false,
+}
+
+const STATE_ANSWER = {
+  type: 'object',
+  required: ['state', 'number'],
+  properties: {
+    state: { type: 'string', enum: ['merged', 'queued', 'waiting', 'removed', 'closed', 'open'] },
+    number: { type: 'integer' },
+    position: { type: ['integer', 'null'], description: "queued: the pull request's place in the queue." },
+    entry: { type: ['string', 'null'], description: "queued: the queue entry's state." },
+    reason: { type: 'string', description: "removed: GitHub's reason." },
+    at: { type: ['string', 'null'], description: 'removed: when the queue removed it.' },
+  },
+  additionalProperties: false,
+}
+
+export const MERGE_QUEUE_TOOL: CoreTool = {
+  name: 'merge_queue',
+  title: 'Merge queue',
+  description:
+    "Tells how a GitHub pull request merges, and where it stands in its base branch's merge queue. op mode: whether the base branch has a merge queue, whether the pull request has a valid approval, and the command that merges it or adds it to the queue, with why. op state: merged, queued (with its position), waiting (auto-merge is on), removed (the queue removed it, with GitHub's reason), closed, or open. It reads GitHub with gh and changes nothing.",
+  inputSchema: {
+    type: 'object',
+    required: ['op', 'pr'],
+    properties: {
+      op: { type: 'string', enum: OPS, description: 'mode: how it merges. state: where it stands.' },
+      pr: { type: 'string', description: 'The pull request: its number, its URL, or its branch, as gh takes it.' },
+      repo: { type: 'string', description: "OWNER/NAME. Needed when pr is not a URL and the session's folder is not a checkout of the repo." },
+    },
+    additionalProperties: false,
+  },
+  // One schema per op: an answer has `queue` (mode) or `state` (state), never both.
+  outputSchema: { type: 'object', oneOf: [MODE_ANSWER, STATE_ANSWER] },
+  annotations: { readOnlyHint: true, openWorldHint: true },
+  call: async ($, input): Promise<ToolAnswer> => {
+    const parsed = inputOf(input)
+    return typeof parsed === 'string' ? { refusal: parsed } : mergeQueue($, parsed)
+  },
 }

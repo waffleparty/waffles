@@ -18,6 +18,7 @@ import {
   type Where,
 } from './plan-store.ts'
 import { restorePlan } from './plan-mirror.ts'
+import type { CoreTool } from './tools.ts'
 import {
   addSteps,
   agentsOf,
@@ -811,6 +812,18 @@ export async function callPlan($: Host, input: Record<string, unknown>): Promise
     logFailure($, 'a call failed', error)
     return { deny: `plan outline failed: ${error instanceof Error ? error.message : String(error)}` }
   }
+}
+
+/**
+ * The plan outline tool as a core tool. It is not in `TOOLS` (core/tools.ts): each adapter registers it
+ * itself, since it refuses a subagent, starts the session's goal first, and tells a view of each change.
+ */
+export const planTool: CoreTool = {
+  ...PLAN_TOOL,
+  call: async ($, input) => {
+    const answer = await callPlan($, input)
+    return 'deny' in answer ? { refusal: answer.deny } : { text: answer.result }
+  },
 }
 
 /**

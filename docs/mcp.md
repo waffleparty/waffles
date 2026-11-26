@@ -1,13 +1,13 @@
 # MCP server
 
-Cursor, Codex, and Antigravity take tools only from MCP servers: their plugins cannot register a tool or a slash command in code. The waffles MCP server gives them the [plan outline](plan-outline.md) tool, and the mode commands as MCP prompts, which most clients show as slash commands. Claude Code and OpenCode register these themselves and do not need it.
+Cursor, Codex, and Antigravity take tools only from MCP servers: their plugins cannot register a tool or a slash command in code. The waffles MCP server gives them the [plan outline](plan-outline.md) tool, the core's tools (such as the merge queue), and the mode commands as MCP prompts, which most clients show as slash commands. Claude Code and OpenCode register these themselves, in their own process, and do not need it.
 
 ## What it offers
 
 | Item | Value |
 | --- | --- |
 | Server name | `waffles` |
-| Tools | `plan`: the plan outline tool, with the same description and input as on Claude Code. `mode`: reads the session's mode, or sets it with `{ "set": "production" \| "rapid" \| "backlog" }`, for a client that shows no prompts. |
+| Tools | `plan`: the plan outline tool, with the same description and input as on Claude Code. `mode`: reads the session's mode, or sets it with `{ "set": "production" \| "rapid" \| "backlog" }`, for a client that shows no prompts. `merge_queue`: with `{ "op": "mode" \| "state", "pr": "<number, URL, or branch>", "repo": "OWNER/NAME" }`, how the pull request merges or where it stands in its base branch's merge queue, as a structured value with an output schema; the same answers as `scripts/merge-queue.ts`. |
 | Prompts | `prod`, `rapid`, `backlog-entry`: getting one changes the mode, as the command does on Claude Code. Its message is the mode statement the model reads; its `description` is the text Claude Code shows the person. |
 | Resources | `waffles://plan-outline` (`text/plain`): what `show` prints, the active goal's tree and the other open goals, or the open goals. A subscriber is told when a tool call or the heartbeat changed it. |
 | Instructions | The modes' definitions, then the plan outline's rules, which these platforms have no plugin-written system prompt for |
@@ -65,7 +65,7 @@ Set `env` in the entry when the client shows tools under another pattern, or sta
 | `WAFFLES_TOOL_PREFIX` | `mcp__waffles__` | What comes before a tool's name as the model sees it, for every tool the instructions name. Set it to an empty string where the client shows the bare name. |
 | `WAFFLES_PLAN_TOOL` | The prefix and `plan` | The plan outline tool's whole name as the model sees it, in place of the prefix |
 | `WAFFLES_ASK_TOOL` | `a multiple-choice question` | The tool the model asks the person a question with, used in the rules. The default reads as plain words, so on a client with no such tool the model asks in the chat. |
-| `WAFFLES_MCP_MODULES` | Every module | The modules to offer, comma-separated: `modes`, `plan`. The server announces a capability only for what they provide. |
+| `WAFFLES_MCP_MODULES` | Every module | The modules to offer, comma-separated: `modes`, `plan`, `tools` (the core's tools). The server announces a capability only for what they provide. |
 | `WAFFLES_SESSION_ID` | A new ID for each server process | The session the mode and the active goal belong to. Set it to the ID the platform's hooks use, so the hooks and the server agree. |
 | `WAFFLES_CWD` | The process's working directory | The folder whose checkout holds the plan outline |
 | `WAFFLES_HOOKS` | Not set | `1` where the platform's hooks run beside the server and send the mode statement with the first message. The instructions then leave out that no statement comes. The plugin's MCP configurations for Codex, Cursor, and Antigravity set it. On the Codex CLI, which runs no plugin hooks, it still leaves the instructions true: it only removes that sentence, and the `mode` tool still returns the mode. |
@@ -82,7 +82,9 @@ The function that names a request's session (`idOf` in `adapters/mcp/sessions.ts
 
 ## Adding a tool, a prompt, or a resource
 
-Content comes in modules, one file each in `adapters/mcp/`: `modes.ts` and `plan.ts` today. `server.ts` holds the transport and the protocol only and reads the content from the registry (`registry.ts`), so a new tool, prompt, or resource changes no protocol code. A module can contribute:
+A tool every platform offers is defined once, in the core: add it to `TOOLS` in `core/tools.ts`, whose header says how. The `tools` module (`adapters/mcp/tools.ts`) offers every one, so such a tool needs no change here. A module of its own is for what only the MCP server offers.
+
+Content comes in modules, one file each in `adapters/mcp/`: `modes.ts`, `plan.ts`, and `tools.ts` today. `server.ts` holds the transport and the protocol only and reads the content from the registry (`registry.ts`), so a new tool, prompt, or resource changes no protocol code. A module can contribute:
 
 | Field | What it is |
 | --- | --- |

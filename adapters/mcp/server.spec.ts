@@ -29,7 +29,7 @@ test('the handshake answers with the revision asked for, the content, and the ru
   const list = await s.request('tools/list')
   // A 2025-11-25 result has no resultType or cache fields.
   assert.deepEqual(Object.keys(list.result), ['tools'])
-  assert.deepEqual(list.result.tools.map((tool: Message) => tool.name), ['mode', 'plan'])
+  assert.deepEqual(list.result.tools.map((tool: Message) => tool.name), ['mode', 'plan', 'merge_queue'])
   assert.deepEqual(list.result.tools[1], { name: 'plan', description: PLAN_TOOL.description, inputSchema: PLAN_TOOL.inputSchema })
   assert.deepEqual(await s.close(), { code: 0, signal: null })
 })
@@ -105,7 +105,7 @@ test('a 2026-07-28 request is served on its own, by the _meta it carries', LIMIT
   const list = await s.request('tools/list', { _meta: META })
   assert.equal(list.result.resultType, 'complete')
   assert.equal(list.result.cacheScope, 'private')
-  assert.deepEqual(list.result.tools.map((tool: Message) => tool.name), ['mode', 'plan'])
+  assert.deepEqual(list.result.tools.map((tool: Message) => tool.name), ['mode', 'plan', 'merge_queue'])
 
   const made = await s.request('tools/call', { _meta: META, name: 'plan', arguments: { op: 'goal', title: 'Ship it' } })
   assert.equal(made.result.resultType, 'complete')

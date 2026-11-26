@@ -1,4 +1,5 @@
 import type { Host, Names } from '../../core/host.ts'
+import type { CoreTool, Json, ToolAnswer } from '../../core/tools.ts'
 
 /**
  * What the MCP server offers, apart from how it speaks the protocol. Content comes in modules, one file
@@ -7,38 +8,23 @@ import type { Host, Names } from '../../core/host.ts'
  * built here, so a new tool, prompt, or resource is a change to a module, never to the protocol code.
  */
 
-export type Json = Record<string, unknown>
-
-/** The spec's hints on a tool's behavior. A client may show them and must not trust them. */
-export type ToolAnnotations = {
-  title?: string
-  readOnlyHint?: boolean
-  destructiveHint?: boolean
-  idempotentHint?: boolean
-  openWorldHint?: boolean
-}
+export type { Json, ToolAnnotations, ToolAnswer } from '../../core/tools.ts'
 
 /**
- * A tool's answer: text the model reads; a structured value, sent as `structuredContent` with its JSON as
- * the text; or a refusal, which the model reads as the call's error and can correct.
+ * A tool as the server offers it: the core's tool (`core/tools.ts`), whose shape exists once, with a
+ * handler that gets the request's session in place of the Host alone.
  */
-export type ToolAnswer = { text: string } | { value: unknown } | { refusal: string }
-
-export type Tool = {
+export type Tool = Omit<CoreTool, 'call'> & {
   /** The name in `tools/list`: letters, digits, `_`, `-`, and `.`. */
   name: string
-  title?: string
-  description: string
-  /** A JSON Schema with `type: 'object'` at the root. */
-  inputSchema: Json
-  /** A JSON Schema the structured value of every answer conforms to. */
-  outputSchema?: Json
-  annotations?: ToolAnnotations
   /** An environment variable that names the tool as the model sees it, in place of the prefix and the name. */
   nameVariable?: string
   /** One call. A handler that throws gives the model a short error, never a protocol error. */
   call(session: Session, input: Json): Promise<ToolAnswer>
 }
+
+/** A core tool as the server offers it: its handler gets the session's Host. */
+export const toolOf = (tool: CoreTool): Tool => ({ ...tool, call: (session, input) => tool.call(session.$, input) })
 
 export type PromptArgument = { name: string; title?: string; description?: string; required?: boolean }
 export type PromptMessage = { role: 'user' | 'assistant'; content: { type: 'text'; text: string } }

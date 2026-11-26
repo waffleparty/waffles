@@ -23,6 +23,7 @@ import {
 } from '../../core/modes.ts'
 import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, spawnPlan, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
+import { textOf, TOOLS } from '../../core/tools.ts'
 import { isRunCommand, permissionAsked, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
 import { autoEffort, EFFORT_COMMAND, EFFORT_DESCRIPTION, type ModelRef, type Variant } from './effort.ts'
@@ -30,9 +31,9 @@ import { guardQuestion, QUESTION_TOOL } from './unattended.ts'
 import { NOTICE } from './view.ts'
 
 /**
- * The waffles plugin's server part for OpenCode 2: the plan outline tool, the modes and their commands,
- * the rules in the system prompt, and the skills. It runs in OpenCode's server process, which serves
- * every session, so each session gets its own host.
+ * The waffles plugin's server part for OpenCode 2: the plan outline tool, the core's other tools, the
+ * modes and their commands, the rules in the system prompt, and the skills. It runs in OpenCode's
+ * server process, which serves every session, so each session gets its own host.
  *
  * A push runs the checkpoint.
  *
@@ -304,6 +305,23 @@ const plugin: Plugin.Plugin = {
           return { content: answer.result }
         },
       })
+      // The core's other tools, every one, under the plan tool's name scheme. A subagent may call them: each
+      // runs in its own session's folder. A structured value goes as the output, with its JSON as the text.
+      for (const tool of TOOLS) {
+        editor.add({
+          name: `waffles_${tool.name}`,
+          description: tool.description,
+          input: tool.inputSchema as never,
+          ...(tool.outputSchema ? { output: tool.outputSchema as never } : {}),
+          execute: async (input, context) => {
+            const session = await sessionOf(context.sessionID)
+            const answer = await tool.call(session.$, input as Record<string, unknown>)
+            const said = textOf(answer)
+            if ('refusal' in said) throw new Error(said.refusal)
+            return 'value' in answer ? { output: answer.value as never, content: said.text } : { content: said.text }
+          },
+        })
+      }
       // During an unattended run the question tool asks only the run's start question.
       editor.update(QUESTION_TOOL, tool => {
         tool.execute = guardQuestion(tool.execute, runOf)

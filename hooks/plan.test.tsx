@@ -77,7 +77,8 @@ test('the plan tool is registered with its schema in the prompt', async ($, on) 
   world(on)
   const tools = await start($, on)
 
-  expect(tools).toEqual([
+  // The core's other tools register beside it: tools.test.ts checks them.
+  expect(tools.filter(t => (t as { name: string }).name === 'plan')).toEqual([
     expect.objectContaining({
       name: 'plan',
       description: DESCRIPTION,

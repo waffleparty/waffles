@@ -67,6 +67,7 @@ The agents load with the plugin and are available outside the skills that start 
 | --- | --- | --- |
 | Modes | `/prod`, `/rapid`, and `/backlog-entry`, and a statement of the current mode in every conversation. | [Modes](docs/modes.md) |
 | Plan outline | The `mcp__waffles__plan` tool, the pane, the footer item, and the pull request checklist. | [Plan outline](docs/plan-outline.md) |
+| Merge queue | The `mcp__waffles__merge_queue` tool: how a pull request merges, and where it stands in its base branch's merge queue. | [MCP server](docs/mcp.md#what-it-offers) |
 | Auto effort | A per-prompt effort pick, and the footer row. | [Modes](docs/modes.md#auto-effort) |
 | Checkpoint | After `git push` and `gh pr create`, the plan outline is rendered into the pull request. | [Plan outline](docs/plan-outline.md#the-checklist-in-the-pull-request) |
 | Dev servers | A footer item that lists the dev servers running from the project, and opens one in the browser. | [Skills](docs/skills.md#dev-server) |
@@ -92,13 +93,14 @@ waffles/
 ├── skills/<name>/SKILL.md       Agent Skills (https://agentskills.io/specification)
 ├── agents/                      Claude Code subagents
 ├── core/                        The logic, with no platform imports: plan outline, modes, runs, checkpoint
+│   └── tools.ts                 The tools every adapter offers, defined once
 ├── hooks/                       The Claude Code adapter: hooks, pane, footer, auto effort, dev servers
 │   ├── hooks.json               Names the module that registers the hooks
 │   └── *.test.ts(x)             Its tests, run by `claude plugin test`
 ├── adapters/node/               The core's host on plain Node.js
 ├── adapters/opencode/           The OpenCode 2 adapter: server part and terminal UI part
 ├── adapters/command/            The adapter for platforms whose hooks run a command per event, with a table per platform
-├── adapters/mcp/                The MCP server that offers the plan outline tool
+├── adapters/mcp/                The MCP server that offers the plan outline tool and the core's tools
 ├── scripts/                     Node.js scripts the skills call, with their tests (*.spec.ts)
 │   └── bump-version.sh          Writes or checks the version in every manifest
 ├── types/                       Type declarations for the hooks

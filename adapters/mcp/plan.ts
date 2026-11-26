@@ -1,5 +1,5 @@
 import { memoryOf } from '../../core/host.ts'
-import { callPlan, endPlan, PLAN_TOOL, startPlan, tickPlan } from '../../core/plan.ts'
+import { callPlan, endPlan, planTool, startPlan, tickPlan } from '../../core/plan.ts'
 import { planRules } from '../../core/plan-prompt.ts'
 import type { Module, Session } from './registry.ts'
 
@@ -26,15 +26,13 @@ export const planModule: Module = {
   name: 'plan',
   tools: [
     {
-      name: PLAN_TOOL.name,
-      description: PLAN_TOOL.description,
-      inputSchema: PLAN_TOOL.inputSchema,
+      ...planTool,
       nameVariable: 'WAFFLES_PLAN_TOOL',
+      // A refusal is the tool's answer, which the model reads and acts on, not a failure of the protocol.
       call: async (session, input) => {
-        const answer = await callPlan(session.$, input)
+        const answer = await planTool.call(session.$, input)
         await looked(session)
-        // A refusal is the tool's answer, which the model reads and acts on, not a failure of the protocol.
-        return 'deny' in answer ? { refusal: answer.deny } : { text: answer.result }
+        return answer
       },
     },
   ],

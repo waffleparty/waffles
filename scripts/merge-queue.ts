@@ -1,12 +1,13 @@
 // Tell how a pull request merges (directly, or through its base branch's merge queue), and where it stands:
-// core/merge-queue.ts says how.
+// core/merge-queue.ts says how. The merge_queue tool gives the same answers; this is for a person, and for a
+// platform where the tool is missing.
 //
 // Usage:
 //   node merge-queue.ts mode PR [--repo OWNER/NAME]
 //   node merge-queue.ts state PR [--repo OWNER/NAME]
 //
 // PR is a number, a URL, or a branch, as gh takes it. --repo is needed when PR is not a URL and the folder is not the
-// repo. Prints 1 line of JSON.
+// repo. Prints 1 line of JSON: the tool's answer.
 //
 // Exit codes: 0 when gh answered; 1 when it did not, with its message on stderr; 2 for wrong arguments.
 

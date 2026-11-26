@@ -32,6 +32,7 @@ To use waffles in one project only, put the same entry in that project's `openco
 | Skills | Every skill in `skills/` except `plan`, which opens Claude Code's pane. Name a skill in a prompt with `@<name>`, such as `@ask`. Skills marked "explicit" are not offered to the model. |
 | Modes | `/prod`, `/rapid`, and `/backlog-entry`. The model reads the current mode in a context block that OpenCode updates at the next step. |
 | Plan outline | The `waffles_plan` tool, the footer item, the session panel, and the pull request checklist after a push. |
+| Merge queue | The `waffles_merge_queue` tool: how a pull request merges, and where it stands in its base branch's merge queue. Subagents can call it. |
 | Unattended runs | `@non-interactive [task]` starts a run. See [Unattended runs](#unattended-runs). |
 | Auto effort | A level for each prompt you type, and `/auto-effort [on\|off]`. See [Auto effort](#auto-effort). |
 | Subagent steps | A subagent whose description starts with a step ID and a colon marks that step. See [Subagent steps](#subagent-steps). |
