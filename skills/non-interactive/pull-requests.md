@@ -21,7 +21,7 @@ last step: commit ────────────────────�
         finished, reviewed, and nothing that stays with the user?
            │ yes                              │ no ─► step left for the user
            ▼
-   merge-queue.ts mode
+   merge_queue tool, op mode
      │
      ├─ no queue ─────────────► gh pr merge --squash ──────────────────────────► merged
      │                            │ refused by a rule ─► … --admin ────────────► merged
@@ -56,8 +56,13 @@ last step: commit ────────────────────�
 - **When to merge.** All 3 must hold: the piece is finished and verified, and
   the pieces below it in a stack are merged; the `waffles:reviewer` review (see Finishing in SKILL.md)
   has no open **must fix** finding; the pull request's checks pass. Then run the
-  production check below, and merge as
-  `node <skill-dir>/../../scripts/merge-queue.ts mode <number>` says.
+  production check below, and find how the pull request merges: call the
+  waffles merge queue tool (`merge_queue`; each platform adds its own prefix
+  to the name, such as `mcp__waffles__merge_queue`) with
+  `{"op": "mode", "pr": "<number>"}`, and add `"repo": "<owner>/<name>"` when
+  the session's folder is not a checkout of the repo. Where that tool is
+  missing, run `node <skill-dir>/../../scripts/merge-queue.ts mode <number>`,
+  which prints the same answer as JSON. Merge as the answer says.
   Without a merge queue, merge with `gh pr merge <number> --squash`,
   passing the commit's subject and body yourself (`--subject`, `--body`) so
   that the `Co-Authored-By` trailer is kept. With one, see The merge queue. Don't pass `--delete-branch`: it
@@ -83,8 +88,9 @@ last step: commit ────────────────────�
     before you add it. Then wait for the result with Monitor: an until-loop
     that runs
     `node <skill-dir>/../../scripts/merge-queue.ts state <number>` every
-    60 seconds and ends at `merged`, `removed`, or `closed`, for at most 2
-    hours.
+    60 seconds (a shell loop, so the script and not the tool) and ends at
+    `merged`, `removed`, or `closed`, for at most 2 hours. To read the state
+    once, outside the loop, call the tool with `{"op": "state", "pr": "<number>"}`.
     - `merged`: go on as After a merge says.
     - `removed`: in a repo that names a backlog adapter, `ship` the item
       with `removed` and a `note` that gives GitHub's reason: the item goes

@@ -319,8 +319,13 @@ serve it with 1 dev server:
 ### Merging a pull request
 
 1. If you started the clone's dev server yourself, stop it.
-2. Merge as `node <skill-dir>/../../scripts/merge-queue.ts mode <number>`
-   says. Without a merge queue:
+2. Find how the pull request merges: call the waffles merge queue tool
+   (`merge_queue`; each platform adds its own prefix to the name, such as
+   `mcp__waffles__merge_queue`) with `{"op": "mode", "pr": "<number>"}`, and
+   add `"repo": "<owner>/<name>"` when the session's folder is not a checkout
+   of the repo. Where that tool is missing, run
+   `node <skill-dir>/../../scripts/merge-queue.ts mode <number>`, which prints
+   the same answer as JSON. Merge as the answer says. Without a merge queue:
    `gh pr merge <number> --squash --subject <subject> --body <digest>`, with
    the subject and digest that the `waffles:commit-prep` skill describes. When it
    is refused (a check failed, a review is required), say why and leave the
@@ -333,7 +338,8 @@ serve it with 1 dev server:
    the digest in the pull request's body, run `gh pr merge <number>` (no
    merge method, no `--auto`), and write under `## Progress` that it is in
    the queue. Then start Monitor with an until-loop that runs
-   `merge-queue.ts state <number>` every 60 seconds and ends at `merged`,
+   `node <skill-dir>/../../scripts/merge-queue.ts state <number>` every 60
+   seconds (a shell loop, so the script and not the tool) and ends at `merged`,
    `removed`, or `closed`; its notification starts the next pass, and the
    item stays `review` until then. Go on with steps 3 to 5 once it is
    `merged`. When the queue removed it, set `status: escalated`, write
