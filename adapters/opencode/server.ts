@@ -48,6 +48,9 @@ import { NOTICE } from './view.ts'
  * A subagent the main session starts with the subagent tool, whose description names a step first with a
  * colon (`6.2: Build the parser`), marks that step while it works; its session's turn end sets the step to
  * review. The plan outline's view and the footer are the terminal UI part's (tui.tsx).
+ *
+ * Not here: the waffles agents and the dev servers item, which only Claude Code has, and a reply to /prod,
+ * /rapid and /backlog-entry, whose text OpenCode gives no place (only /auto-effort's shows, as a toast).
  */
 
 /** What OpenCode calls its own things. */

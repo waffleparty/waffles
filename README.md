@@ -7,17 +7,17 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Agent | Command |
 | --- | --- |
 | Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
+| OpenCode 2 | Clone this repo and add its absolute path to `plugins` in `~/.config/opencode/opencode.jsonc`. See [OpenCode](docs/opencode.md). |
 | Codex | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/codex.md](docs/codex.md). |
-| OpenCode 2 | Name this repo in `plugins` in `opencode.jsonc`. Modes, the plan outline with its panel, and the checkpoint. |
 | Cursor | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
 
-Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, and the checkpoint. On other platforms only the skills load. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code for now.
+Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, the checkpoint, unattended runs, and auto effort; see [OpenCode](docs/opencode.md) for what differs. Codex has the modes, the plan outline tool, and the checkpoint through hooks and an MCP server. On other platforms only the skills load. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code or OpenCode.
 
 ## Requirements
 
 | Requirement | Needed for |
 | --- | --- |
-| Claude Code, or OpenCode 2 | The hooks: modes, the plan outline, and the checkpoint. The agents, auto effort, and the dev servers pane need Claude Code. |
+| Claude Code, or OpenCode 2 | The hooks: modes, the plan outline, the checkpoint, unattended runs, and auto effort. The agents and the dev servers pane need Claude Code. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
 | Node.js 22.18 or later | The scripts in `scripts/` that skills run from the shell: builders, the merge queue, the review branch, the backlog queue, and the CI watcher. They use Node.js built-ins only and run with no build step. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
@@ -78,6 +78,7 @@ The agents load with the plugin and are available outside the skills that start 
 - [Plan outline](docs/plan-outline.md): the tree of goals and steps, the pane, and the pull request checklist.
 - [Unattended runs](docs/unattended-runs.md): what a run does, what stays with you, and the permissions you grant it.
 - [Skills](docs/skills.md): commit prep, dev server, watch CI, debate, ask, and UX review.
+- [OpenCode](docs/opencode.md): installing waffles in OpenCode 2, and what works there.
 
 ## Layout
 
