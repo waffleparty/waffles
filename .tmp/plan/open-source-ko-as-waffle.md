@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T18:20:20.312Z
+updated: 2026-11-26T20:06:53.219Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -40,6 +40,10 @@ updated: 2026-11-26T18:20:20.312Z
   - [x] 2.14 ? Verify which hook features other agent platforms offer
 - [ ] 3 Remove the working files
 - [ ] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead)
+  - [x] 4.1 ? Decide where the plan outline is stored
+  - [ ] 4.2 Keep the plan outline's files in the git folder, outside the working tree
+  - [ ] 4.3 Mirror the plan outline to a git ref at each push, and restore from it on another machine
+  - [ ] 4.4 Remove the plan outline's commit and cleanup rules from the commit protocol
 - [ ] 5 Phase 2: bring back the design layer
 - [ ] 6 Phase 2: move the hook logic into one vendor-neutral library behind per-platform adapters
   - [x] 6.1 Choose the language of the core library
@@ -61,6 +65,7 @@ updated: 2026-11-26T18:20:20.312Z
     - [ ] 6.6.5 Pick the effort for each prompt on OpenCode
     - [ ] 6.6.6 Mark a step by its subagent on OpenCode
     - [ ] 6.6.7 Document how to install waffles on OpenCode
+    - [-] 6.6.8 Test the panel's resize by drag and its key scrolling on the local machine
   - [ ] 6.7 Add an Antigravity manifest
   - [ ] 6.8 Move the Codex manifest to a root plugin.json
   - [x] 6.9 Port the Python scripts to TypeScript
@@ -73,6 +78,9 @@ updated: 2026-11-26T18:20:20.312Z
     - [x] 6.11.1 Rename the scripts and the Node.js tests to kebab-case
     - [x] 6.11.2 Trim backlog-queue and builders, and remove the Python-compatibility module
     - [x] 6.11.3 Trim merge-queue, review-branch, and watch, under the one type check
-  - [ ] 6.12 Review the OpenCode terminal UI with the person
-  - [ ] 6.13 Review and fix the bugs carried over from the Python scripts
-    - [ ] 6.13.1 Print refusals and failures on one stream in all 5 scripts
+  - [x] 6.12 Review the OpenCode terminal UI with the person
+  - [x] 6.13 Review and fix the bugs carried over from the Python scripts
+    - [x] 6.13.1 Print refusals and failures on one stream in all 5 scripts
+    - [x] 6.13.2 Fix the watcher's lost and repeated events
+    - [x] 6.13.3 Fix the checkpoint's failures after it wrote the description
+    - [x] 6.13.4 Fix the item files with CRLF line ends and the pull requests with missing fields
