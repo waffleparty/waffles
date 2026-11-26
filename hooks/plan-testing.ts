@@ -15,9 +15,16 @@ class Stamped extends Map<string, string> {
 
 export type GitAnswer = { exitCode: number; stdout: string }
 
-/** What git answers in a checkout at /repo: its top level and git dir to the plan outline's query, `/repo/.git` to any other. */
+/**
+ * What git answers in a checkout at /repo: its top level and git dir to the plan outline's query, a
+ * detached HEAD to `symbolic-ref` (so no copy on a remote is looked for), `/repo/.git` to any other.
+ */
 export const inRepo = (argv: readonly string[]): GitAnswer =>
-  argv.includes('--git-dir') ? { exitCode: 0, stdout: '/repo\n/repo/.git\n' } : { exitCode: 0, stdout: '/repo/.git\n' }
+  argv.includes('--git-dir')
+    ? { exitCode: 0, stdout: '/repo\n/repo/.git\n' }
+    : argv[1] === 'symbolic-ref'
+      ? { exitCode: 1, stdout: '' }
+      : { exitCode: 0, stdout: '/repo/.git\n' }
 
 export type Disk = {
   /** Path to text: every file there is, each with its modification time. */

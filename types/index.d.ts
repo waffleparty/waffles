@@ -85,6 +85,8 @@ declare module 'claude-code' {
       planOthers: PlanOther[]
       /** Step IDs changed since the person's last prompt. */
       planChanged: string[]
+      /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
+      planFetched: boolean
     }
   }
 }

@@ -1,4 +1,5 @@
 import type { Host, RunResult } from './host.ts'
+import { dropPlan, mirrorPlan } from './plan-mirror.ts'
 
 /*
  * Renders the plan outline into its section of the pull request's description.
@@ -435,6 +436,10 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
 const PUSH = /\bgit\s+(?:-C\s+\S+\s+)?push\b/
 // Opening the pull request renders the checklist too: the first push found no pull request to update.
 const CREATE = /\bgh\s+pr\s+create\b/
+// A merge renders nothing: it removes the merged branch's copy of the plan outline from the remote.
+const MERGE = /\bgh\s+pr\s+merge\b/
+// The pull request a merge names by number; with none, gh merges the checked-out branch's.
+const MERGE_NUMBER = /\bgh\s+pr\s+merge\s+([0-9]+)(?=\s|$)/
 // A command that starts `cd <dir> &&`, or a `git -C <dir> push`, runs the push in that folder.
 const CD = /^\s*cd\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s*&&/
 const DASH_C = /\bgit\s+-C\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s+push\b/
@@ -460,20 +465,53 @@ export function folderOf(command: string, cwd: string, isPush: boolean, home: st
 /** Whether a shell command, at a cheap look, pushes a branch or opens a pull request. */
 export const isPushLike = (command: string) => PUSH.test(command) || CREATE.test(command)
 
+/** Whether `afterShell` has work for a shell command, at a cheap look: a push, a new pull request, or a merge. */
+export const isWatched = (command: string) => isPushLike(command) || MERGE.test(command)
+
 /**
- * A shell command that pushed or opened a pull request ended well: the checkpoint renders the plan
- * outline into the pull request's description. Returns the line the model reads, or null with nothing
- * to say: another kind of command, a folder that can't be told (a checkpoint of the wrong checkout could
- * change another pull request), or a checkpoint that printed nothing. `cwd` is where the command ran.
+ * A shell command that pushed, opened a pull request, or merged one ended well. After a push or a new
+ * pull request, the checkpoint renders the plan outline into the pull request's description, and the
+ * plan outline's copy on the remote is brought up to date (plan-mirror.ts). After a merge, the merged
+ * branch's copy is removed. Returns the lines the model reads, or null with nothing to say: another kind
+ * of command, a folder that can't be told (a checkpoint of the wrong checkout could change another pull
+ * request), or nothing printed and nothing failed. `cwd` is where the command ran.
  */
 export async function afterShell($: Host, command: string, cwd?: string): Promise<string | null> {
-  if (!isPushLike(command)) return null
+  if (!isWatched(command)) return null
+  const isPush = isPushLike(command)
   const home = await $.home().catch(() => undefined)
-  const folder = folderOf(command, cwd ?? (await $.session.cwd()), true, home)
+  const folder = folderOf(command, cwd ?? (await $.session.cwd()), isPush, home)
   if (folder === null) return null
+  if (!isPush) return afterMerge($, folder, MERGE_NUMBER.exec(command)?.[1])
   const done = await checkpoint($, folder, { timeoutMs: CHECKPOINT_MS }).catch((error: unknown) => ({
     stdout: `did not run: ${error instanceof Error ? error.message : String(error)}`,
   }))
   const line = done.stdout.trim()
-  return line ? `waffles checkpoint: ${line}` : null
+  const lines = [line ? `waffles checkpoint: ${line}` : null, await mirrorPlan($, folder)].filter(text => text !== null)
+  return lines.length ? lines.join('\n') : null
+}
+
+// How long gh may take to say whether a merged pull request is merged.
+const VIEW_MS = 30_000
+
+/**
+ * After a merge: when gh reports the pull request merged or closed, its head branch's copy of the plan
+ * outline is removed from the remote and from the local repository. A pull request from another
+ * repository has no copy here. The line the model reads when the removal fails; null otherwise.
+ */
+async function afterMerge($: Host, folder: string, pr: string | undefined): Promise<string | null> {
+  const view = await $.process
+    .run(['gh', 'pr', 'view', ...(pr ? [pr] : []), '--json', 'state,headRefName,isCrossRepository'], { cwd: folder, timeoutMs: VIEW_MS })
+    .catch(() => null)
+  if (view?.exitCode !== 0) return null
+  let info: { state?: unknown; headRefName?: unknown; isCrossRepository?: unknown }
+  try {
+    info = JSON.parse(view.stdout) as typeof info
+  } catch {
+    return null
+  }
+  // A merge queue or --auto leaves it open: the copy stays until a merge that gh reports done.
+  if (info?.state !== 'MERGED' && info?.state !== 'CLOSED') return null
+  if (info.isCrossRepository !== false || typeof info.headRefName !== 'string' || !info.headRefName) return null
+  return dropPlan($, folder, info.headRefName)
 }

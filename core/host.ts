@@ -152,6 +152,8 @@ export type SessionState = {
   planOthers: OtherGoal[]
   /** Step IDs changed since the person's last prompt. */
   planChanged: string[]
+  /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
+  planFetched: boolean
 }
 
 /** What each key reads as before it is set. */
@@ -170,6 +172,7 @@ export const INITIAL: SessionState = {
   planError: null,
   planOthers: [],
   planChanged: [],
+  planFetched: false,
 }
 
 /** Each module's in-process values, under its own key; a module makes its entry at first use. */

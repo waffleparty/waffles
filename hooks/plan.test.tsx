@@ -331,7 +331,46 @@ test('a poll in a checkout with no outline folder writes nothing', async ($, on)
   await clock.advance(60_000)
 
   expect(disk.writes).toEqual([])
-  expect(Object.keys(state).filter(key => key.startsWith('plan'))).toEqual([])
+  // Only that the session looked for a copy on the remote, once: at a detached HEAD there is none.
+  expect(Object.keys(state).filter(key => key.startsWith('plan'))).toEqual(['planFetched'])
+  expect(disk.ran.filter(argv => argv[1] === 'symbolic-ref')).toHaveLength(1)
+})
+
+test("the session's first poll restores the branch's copy from the remote into an empty plan folder, once", async ($, on) => {
+  const { disk, clock, state } = world(on)
+  const goal = serializeGoal(newGoal('Ship OAuth login', [{ title: 'Spec' }], ISO))
+  disk.git = argv => {
+    const command = argv.slice(1).join(' ')
+    if (command === 'symbolic-ref --short -q HEAD') return { exitCode: 0, stdout: 'feat/x\n' }
+    if (command === 'config --get branch.feat/x.remote') return { exitCode: 0, stdout: 'origin\n' }
+    if (command === 'ls-remote origin refs/waffles/plan/feat/x') return { exitCode: 0, stdout: 'abc\trefs/waffles/plan/feat/x\n' }
+    if (command === 'ls-tree -z refs/waffles/plan/feat/x') return { exitCode: 0, stdout: '100644 blob b1\tship-oauth-login.md\x00100644 blob b2\tassumed-for-you.md\x00040000 tree t1\tdocs\x00' }
+    if (command === 'cat-file blob b1') return { exitCode: 0, stdout: goal }
+    if (command === 'cat-file blob b2') return { exitCode: 0, stdout: '# Assumed for you\n' }
+    return inRepo(argv)
+  }
+  await start($, on)
+  await clock.advance(10_000)
+
+  expect(disk.files.get(file('ship-oauth-login'))).toBe(goal)
+  expect(disk.files.get(`${ROOT}/assumed-for-you.md`)).toBe('# Assumed for you\n')
+  expect(disk.ran.filter(argv => argv[1] === 'fetch')).toEqual([
+    ['git', 'fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--no-recurse-submodules', '--no-auto-gc', 'origin', '+refs/waffles/plan/feat/x:refs/waffles/plan/feat/x'],
+  ])
+  expect(disk.ran.filter(argv => argv[1] === 'ls-remote')).toHaveLength(1)
+  // The restored goal is an open goal the session can continue.
+  expect(state.planOthers).toEqual([{ slug: 'ship-oauth-login', title: 'Ship OAuth login', current: '1 Spec', inUse: false }])
+})
+
+test('a plan folder that holds a file is never restored over', async ($, on) => {
+  const { disk } = world(on)
+  disk.files.set(`${ROOT}/notes.md`, 'mine\n')
+  disk.git = argv => (argv[1] === 'symbolic-ref' ? { exitCode: 0, stdout: 'feat\n' } : inRepo(argv))
+
+  await call($, { op: 'show' })
+
+  expect(disk.files.get(`${ROOT}/notes.md`)).toBe('mine\n')
+  expect(disk.ran.filter(argv => ['symbolic-ref', 'ls-remote', 'fetch'].includes(argv[1] ?? ''))).toEqual([])
 })
 
 test('the poll redraws a goal changed on disk and refreshes the lock every 30 s', async ($, on) => {

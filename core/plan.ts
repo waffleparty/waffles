@@ -17,6 +17,7 @@ import {
   type GoalFile,
   type Where,
 } from './plan-store.ts'
+import { restorePlan } from './plan-mirror.ts'
 import {
   addSteps,
   agentsOf,
@@ -435,6 +436,7 @@ async function apply($: Host, raw: Record<string, unknown>): Promise<string> {
   const { isFromGit, isGitDown, ...root } = await findPlanRoot($)
   // The fallback folders would be in the working tree, where a lock or record could be committed.
   if (isGitDown) throw new PlanError(GIT_DOWN)
+  if (isFromGit) await fetchOnce($, root)
   // A call that comes before the first poll of a resumed session finds its goal active.
   // A restore that fails leaves the call to work as with no record.
   if ((await $.state.get('planGoal')) === null) {
@@ -645,7 +647,28 @@ async function restore($: Host, me: string, root: Where, isFromGit: boolean, now
   }
 }
 
-/** One poll: the heartbeat every BEAT_MS, then the redraw, with 1 git run. Writes nothing in a checkout with no goal file. */
+/**
+ * Once per session, at its first poll or call in a repository: a plan folder with no file takes the
+ * files of the branch's copy on the remote, so a fresh clone or another machine finds the goals pushed
+ * from elsewhere. The session's record of its active goal is restored after it. A failure goes to the
+ * debug log, and the poll or the call goes on as with no copy.
+ */
+async function fetchOnce($: Host, root: Where) {
+  if (await $.state.get('planFetched')) return
+  // Set first: a process that serves one event never repeats the network round trip.
+  await $.state.set('planFetched', true)
+  try {
+    const names = await restorePlan($, root.outline)
+    if (names.length) $.log(`plan outline: restored ${names.join(', ')} from the remote`)
+  } catch (error) {
+    logFailure($, "couldn't restore the plan outline from the remote", error)
+  }
+}
+
+/**
+ * One poll: the heartbeat every BEAT_MS, then the redraw, with 1 git run. Writes nothing in a checkout
+ * with no goal file, apart from the files the session's first poll restores from the remote.
+ */
 async function poll($: Host) {
   const at = vars($).ends
   const isEnded = () => vars($).ends !== at
@@ -664,6 +687,8 @@ async function poll($: Host) {
   const { lastRoot } = vars($)
   const isUntrusted = lastRoot !== null ? root.outline !== lastRoot.outline : !(await $.fs.exists(root.outline))
   if (!isFromGit && shown !== null && isUntrusted) return
+  if (isFromGit) await fetchOnce($, root)
+  if (isEnded()) return
   const now = await $.clock.now()
   // Only from a root git gave, or, before git has given one, the working directory's.
   if (slug === null && (isFromGit || vars($).lastRoot === null)) {

@@ -49,16 +49,19 @@ const folders = (runs: [string, string | undefined][]) => runs.filter(r => r[0] 
 
 const bash = (command: string) => ({ tool: 'Bash', command }) as const
 
-test('a push that worked runs the checkpoint and tells the model what it did', async ($, on) => {
+test('a push that worked runs the checkpoint, then the copy, and tells the model what it did', async ($, on) => {
   const { runs, limits } = world(on)
 
   const r = await $.tool.call(bash('git push -u origin feat'))
 
+  const edit = runs.findIndex(run => run[0] === 'gh pr edit 7 --body-file -')
   expect(runs[0]).toEqual(['git rev-parse --show-toplevel', '/repo'])
-  expect(runs.at(-1)).toEqual(['gh pr edit 7 --body-file -', '/repo'])
+  expect(edit).toBeGreaterThan(0)
+  // Then the copy on the remote: git gives it no git dir here, so it stops there.
+  expect(runs.slice(edit + 1)).toEqual([['git rev-parse --path-format=absolute --git-dir', '/repo']])
   expect(runs.every(run => run[1] === '/repo')).toBe(true)
-  // With the clock standing still, each command may take all of the checkpoint's 60 seconds.
-  expect(limits).toEqual(runs.map(() => 60_000))
+  // With the clock standing still, each command may take all of the checkpoint's 60 seconds, and of the copy's 30.
+  expect(limits).toEqual(runs.map((run, i) => (i <= edit ? 60_000 : 30_000)))
   expect(r).toEqual({ ...RAN, context: ['waffles checkpoint: Updated the plan outline in #7: https://github.com/o/r/pull/7'] })
 })
 
@@ -88,12 +91,13 @@ test('a push in another folder runs the checkpoint there', async ($, on) => {
   expect(folders(runs)).toEqual(['/repo/../other', '/abs/repo'])
 })
 
-test('a merge runs no checkpoint', async ($, on) => {
+test('a merge runs no checkpoint; it only asks gh whether the pull request it names is merged', async ($, on) => {
   const { runs, commands } = world(on)
 
+  // The fake gh reports #7 open, as a merge queue leaves it: its copy stays.
   const r = await $.tool.call(bash('gh pr merge 7 --squash'))
 
-  expect(runs).toEqual([])
+  expect(runs).toEqual([['gh pr view 7 --json state,headRefName,isCrossRepository', '/repo']])
   expect(commands).toEqual(['gh pr merge 7 --squash'])
   expect(r).toEqual(RAN)
 })
