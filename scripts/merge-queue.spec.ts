@@ -78,18 +78,18 @@ describe('merge-queue', () => {
   const write = (state: object) => writeFileSync(statePath, JSON.stringify(state))
 
   // The parsed JSON when the script printed it, else its message.
-  const runScript = (...args: string[]): [number, any] => {
+  const runScript = async (...args: string[]): Promise<[number, any]> => {
     let text = ''
     let error = ''
-    const code = main(args, { write: (s: string) => (text += s) }, { write: (s: string) => (error += s) })
+    const code = await main(args, { write: (s: string) => (text += s) }, { write: (s: string) => (error += s) })
     return [code, code === 0 ? JSON.parse(text) : error]
   }
 
   const calls = (): string[][] => readFileSync(`${statePath}.calls`, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
 
-  test('with a merge queue, an approved pull request is added to the queue', () => {
+  test('with a merge queue, an approved pull request is added to the queue', async () => {
     write({ rules: [{ type: 'pull_request' }, { type: 'merge_queue', parameters: { merge_method: 'SQUASH' } }], base: 'release/1.0', review: 'APPROVED' })
-    const [code, result] = runScript('mode', '12')
+    const [code, result] = await runScript('mode', '12')
     assert.equal(code, 0)
     // No merge method and no --auto: the queue's own method applies, and the repo may not allow auto-merge.
     assert.deepEqual([result.queue, result.approved, result.command], [true, true, 'gh pr merge 12'])
@@ -98,10 +98,10 @@ describe('merge-queue', () => {
     assert.deepEqual(rules, ['api', 'repos/o/r/rules/branches/release%2F1.0'])
     // No review required: GitHub adds it too.
     write({ rules: [{ type: 'merge_queue', parameters: { merge_method: 'SQUASH' } }], review: '' })
-    assert.equal(runScript('mode', '12')[1].command, 'gh pr merge 12')
+    assert.equal((await runScript('mode', '12'))[1].command, 'gh pr merge 12')
   })
 
-  test('with a merge queue, a pull request without an approval gets the admin bypass', () => {
+  test('with a merge queue, a pull request without an approval gets the admin bypass', async () => {
     const cases: [string, string | null, string][] = [
       ['REVIEW_REQUIRED', 'SQUASH', 'gh pr merge 12 --squash --admin --subject <subject> --body <digest>'],
       ['CHANGES_REQUESTED', 'MERGE', 'gh pr merge 12 --merge --admin --subject <subject> --body <digest>'],
@@ -110,55 +110,55 @@ describe('merge-queue', () => {
     ]
     for (const [review, method, command] of cases) {
       write({ rules: [{ type: 'merge_queue', parameters: method ? { merge_method: method } : {} }], review })
-      const [code, result] = runScript('mode', '12')
+      const [code, result] = await runScript('mode', '12')
       assert.equal(code, 0)
       assert.deepEqual([result.queue, result.approved, result.review, result.command], [true, false, review, command])
       assert.ok(result.why.includes('leave it for a reviewer'))
     }
   })
 
-  test('without a queue, merge is a squash now', () => {
+  test('without a queue, merge is a squash now', async () => {
     write({ rules: [{ type: 'pull_request' }] })
-    let [code, result] = runScript('mode', 'https://github.com/o/r/pull/12')
+    let [code, result] = await runScript('mode', 'https://github.com/o/r/pull/12')
     assert.deepEqual([code, result.queue], [0, false])
     assert.equal(result.command, 'gh pr merge 12 --squash --subject <subject> --body <digest>')
     write({ no_rulesets: true })
-    ;[code, result] = runScript('mode', '12')
+    ;[code, result] = await runScript('mode', '12')
     assert.deepEqual([code, result.queue], [0, false])
     assert.ok(result.why.includes('no rulesets'))
   })
 
-  test('when gh cannot read the rules, the reason says so', () => {
+  test('when gh cannot read the rules, the reason says so', async () => {
     write({ down: true })
-    const [code, text] = runScript('mode', '12')
+    const [code, text] = await runScript('mode', '12')
     assert.equal(code, 1)
     assert.ok(text.includes('HTTP 502'))
   })
 
-  test('wrong arguments exit 2 without calling gh, and --help exits 0', () => {
+  test('wrong arguments exit 2 without calling gh, and --help exits 0', async () => {
     for (const args of [[], ['merge', '12'], ['mode'], ['mode', '12', '13'], ['mode', '12', '--repo'], ['state', '12', '--nope']]) {
-      const [code, text] = runScript(...args)
+      const [code, text] = await runScript(...args)
       assert.equal(code, 2, args.join(' '))
       assert.ok(text.includes('usage:'), args.join(' '))
     }
     assert.throws(() => calls())
-    assert.equal(main(['--help'], { write: () => {} }), 0)
+    assert.equal(await main(['--help'], { write: () => {} }), 0)
   })
 
-  test('--repo goes to gh pr view as -R', () => {
+  test('--repo goes to gh pr view as -R', async () => {
     write({ rules: [] })
-    assert.equal(runScript('mode', '12', '--repo', 'o/r')[0], 0)
+    assert.equal((await runScript('mode', '12', '--repo', 'o/r'))[0], 0)
     assert.deepEqual(calls()[0]?.slice(0, 5), ['pr', 'view', '12', '-R', 'o/r'])
   })
 
-  test("a pull request the queue removed is removed, with GitHub's reason", () => {
+  test("a pull request the queue removed is removed, with GitHub's reason", async () => {
     write({ pr: pr({ last: REMOVED }) })
-    const [code, result] = runScript('state', '12')
+    const [code, result] = await runScript('state', '12')
     assert.equal(code, 0)
     assert.deepEqual(result, { state: 'removed', number: 12, reason: 'The merge commit failed the required check test', at: '2026-11-23T05:00:00Z' })
   })
 
-  test('merged, queued, waiting, closed, and open', () => {
+  test('merged, queued, waiting, closed, and open', async () => {
     const cases: [object, string][] = [
       [pr({ merged: true, last: { __typename: 'AddedToMergeQueueEvent', createdAt: 'x' } }), 'merged'],
       [pr({ queued: { state: 'AWAITING_CHECKS', position: 2 } }), 'queued'],
@@ -170,11 +170,11 @@ describe('merge-queue', () => {
     ]
     for (const [data, expected] of cases) {
       write({ pr: data })
-      const [code, result] = runScript('state', '12')
+      const [code, result] = await runScript('state', '12')
       assert.deepEqual([code, result.state], [0, expected], JSON.stringify(data))
     }
     write({ pr: pr({ queued: { state: 'QUEUED', position: 3 } }) })
-    assert.deepEqual(runScript('state', '12')[1], { state: 'queued', number: 12, position: 3, entry: 'QUEUED' })
+    assert.deepEqual((await runScript('state', '12'))[1], { state: 'queued', number: 12, position: 3, entry: 'QUEUED' })
     const graphql = calls().filter((call) => call.includes('graphql')).at(-1) as string[]
     // Owner and name go as strings (-f), so an all-digit name is not sent as a number; the number as -F.
     assert.deepEqual(graphql.slice(2, 8), ['-f', 'owner=o', '-f', 'name=r', '-F', 'number=12'])
