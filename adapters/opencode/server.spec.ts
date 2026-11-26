@@ -27,6 +27,11 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = 
     hooks: {} as Record<string, (event: never) => unknown>,
     prompts: [] as Json[],
     storage: new Map<string, unknown>(),
+    // What the small model is asked, and what it answers.
+    generated: [] as Json[],
+    answer: '{"level": "low", "why": "a lookup"}',
+    // The session's messages, as session.context gives them.
+    messages: [] as Json[],
   }
   const question: Tool & { answer: Promise<{ content: string }> | null } = {
     name: 'question',
@@ -59,6 +64,7 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = 
         sessions.get(sessionID)!.metadata = metadata
       },
       prompt: async (input: Json) => void registered.prompts.push(input),
+      context: async () => registered.messages,
       hook: hook('session'),
       instructions: {
         entry: {
@@ -69,6 +75,13 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = 
           remove: async ({ sessionID, key }: { sessionID: string; key: string }) => void entries.get(sessionID)?.delete(key),
         },
       },
+    },
+    model: {
+      list: async () => ({ data: [{ providerID: 'anthropic', id: 'claude-sonnet-5-5', variants: ['none', 'low', 'high'].map(id => ({ id, settings: { effort: id } })) }] }),
+      default: async () => ({ data: { providerID: 'anthropic', id: 'claude-sonnet-5-5' } }),
+    },
+    experimental: {
+      generate: { text: async (input: Json) => (registered.generated.push(input), { text: registered.answer }) },
     },
     storage: {
       get: async (key: string) => registered.storage.get(key),
@@ -148,7 +161,7 @@ test('the session keeps its mode on its record, and the values a view draws from
 test('setup registers the plan outline tool, the mode commands, the skills, and the hooks', async () => {
   const { registered, cleanup } = await fakeContext()
   assert.deepEqual(registered.tools.map(t => t.name), [NAMES.planTool])
-  assert.deepEqual(registered.commands.map(c => c.name).sort(), ['backlog-entry', 'prod', 'rapid'])
+  assert.deepEqual(registered.commands.map(c => c.name).sort(), ['auto-effort', 'backlog-entry', 'prod', 'rapid'])
   assert.ok(registered.skills.length >= 10)
   assert.deepEqual(Object.keys(registered.hooks).sort(), ['permission.evaluate', 'session.context', 'session.prompt', 'tool.execute.after'])
   await cleanup()
@@ -249,6 +262,47 @@ test("a subagent asks under its main session's run", async () => {
   await registered.hooks['permission.evaluate']!(event as never)
   assert.equal(event.effect, 'deny')
   assert.match(event.message ?? '', /report it in your result/)
+  await cleanup()
+})
+
+test("a typed prompt's turn runs at the level the session's own model picks, asked at its lowest variant", async () => {
+  const { registered, cleanup } = await fakeContext()
+  registered.messages = [
+    { type: 'user', text: 'hi' },
+    { type: 'assistant', content: [{ type: 'reasoning', text: 'hmm' }, { type: 'text', text: 'Renamed foo.' }] },
+    { type: 'assistant', content: [{ type: 'tool', name: 'read' }] },
+  ]
+  await registered.hooks['session.prompt']!(prompt('s1', 'what does this do?') as never)
+  const request = { sessionID: 's1', model: { providerID: 'anthropic', id: 'claude-sonnet-5-5' }, system: [] as Json[], options: { maxTokens: 100 } as Json }
+  await registered.hooks['session.context']!(request as never)
+  assert.deepEqual(request.options, { maxTokens: 100, effort: 'low' })
+  assert.deepEqual(registered.generated[0]?.model, { providerID: 'anthropic', id: 'claude-sonnet-5-5', variant: 'none' })
+  // The pick reads the last reply that holds text.
+  assert.match(String(registered.generated[0]?.prompt), /<reply>\nRenamed foo\.\n<\/reply>/)
+  await cleanup()
+})
+
+test("/auto-effort off is kept in the person's values, and its line is left for the terminal UI part", async () => {
+  const { registered, sessions, cleanup } = await fakeContext()
+  await registered.commands.find(c => c.name === 'auto-effort')!.execute({ sessionID: 's1', prompt: { text: 'off' } })
+  assert.equal(registered.storage.get('store/effort.enabled'), false)
+  const notice = sessions.get('s1')?.metadata?.['waffles.notice'] as Json
+  assert.match(String(notice.text), /^Auto effort: off\./)
+  assert.equal(typeof notice.at, 'number')
+  // With it off, a typed prompt's turn runs at the model's variant, and nothing is asked.
+  await registered.hooks['session.prompt']!(prompt('s1', 'what does this do?') as never)
+  const request = { sessionID: 's1', model: { providerID: 'anthropic', id: 'claude-sonnet-5-5' }, system: [] as Json[], options: {} as Json }
+  await registered.hooks['session.context']!(request as never)
+  assert.deepEqual(request.options, {})
+  assert.equal(registered.generated.length, 0)
+  await cleanup()
+})
+
+test("a subagent's requests run at its own variant", async () => {
+  const { registered, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  const request = { sessionID: 'child', model: { providerID: 'anthropic', id: 'claude-sonnet-5-5' }, system: [] as Json[], options: {} as Json }
+  await registered.hooks['session.context']!(request as never)
+  assert.deepEqual(request.options, {})
   await cleanup()
 })
 

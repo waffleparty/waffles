@@ -1,11 +1,12 @@
 // The waffles plugin's terminal UI part for OpenCode 2: the mode and the plan outline's current step in
-// the footer under the prompt, and the plan outline in a session panel. It draws only what the server
+// the footer under the prompt, the plan outline in a session panel, and a command's line for the person
+// as a toast. It draws only what the server
 // part keeps in the session's metadata (see view.ts), so it works with a remote server too. OpenCode
 // compiles this file; the type check and the tests cover view.ts.
 import { Plugin } from '@opencode/plugin/tui'
 import { createEffect, For, Show } from 'solid-js'
 
-import { footerParts, outlineRows, PIECE_COLORS } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS } from './view.ts'
 
 // The panel's name: OpenCode shares one panel between plugins, and each draws under its own name.
 const PANEL = 'waffles.plan'
@@ -94,9 +95,21 @@ export default Plugin.define({
     })
 
     // A goal that becomes active opens the panel, once per session; /plan-outline opens and closes it.
+    // A command's line for the person shows as a toast, once: the one there when the session opens is old.
+    const seen = new Map()
     const opener = context.ui.slot({
       append: 'session.composer.top',
       render: (input) => {
+        createEffect(() => {
+          const sessionID = input.sessionID
+          if (!sessionID) return
+          const notice = noticeOf(metadata(sessionID), seen.get(sessionID) ?? null)
+          const isFirst = !seen.has(sessionID)
+          if (isFirst) seen.set(sessionID, notice?.at ?? 0)
+          if (!notice || isFirst) return
+          seen.set(sessionID, notice.at)
+          context.ui.toast.show({ message: notice.text })
+        })
         createEffect(() => {
           const sessionID = input.sessionID
           if (!sessionID || opened.has(sessionID)) return

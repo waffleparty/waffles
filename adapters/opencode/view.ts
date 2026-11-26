@@ -56,6 +56,22 @@ export function footerParts(metadata: unknown, room = FOOTER_ROOM): { mark: stri
   return { mark, color, mode, step }
 }
 
+/**
+ * The session's metadata key that holds the last line a command has for the person: a command's executor
+ * has no reply of its own on OpenCode, so the terminal UI part shows it as a toast.
+ */
+export const NOTICE = 'waffles.notice'
+
+/**
+ * The line a command left for the person to read, as a toast shows it: null when there is none, or when
+ * it is the one `seen` already names. `at` tells one line from the next, so each shows once.
+ */
+export function noticeOf(metadata: unknown, seen: number | null): { text: string; at: number } | null {
+  const notice = (metadata as Record<string, unknown> | null | undefined)?.[NOTICE] as { text?: unknown; at?: unknown } | undefined
+  if (typeof notice?.text !== 'string' || typeof notice.at !== 'number' || notice.at === seen) return null
+  return { text: notice.text, at: notice.at }
+}
+
 /** The plan outline's rows for a panel `room` columns wide, as on Claude Code; empty with no goal drawn. */
 export function outlineRows(metadata: unknown, room: number): Piece[][] {
   const goal = goalOf(keptOf(metadata))

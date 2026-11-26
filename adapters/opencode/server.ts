@@ -6,6 +6,7 @@ import type { Plugin } from '@opencode/plugin'
 
 import { adapterContext } from '../../core/backlog-adapter.ts'
 import { afterShell } from '../../core/checkpoint.ts'
+import { lowestLevel } from '../../core/effort.ts'
 import { INITIAL, type Host, type Names, type SessionState } from '../../core/host.ts'
 import {
   ASSESS_PROMPT,
@@ -24,7 +25,9 @@ import { callPlan, endPlan, PLAN_TOOL, POLL_MS, startPlan, submitPlan, SUBAGENT,
 import { planContext, planRules } from '../../core/plan-prompt.ts'
 import { isRunCommand, permissionAsked, startUnattended, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
+import { autoEffort, EFFORT_COMMAND, EFFORT_DESCRIPTION, type ModelRef, type Variant } from './effort.ts'
 import { guardQuestion, QUESTION_TOOL } from './unattended.ts'
+import { NOTICE } from './view.ts'
 
 /**
  * The waffles plugin's server part for OpenCode 2: the plan outline tool, the modes and their commands,
@@ -38,8 +41,12 @@ import { guardQuestion, QUESTION_TOOL } from './unattended.ts'
  * turns. During a run, permission requests are denied and questions refused with the texts the core
  * gives; the run's start question waits START_ANSWER_MS for the person, and is then taken off the screen.
  *
- * Not here yet: auto effort, and the marking of a step by its subagent. The plan outline's view and the
- * footer are the terminal UI part's (tui.tsx).
+ * Auto effort picks a level for each prompt the person types and applies it to the turn's model requests
+ * as the model's own variant of that level; /auto-effort turns it on or off. The small model it asks is the
+ * session's own, at its lowest variant: price alone does not tell a fast cheap model in a provider's list.
+ *
+ * Not here yet: the marking of a step by its subagent. The plan outline's view and the footer are the
+ * terminal UI part's (tui.tsx).
  */
 
 /** What OpenCode calls its own things. */
@@ -62,6 +69,8 @@ const SHOWN: readonly (keyof SessionState)[] = ['planTree']
 const MODE_ENTRY = 'waffles-mode'
 const PLAN_ENTRY = 'waffles-plan-outline'
 const ADAPTER_ENTRY = 'waffles-backlog-adapter'
+// How long the list of models, and their variants, is used before it is read again.
+const MODELS_MS = 60_000
 
 type Session = {
   $: Host
@@ -147,6 +156,41 @@ const plugin: Plugin.Plugin = {
     // The sessions whose turn is running: a prompt typed into one is delivered into that turn.
     const busy = new Set<string>()
 
+    // The models OpenCode offers, with their variants, read again after MODELS_MS.
+    let models: { at: number; list: Promise<readonly { providerID: string; id: string; variants?: readonly Variant[] }[]> } | null = null
+    const modelList = () => {
+      if (!models || Date.now() - models.at > MODELS_MS) {
+        const list = ctx.model.list().then(answer => answer.data as never)
+        models = { at: Date.now(), list }
+        list.catch(() => (models = null))
+      }
+      return models.list
+    }
+    const variantsOf = async (model: ModelRef) => (await modelList()).find(m => m.providerID === model.providerID && m.id === model.id)?.variants ?? []
+    const effort = autoEffort(variantsOf)
+
+    // The model a quick question goes to: the session's own, else the default, at its lowest variant.
+    const quickModel = async (sessionID: string): Promise<ModelRef | null> => {
+      const info = await ctx.session.get({ sessionID })
+      const fallback = info.model ? null : (await ctx.model.default()).data
+      const ref = info.model ?? (fallback ? { providerID: fallback.providerID, id: fallback.id } : null)
+      if (!ref) return null
+      const variant = lowestLevel((await variantsOf(ref)).map(v => v.id))
+      return { providerID: ref.providerID, id: ref.id, ...(variant === null ? {} : { variant }) }
+    }
+
+    // The text of the session's last assistant message that holds any.
+    const lastReplyOf = async (sessionID: string): Promise<string> => {
+      const messages = await ctx.session.context({ sessionID })
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i]!
+        if (message.type !== 'assistant') continue
+        const text = message.content.flatMap(part => (part.type === 'text' ? [part.text] : [])).join('\n')
+        if (text.trim()) return text
+      }
+      return ''
+    }
+
     // One host per session, made at the session's first event and kept until the session is removed.
     const sessionOf = (sessionID: string): Promise<Session> => {
       const known = sessions.get(sessionID)
@@ -167,8 +211,20 @@ const plugin: Plugin.Plugin = {
             },
             // A change of mode replaces the session's mode block; the model is told at the next step.
             conversation: {
-              lastReply: async () => '',
+              lastReply: () => lastReplyOf(sessionID).catch(() => ''),
               note: text => entry(MODE_ENTRY, text).then(() => true),
+            },
+            // A question that gets no answer in time is stopped, so it costs nothing more.
+            model: {
+              ask: async (prompt, { timeoutMs }) => {
+                const model = await quickModel(sessionID).catch(() => null)
+                if (!model) return null
+                const stop = AbortSignal.timeout(timeoutMs)
+                return ctx.experimental.generate.text({ model, prompt }, { signal: stop }).then(
+                  answer => answer.text,
+                  () => null,
+                )
+              },
             },
             log: message => console.debug(`waffles: ${message}`),
           },
@@ -244,7 +300,20 @@ const plugin: Plugin.Plugin = {
       rapid: async $ => ({ text: await runRapid($) }),
       prod: runProd,
     }
+    // The last line a command has for the person, for the terminal UI part to show.
+    const notify = async (sessionID: string, text: string) => {
+      const info = await ctx.session.get({ sessionID })
+      await ctx.session.update({ sessionID, metadata: { ...info.metadata, [NOTICE]: { text, at: Date.now() } } as never })
+    }
     await ctx.command.transform(editor => {
+      editor.add({
+        name: EFFORT_COMMAND,
+        description: EFFORT_DESCRIPTION,
+        execute: async ({ sessionID, prompt }) => {
+          const session = await sessionOf(sessionID)
+          await notify(sessionID, await effort.command(session.$, prompt.text))
+        },
+      })
       for (const { name, description } of COMMANDS) {
         editor.add({
           name,
@@ -262,8 +331,13 @@ const plugin: Plugin.Plugin = {
 
     // The rules go last in the system prompt, with the same bytes in every request, so the prompt cache holds.
     const rules = planRules(NAMES)
-    const context = await ctx.session.hook('context', event => {
+    // The main session's turn runs at the level auto effort chose for it; a subagent runs at its own variant.
+    const context = await ctx.session.hook('context', async event => {
       event.system.push({ type: 'text', text: MODES_TEXT }, { type: 'text', text: rules })
+      const session = await sessionOf(event.sessionID).catch(() => null)
+      if (!session || session.isChild) return
+      const options = await effort.request(session.$, event.sessionID, event.model).catch(() => null)
+      if (options) Object.assign(event.options, options)
     })
 
     const prompt = await ctx.session.hook('prompt', async event => {
@@ -279,6 +353,7 @@ const plugin: Plugin.Plugin = {
       const typed = { isPerson: true, isTyped: !busy.has(event.sessionID), command, isMeta: false, text: event.prompt.text }
       const before = await wafflesMode($)
       await submitUnattended($, typed)
+      effort.submit(event.sessionID, typed)
       submitPlan($)
       // The line that states backlog mode beside a prompt is not added here: the mode block always holds the current mode.
       await submitMode($, typed, before)
@@ -314,8 +389,10 @@ const plugin: Plugin.Plugin = {
     // goal. A turn ends when the session's execution settles: OpenCode 2.4 sends plugins no session.idle.
     const TURN_ENDS: readonly string[] = ['session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.idle']
     const types = ['session.execution.started', 'session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.idle', 'session.deleted'] as const
-    const turnEnded = async (session: Session) => {
-      if (!session.isChild) await completeMode(session.$).catch(() => undefined)
+    const turnEnded = async (sessionID: string, session: Session) => {
+      if (session.isChild) return
+      effort.complete(sessionID)
+      await completeMode(session.$).catch(() => undefined)
     }
     const events = new AbortController()
     void (async () => {
@@ -327,9 +404,10 @@ const plugin: Plugin.Plugin = {
         const known = sessions.get(sessionID)
         const session = known === undefined ? null : await known.catch(() => null)
         if (!session) continue
-        if (TURN_ENDS.includes(event.type)) await turnEnded(session)
+        if (TURN_ENDS.includes(event.type)) await turnEnded(sessionID, session)
         else if (event.type === 'session.deleted') {
           await endPlan(session.$, sessionID, false).catch(() => undefined)
+          effort.forget(sessionID)
           sessions.delete(sessionID)
         }
       }

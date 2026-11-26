@@ -63,5 +63,37 @@ export async function pickEffort($: Host, text: string, setting: string): Promis
   return answer === null ? null : parsePick(answer)
 }
 
+/**
+ * The level a turn runs at: the model's pick for the prompt, with `keep` read as `last`, the level the
+ * turn before ran at. Null to run at `setting`: no pick, or a pick that is the setting already.
+ */
+export async function chooseLevel($: Host, text: string, setting: string, last: string): Promise<EffortLevel | null> {
+  const pick = await pickEffort($, text, setting)
+  if (!pick) return null
+  const level = pick.level === 'keep' ? last : pick.level
+  return LEVELS.includes(level as EffortLevel) && level !== setting ? (level as EffortLevel) : null
+}
+
+// The effort names models offer, lowest first. `none` turns reasoning off, so no level falls back to it.
+const SCALE: readonly string[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+
+/**
+ * The name among the levels a model offers that carries `level`: the same name, else the nearest above
+ * it, else the nearest below it. Null when the model offers none but `none`, or no level at all.
+ */
+export function nearestLevel(level: EffortLevel, offered: readonly string[]): string | null {
+  if (offered.includes(level)) return level
+  const at = SCALE.indexOf(level)
+  const known = offered.filter(name => name !== 'none' && SCALE.includes(name))
+  const above = known.filter(name => SCALE.indexOf(name) > at).sort((a, b) => SCALE.indexOf(a) - SCALE.indexOf(b))
+  const below = known.filter(name => SCALE.indexOf(name) < at).sort((a, b) => SCALE.indexOf(b) - SCALE.indexOf(a))
+  return above[0] ?? below[0] ?? null
+}
+
+/** The lowest level a model offers, for a quick answer: `none` when it can turn reasoning off; null when it offers none. */
+export function lowestLevel(offered: readonly string[]): string | null {
+  return [...offered].filter(name => SCALE.includes(name)).sort((a, b) => SCALE.indexOf(a) - SCALE.indexOf(b))[0] ?? null
+}
+
 /** A level as the footer names it. */
 export const levelLabel = (level: string) => LEVEL_NAMES[level]?.toLowerCase() ?? level

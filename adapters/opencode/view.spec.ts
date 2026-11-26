@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { addSteps, closeSteps, newGoal } from '../../core/plan-tree.ts'
-import { footerParts, outlineRows, PIECE_COLORS } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS } from './view.ts'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 const goal = () => newGoal('Ship it', [{ title: 'Build', kind: 'planned' }, { title: 'Test', kind: 'planned' }], NOW)
@@ -47,6 +47,14 @@ test('the panel lists the goal and its steps, with the marks and colors Claude C
 test('a row is cut to the panel\'s width', () => {
   const planTree = newGoal('Ship it', [{ title: 'Build the whole thing from the ground up, twice', kind: 'planned' }], NOW)
   assert.deepEqual(textOf(outlineRows({ waffles: { planTree } }, 20)), ['Ship it', '▶ 1 Build the whole…'])
+})
+
+test("a command's line shows once, by the time it was left", () => {
+  const metadata = { waffles: {}, 'waffles.notice': { text: 'Auto effort: off.', at: 5 } }
+  assert.deepEqual(noticeOf(metadata, null), { text: 'Auto effort: off.', at: 5 })
+  assert.equal(noticeOf(metadata, 5), null)
+  assert.deepEqual(noticeOf(metadata, 4), { text: 'Auto effort: off.', at: 5 })
+  for (const other of [undefined, {}, { 'waffles.notice': { text: 1, at: 5 } }, { 'waffles.notice': { text: 'x' } }]) assert.equal(noticeOf(other, null), null)
 })
 
 test('a tree that is not a goal draws nothing', () => {
