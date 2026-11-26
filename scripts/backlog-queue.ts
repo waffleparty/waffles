@@ -281,7 +281,8 @@ function raised(backlog: string, name: string, newId: string): string[] {
     } else {
       const record = join(backlog, `${newId}.md`)
       if (existsSync(record)) return [...lines, `${name} is ${newId} in the tracker; kept ${path}, since ${record} exists.`]
-      writeFileSync(record, text.replace(/^---\n/, () => `---\nid: ${newId}\n`))
+      // The id line takes the line end of the header's first line, so a file with crlf line ends keeps them.
+      writeFileSync(record, text.replace(/^---(\r?\n)/, (_, eol: string) => `---${eol}id: ${newId}${eol}`))
       unlinkSync(path)
       lines.push(`${name} is ${newId} in the tracker; its work goes on, so it is now ${record}.`)
     }

@@ -275,6 +275,24 @@ describe('the queue', () => {
     assert.ok(readFileSync(later, 'utf8').includes('depends: [ITEM-1, other.md]'))
   })
 
+  test('a raised item with crlf line ends becomes its record with an id line, and keeps its line ends', () => {
+    const name = writeItem()
+    const path = join(backlog, name)
+    writeFileSync(path, ITEM.replace('status: new', 'status: running').replaceAll('\n', '\r\n'))
+    const later = join(backlog, 'later.md')
+    writeFileSync(later, ITEM.replace('depends: []', `depends: [${name}]`).replaceAll('\n', '\r\n'))
+    waffles.call('raise', name, { actor: 'agent' })
+    adapter.online = true
+
+    waffles.call('note', 'ITEM-1', { text: 'x' })
+
+    assert.ok(!existsSync(path))
+    const record = readFileSync(join(backlog, 'ITEM-1.md'), 'utf8')
+    assert.ok(record.startsWith('---\r\nid: ITEM-1\r\nstatus: running\r\n'), JSON.stringify(record.slice(0, 40)))
+    assert.ok(!/[^\r]\n/.test(record))
+    assert.ok(readFileSync(later, 'utf8').includes('depends: [ITEM-1]\r\n'))
+  })
+
   test('a seq is never used twice, so a stale done removes nothing', () => {
     const first = (JSON.parse(waffles.run('add', 'note', 'ITEM-1', '--why', 'no network', '--data', '{}').stdout) as Entry).seq
     assert.equal(waffles.run('done', String(first)).returncode, 0)
