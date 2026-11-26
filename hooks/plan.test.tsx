@@ -8,11 +8,11 @@ import { newGoal, parseGoal, serializeGoal } from '../core/plan-tree.ts'
 
 const TOOL = 'mcp__waffles__plan'
 const DESCRIPTION =
-  'Changes the plan outline: the tree of goals and steps for this repo that the person sees beside the chat. The only way to change its goal files in .tmp/plan/. Each call returns the changes and the new path.'
+  "Changes the plan outline: the tree of goals and steps for this repo that the person sees beside the chat. The only way to change its goal files, which are kept in the checkout's git folder, outside the working tree. Each call returns the changes and the new path."
 const NOW = Date.parse('2026-11-15T12:00:00Z')
 const ISO = new Date(NOW).toISOString()
 const ME = 'session-me'
-const ROOT = '/repo/.tmp/plan'
+const ROOT = '/repo/.git/waffles/plan'
 const STATE = '/repo/.git/waffles'
 const file = (slug: string) => `${ROOT}/${slug}.md`
 const lockFile = (slug: string) => `${STATE}/locks/${slug}.json`
@@ -102,8 +102,8 @@ test('goal starts a goal file and the result names the change and the path', asy
   expect(r).toEqual({ result: '◇ new goal: Ship OAuth login [ship-oauth-login]\n\nPath: 1 Spec' })
   const goal = newGoal('Ship OAuth login', [{ title: 'Spec' }, { title: 'Build' }], ISO)
   expect(parseGoal(disk.files.get(file('ship-oauth-login'))!, 'x')).toEqual(goal)
-  // Committed on the branch: no .gitignore in .tmp/plan.
-  expect(disk.writes.filter(path => path.startsWith(ROOT) && path.endsWith('.gitignore'))).toEqual([])
+  // In the git dir, which git never commits: the state folder's .gitignore is all it needs.
+  expect(disk.writes.filter(path => path.endsWith('.gitignore'))).toEqual([`${STATE}/.gitignore`])
   expect(JSON.parse(disk.files.get(lockFile('ship-oauth-login'))!)).toEqual({ session: ME, heartbeat: ISO })
   expect(state.planGoal).toBe('ship-oauth-login')
   expect(state.planTree).toEqual(goal)
@@ -187,7 +187,7 @@ test('with the shell in a submodule, a call on the active goal is a quiet result
   const writes = disk.writes.length
   const quiet = {
     result:
-      "Nothing changed: .tmp/plan/ship-oauth-login.md isn't in /repo/sub, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again.",
+      "Nothing changed: the active goal ship-oauth-login has no goal file in /repo/sub, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again.",
   }
 
   expect(await call($, { op: 'done', ids: ['1'] })).toEqual(quiet)
@@ -301,7 +301,7 @@ test('an unreadable goal file refuses with its line number', async ($, on) => {
   disk.files.set(file('ship-oauth-login'), '---\ngoal: Ship OAuth login\nnonsense\n')
 
   expect(await call($, { op: 'add', parent: null, kind: 'planned', titles: ['Ship'] })).toEqual({
-    deny: "Can't read .tmp/plan/ship-oauth-login.md: line 3",
+    deny: "Can't read /repo/.git/waffles/plan/ship-oauth-login.md: line 3",
   })
 })
 
@@ -324,7 +324,7 @@ test('moving a whole goal under a step of the active goal removes the other file
   expect(state.planOthers).toEqual([])
 })
 
-test('a poll in a checkout without .tmp/plan writes nothing', async ($, on) => {
+test('a poll in a checkout with no outline folder writes nothing', async ($, on) => {
   const { disk, clock, state } = world(on)
   await start($, on)
 
@@ -422,7 +422,7 @@ test('a poll runs git once however many goal files there are', async ($, on) => 
 // The plan outline rules, word for word as the spec gives them.
 const RULES = `# waffles plan outline
 
-The waffles plugin keeps a plan outline: a tree of the work in this checkout, stored as one goal file per goal in .tmp/plan/ and shown to the person beside the chat. It shows the path from the goal to the current step, so the person can find the way back after side quests. Change it only with the mcp__waffles__plan tool, never by editing its goal files. The plan outline is not Claude Code's plan mode.
+The waffles plugin keeps a plan outline: a tree of the work in this checkout, stored as one goal file per goal in the checkout's git folder and shown to the person beside the chat. The goal files are not in the working tree and are never committed. It shows the path from the goal to the current step, so the person can find the way back after side quests. Change it only with the mcp__waffles__plan tool, never by editing its goal files. The plan outline is not Claude Code's plan mode.
 
 A session has 1 goal at a time. With no active goal, start one for any work that isn't done in the same reply; a question answered or a single change finished in the same reply gets none. When a prompt makes 2 or more steps, start the goal with those steps before starting the work. When a single change grows more steps, start the goal then. When the work matches an open goal named in the plan outline context, continue it with switch instead. While a goal is active, never start or switch to another goal, even for work that seems unrelated: it goes into the active goal's tree, so the way back stays in 1 tree. The other open goals are the work of other sessions.
 
@@ -453,7 +453,7 @@ test('the system prompt gets the plan outline rules as one section that never ch
   world(on)
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'You are Claude Code.', scope: 'shared' }] }))
 
-  // No .tmp/plan yet: the rules tell Claude how to start the first goal.
+  // No outline folder yet: the rules tell Claude how to start the first goal.
   const first = await $.prompt.compose(compose)
   await call($, OAUTH)
   const withGoal = await $.prompt.compose(compose)
@@ -473,7 +473,7 @@ test('the first message carries the active goal tree', async ($, on) => {
 
   expect(await outlineBlock($)).toEqual({
     name: 'planOutline',
-    text: 'plan outline: Ship OAuth login (.tmp/plan/ship-oauth-login.md)\n▶ 1 Spec\n  ○ 1.1 ? Compare PKCE libraries\n○ 2 Build',
+    text: 'plan outline: Ship OAuth login (/repo/.git/waffles/plan/ship-oauth-login.md)\n▶ 1 Spec\n  ○ 1.1 ? Compare PKCE libraries\n○ 2 Build',
   })
 })
 
@@ -494,7 +494,7 @@ test('with no active goal the first message lists the open goals not in use', as
   expect(disk.writes).toEqual([])
 })
 
-test('a checkout without .tmp/plan adds no plan outline block', async ($, on) => {
+test('a checkout with no outline folder adds no plan outline block', async ($, on) => {
   const { disk } = world(on)
   const outlineBlock = firstMessage(on)
 
@@ -800,7 +800,7 @@ test('the poll sets the error of an active goal file it can’t parse', async ($
 
   await clock.advance(5_000)
 
-  expect(state.planError).toBe("Can't read .tmp/plan/ship-oauth-login.md: line 3")
+  expect(state.planError).toBe("Can't read /repo/.git/waffles/plan/ship-oauth-login.md: line 3")
 })
 
 test('a poll whose git fails leaves the pane as the last poll drew it', async ($, on) => {
@@ -843,26 +843,26 @@ test('after a reload whose first poll loses git, the next poll that finds git he
   expect(state.planGoal ?? 'ship-oauth-login').toBe('ship-oauth-login')
 })
 
-test('outside git the poll heartbeats and redraws in the working directory’s .tmp/plan', async ($, on) => {
+test('outside git the poll heartbeats and redraws in the working directory’s .waffles/plan', async ($, on) => {
   const { disk, clock, state } = world(on)
   disk.git = { exitCode: 128, stdout: '' }
   await start($, on)
   await call($, OAUTH)
-  disk.files.set('/cwd/.tmp/plan/ship-oauth-login.md', disk.files.get('/cwd/.tmp/plan/ship-oauth-login.md')!.replace('- [ ] 2 Build', '- [ ] 2 Build later'))
+  disk.files.set('/cwd/.waffles/plan/ship-oauth-login.md', disk.files.get('/cwd/.waffles/plan/ship-oauth-login.md')!.replace('- [ ] 2 Build', '- [ ] 2 Build later'))
 
   await clock.advance(35_000)
 
-  expect(JSON.parse(disk.files.get('/cwd/.tmp/waffles/locks/ship-oauth-login.json')!)).toEqual({ session: ME, heartbeat: new Date(NOW + 30_000).toISOString() })
+  expect(JSON.parse(disk.files.get('/cwd/.waffles/locks/ship-oauth-login.json')!)).toEqual({ session: ME, heartbeat: new Date(NOW + 30_000).toISOString() })
   expect((state.planTree as { steps: { title: string }[] }).steps[1]?.title).toBe('Build later')
 })
 
-test('outside any repository the first lock writes .tmp/waffles/.gitignore with * first', async ($, on) => {
+test('outside any repository the first lock writes .waffles/.gitignore with * first', async ($, on) => {
   const { disk } = world(on)
   disk.git = { exitCode: 128, stdout: '' }
 
   expect(await call($, OAUTH)).toEqual({ result: expect.stringContaining('◇ new goal: Ship OAuth login') })
-  expect(disk.files.get('/cwd/.tmp/waffles/.gitignore')).toBe('*\n')
-  expect(disk.writes.indexOf('/cwd/.tmp/waffles/.gitignore')).toBeLessThan(disk.writes.indexOf('/cwd/.tmp/waffles/locks/ship-oauth-login.json'))
+  expect(disk.files.get('/cwd/.waffles/.gitignore')).toBe('*\n')
+  expect(disk.writes.indexOf('/cwd/.waffles/.gitignore')).toBeLessThan(disk.writes.indexOf('/cwd/.waffles/locks/ship-oauth-login.json'))
 })
 
 test('when git fails inside a repository, a call is refused and nothing is written in the working tree', async ($, on) => {
@@ -886,22 +886,22 @@ test('outside git a deleted goal file shows its error at the next poll', async (
   await start($, on)
   await call($, OAUTH)
   // The folder stays, as on a disk: the fake disk has no empty folders.
-  disk.files.set('/cwd/.tmp/plan/.keep', '')
-  disk.files.delete('/cwd/.tmp/plan/ship-oauth-login.md')
+  disk.files.set('/cwd/.waffles/plan/.keep', '')
+  disk.files.delete('/cwd/.waffles/plan/ship-oauth-login.md')
 
   await clock.advance(5_000)
 
-  expect(state.planError).toBe('No goal file .tmp/plan/ship-oauth-login.md')
+  expect(state.planError).toBe('No goal file /cwd/.waffles/plan/ship-oauth-login.md')
 })
 
-test('when git times out, a stray .tmp/plan in the working directory does not replace the known root', async ($, on) => {
+test('when git times out, a stray .waffles/plan in the working directory does not replace the known root', async ($, on) => {
   const { disk, clock, state } = world(on)
   await start($, on)
   await call($, OAUTH)
   await clock.advance(5_000)
   const tree = state.planTree
-  // The working directory holds its own .tmp/plan with the same goal; git then fails.
-  disk.files.set('/cwd/.tmp/plan/ship-oauth-login.md', disk.files.get(file('ship-oauth-login'))!.replace('- [ ] 2 Build', '- [ ] 2 Stray'))
+  // The working directory holds its own .waffles/plan with the same goal; git then fails.
+  disk.files.set('/cwd/.waffles/plan/ship-oauth-login.md', disk.files.get(file('ship-oauth-login'))!.replace('- [ ] 2 Build', '- [ ] 2 Stray'))
   disk.git = { exitCode: 128, stdout: '' }
   disk.writes.length = 0
 
@@ -1061,7 +1061,7 @@ test('a plan outline block that fails leaves the mode block, and says why in the
   expect(logs).toEqual([expect.stringMatching(/^plan outline: the first message goes without its plan outline block: .*state unavailable/s)])
 })
 
-test('a .tmp/plan that is a file adds no plan outline block', async ($, on) => {
+test('an outline folder that is a file adds no plan outline block', async ($, on) => {
   const { disk } = world(on)
   const outlineBlock = firstMessage(on)
   disk.files.set(ROOT, 'not a folder')
@@ -1108,7 +1108,7 @@ test('a resumed session makes its recorded goal active again at start, before th
   expect(state.planTree).toEqual(goal)
   expect(state.planKept ?? null).toBe(null)
   expect(JSON.parse(disk.files.get(lockFile('ship-oauth-login'))!).session).toBe(me)
-  expect((await outlineBlock($))?.text).toMatch(/^plan outline: Ship OAuth login \(\.tmp\/plan\/ship-oauth-login\.md\)/)
+  expect((await outlineBlock($))?.text).toMatch(/^plan outline: Ship OAuth login \(\/repo\/\.git\/waffles\/plan\/ship-oauth-login\.md\)/)
   expect(await call($, { op: 'add', parent: '2', titles: ['Callback route'] })).toEqual({ result: expect.stringContaining('+ 2.1') })
 })
 
@@ -1167,7 +1167,7 @@ test('a record whose goal file can’t be read stays for the next process', asyn
   expect(disk.files.get(recordFile(me))).toBe(record('ship-oauth-login'))
 })
 
-test('a record that names no slug is removed without reading a file outside .tmp/plan', async ($, on) => {
+test('a record that names no slug is removed without reading a file outside the outline folder', async ($, on) => {
   const me = 'session-resumed-bad-slug'
   const { disk, state } = world(on, me)
   disk.files.set(recordFile(me), record('../escape'))

@@ -25,26 +25,32 @@ async function gitLines($: StoreEngine, args: string[]): Promise<string[] | null
 }
 
 /**
- * The plan outline's folders, as absolute paths. `outline` holds the goal files: `.tmp/plan` at the
- * top level of the checkout, committed on the branch, so a clone reads it after a pull. `state` holds
- * the locks and the session records: `waffles` in the checkout's git dir, which git never commits. Each
- * worktree has its own of both.
+ * The plan outline's folders, as absolute paths. `state` is `waffles` in the checkout's git dir, which
+ * git never commits: it holds the locks and the session records. `outline` is `plan` in it and holds
+ * the goal files, so no goal file is ever in the working tree or in a commit. Each worktree and each
+ * submodule has its own git dir, so its own of both. `top` is the checkout's top level.
  */
-export type Where = { outline: string; state: string }
+export type Where = { top: string; outline: string; state: string }
+
+/** The state folder in a git dir. */
+export const stateIn = (gitDir: string) => `${gitDir}/waffles`
+/** The goal files' folder in a state folder. */
+export const outlineIn = (state: string) => `${state}/plan`
 
 /**
- * `Where` for this checkout, and whether git gave it. Where git gave nothing, both folders are in the
- * working directory's `.tmp`, and `isFromGit` is false: outside git, in a bare repository, which has
- * no checkout, or where git failed (a timeout). `isGitDown` tells the last apart: the working
- * directory or a folder above it holds a `.git`, file or folder, so the fallback folders would be in
- * a working tree, where nothing may be written.
+ * `Where` for this checkout, and whether git gave it. Where git gave nothing, the state folder is
+ * `.waffles` in the working directory, with the goal files in its `plan`, and `isFromGit` is false:
+ * outside git, in a bare repository, which has no checkout, or where git failed (a timeout).
+ * `isGitDown` tells the last apart: the working directory or a folder above it holds a `.git`, file or
+ * folder, so the fallback folders would be in a working tree, where nothing may be written.
  */
 export async function findPlanRoot($: StoreEngine): Promise<Where & { isFromGit: boolean; isGitDown: boolean }> {
   const lines = await gitLines($, ['--path-format=absolute', '--show-toplevel', '--git-dir'])
   const [top, dir] = (lines ?? []).map(line => line.replace(/\/+$/, ''))
-  if (top && dir) return { outline: `${top}/.tmp/plan`, state: `${dir}/waffles`, isFromGit: true, isGitDown: false }
+  if (top && dir) return { top, outline: outlineIn(stateIn(dir)), state: stateIn(dir), isFromGit: true, isGitDown: false }
   const cwd = await $.session.cwd()
-  return { outline: `${cwd}/.tmp/plan`, state: `${cwd}/.tmp/waffles`, isFromGit: false, isGitDown: await isInWorkTree($, cwd) }
+  const state = `${cwd.replace(/\/+$/, '')}/.waffles`
+  return { top: cwd, outline: outlineIn(state), state, isFromGit: false, isGitDown: await isInWorkTree($, cwd) }
 }
 
 // Whether the folder or one above it holds a `.git`: a folder in a clone, a file in a worktree or a submodule.
@@ -57,13 +63,13 @@ async function isInWorkTree($: StoreEngine, folder: string): Promise<boolean> {
 
 /** `findPlanRoot` without whether git gave it. */
 export async function planRoot($: StoreEngine): Promise<Where> {
-  const { outline, state } = await findPlanRoot($)
-  return { outline, state }
+  const { top, outline, state } = await findPlanRoot($)
+  return { top, outline, state }
 }
 
-/** A goal file's path as the person reads it, relative to the checkout. */
-export const goalName = (slug: string) => `.tmp/plan/${slug}.md`
-const goalPath = (outline: string, slug: string) => `${outline}/${slug}.md`
+/** A goal file's path, as the person and the model read it: absolute, since it is outside the working tree. */
+export const goalName = (outline: string, slug: string) => `${outline}/${slug}.md`
+const goalPath = goalName
 const lockPath = (state: string, slug: string) => `${state}/locks/${slug}.json`
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -79,8 +85,8 @@ async function ensureFolder($: StoreEngine, path: string): Promise<void> {
 }
 
 // Writes the state folder's `.gitignore`, `*`, when absent. In a git dir it changes nothing; outside
-// git, in `.tmp/waffles`, it keeps the locks and records out of a repository made there later. Throws
-// PlanError when the state folder isn't a folder.
+// git, in `.waffles`, it keeps the goal files, the locks and the records out of a repository made
+// there later. Throws PlanError when the state folder isn't a folder.
 async function ensureState($: StoreEngine, state: string): Promise<void> {
   const path = `${state}/.gitignore`
   if (await $.fs.exists(path)) return
@@ -141,7 +147,7 @@ export async function listGoals($: StoreEngine, outline?: string): Promise<GoalF
     }
     let file: GoalFile
     try {
-      file = { slug, goal: parseGoal(text, goalName(slug)) }
+      file = { slug, goal: parseGoal(text, goalName(folder, slug)) }
     } catch (error) {
       file = { slug, error: messageOf(error) }
     }
@@ -157,7 +163,7 @@ export async function listGoals($: StoreEngine, outline?: string): Promise<GoalF
 /** Reads and parses one goal file. Throws PlanError when it is missing, can't be read, or is malformed. `outline` saves a git run. */
 export async function loadGoal($: StoreEngine, slug: string, outline?: string): Promise<Goal> {
   outline ??= (await planRoot($)).outline
-  return parseGoal(await readGoal($, outline, slug), goalName(slug))
+  return parseGoal(await readGoal($, outline, slug), goalName(outline, slug))
 }
 
 /** Whether the goal has a file in this checkout's outline folder. */
@@ -170,14 +176,19 @@ async function readGoal($: StoreEngine, folder: string, slug: string): Promise<s
   try {
     return await $.fs.read(path)
   } catch (error) {
-    if (await isGone($, path)) throw new PlanError(`No goal file ${goalName(slug)}`)
-    throw new PlanError(`Can't read ${goalName(slug)}: ${messageOf(error)}`)
+    if (await isGone($, path)) throw new PlanError(`No goal file ${path}`)
+    throw new PlanError(`Can't read ${path}: ${messageOf(error)}`)
   }
 }
 
-/** Writes a goal file. Throws PlanError when the outline folder isn't a folder. `outline` saves a git run. */
+/**
+ * Writes a goal file, after the state folder's `.gitignore`. Throws PlanError when the outline folder or
+ * the state folder isn't a folder. `outline` saves a git run.
+ */
 export async function saveGoal($: StoreEngine, slug: string, goal: Goal, outline?: string): Promise<void> {
   outline ??= (await planRoot($)).outline
+  // The outline folder is `plan` in the state folder.
+  await ensureState($, outline.slice(0, outline.lastIndexOf('/')))
   await ensureFolder($, outline)
   const path = goalPath(outline, slug)
   // A write this process makes is never taken for the file it replaced, however close the times: not

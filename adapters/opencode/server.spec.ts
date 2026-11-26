@@ -184,7 +184,7 @@ test('the plan outline tool works for the main session and refuses a subagent', 
   const tool = registered.tools[0]!
   const made = await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }] }, { sessionID: 's1' })
   assert.match(made.content, /new goal: Ship it/)
-  assert.match(await fs.readFile(join(root, '.tmp', 'plan', 'ship-it.md'), 'utf8'), /Build/)
+  assert.match(await fs.readFile(join(root, '.waffles', 'plan', 'ship-it.md'), 'utf8'), /Build/)
   // A refusal is thrown, so the model reads it as the call's error.
   await assert.rejects(tool.execute({ op: 'focus', id: '9' }, { sessionID: 's1' }), /No step 9/)
   await assert.rejects(tool.execute({ op: 'show' }, { sessionID: 'child' }), new RegExp(SUBAGENT))

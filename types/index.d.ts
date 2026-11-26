@@ -9,7 +9,7 @@ export type InteractionMode = 'production' | 'rapid' | 'backlog'
 /** The mode the model is told: the interaction mode, or a /waffles:non-interactive run over it. */
 export type WafflesMode = InteractionMode | 'non-interactive'
 
-/** One step of a plan outline goal, as hooks/plan-tree.ts reads it from `.tmp/plan/<slug>.md` (its `Step`). */
+/** One step of a plan outline goal, as core/plan-tree.ts reads it from `<git dir>/waffles/plan/<slug>.md` (its `Step`). */
 export type PlanStep = {
   id: string
   title: string
@@ -22,7 +22,7 @@ export type PlanStep = {
   children: PlanStep[]
 }
 
-/** A plan outline goal, as hooks/plan-tree.ts reads it (its `Goal`). */
+/** A plan outline goal, as core/plan-tree.ts reads it (its `Goal`). */
 export type PlanGoal = {
   title: string
   status: 'open' | 'done'

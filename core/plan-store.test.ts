@@ -6,7 +6,7 @@ import { newGoal, serializeGoal, PlanError } from './plan-tree.ts'
 
 const NOW = Date.parse('2026-11-15T12:00:00Z')
 const lock = (session: string, ageMs: number) => JSON.stringify({ session, heartbeat: new Date(NOW - ageMs).toISOString() })
-const ROOT = '/repo/.tmp/plan'
+const ROOT = '/repo/.git/waffles/plan'
 const STATE = '/repo/.git/waffles'
 const LOCK = `${STATE}/locks/g.json`
 const goal = () => newGoal('G', [{ title: 'A' }], '2026-11-15T10:00:00Z')
@@ -15,32 +15,32 @@ const gitAt = (top: string, dir: string) => (argv: readonly string[]) =>
   argv.includes('--git-dir') ? { exitCode: 0, stdout: `${top}\n${dir}\n` } : { exitCode: 1, stdout: '' }
 const failure = (pending: Promise<unknown>) => pending.then(() => null, (error: unknown) => error)
 
-test('the plan outline is in .tmp/plan at the top level of the checkout, its locks in the git dir', async () => {
+test('the plan outline and its locks are in the git dir, outside the working tree', async () => {
   const disk = fakeStoreDisk()
   const $$ = disk.$
   disk.cwd = '/repo/src'
 
-  expect(await planRoot($$)).toEqual({ outline: ROOT, state: STATE })
+  expect(await planRoot($$)).toEqual({ top: '/repo', outline: ROOT, state: STATE })
   expect(disk.ran).toEqual([['git', 'rev-parse', '--path-format=absolute', '--show-toplevel', '--git-dir']])
 })
 
-test('a worktree keeps its own plan outline on its branch, and its own locks', async () => {
+test('a worktree keeps its own plan outline and its own locks in its git dir', async () => {
   const disk = fakeStoreDisk()
   const $$ = disk.$
   // The working directory, inside the worktree, decides neither.
   disk.cwd = '/repo/.claude/worktrees/w/src'
   disk.git = gitAt('/repo/.claude/worktrees/w', '/repo/.git/worktrees/w/')
 
-  expect(await planRoot($$)).toEqual({ outline: '/repo/.claude/worktrees/w/.tmp/plan', state: '/repo/.git/worktrees/w/waffles' })
+  expect(await planRoot($$)).toEqual({ top: '/repo/.claude/worktrees/w', outline: '/repo/.git/worktrees/w/waffles/plan', state: '/repo/.git/worktrees/w/waffles' })
 })
 
-test('a submodule keeps its plan outline at its own top level, and its locks in its own git dir', async () => {
+test('a submodule keeps its plan outline and its locks in its own git dir', async () => {
   const disk = fakeStoreDisk()
   const $$ = disk.$
   disk.cwd = '/super/sub/src'
   disk.git = gitAt('/super/sub', '/super/.git/modules/sub')
 
-  expect(await planRoot($$)).toEqual({ outline: '/super/sub/.tmp/plan', state: '/super/.git/modules/sub/waffles' })
+  expect(await planRoot($$)).toEqual({ top: '/super/sub', outline: '/super/.git/modules/sub/waffles/plan', state: '/super/.git/modules/sub/waffles' })
 })
 
 test('a bare repository with no checkout keeps the plan outline in the working directory', async () => {
@@ -49,7 +49,7 @@ test('a bare repository with no checkout keeps the plan outline in the working d
   // `--show-toplevel` fails outside a work tree, and with it the whole run.
   disk.git = { exitCode: 128, stdout: '' }
 
-  expect(await findPlanRoot($$)).toEqual({ outline: '/cwd/.tmp/plan', state: '/cwd/.tmp/waffles', isFromGit: false, isGitDown: false })
+  expect(await findPlanRoot($$)).toEqual({ top: '/cwd', outline: '/cwd/.waffles/plan', state: '/cwd/.waffles', isFromGit: false, isGitDown: false })
 })
 
 test('outside git the plan outline and its locks are in the working directory', async () => {
@@ -57,29 +57,32 @@ test('outside git the plan outline and its locks are in the working directory', 
   const $$ = disk.$
   disk.git = { exitCode: 128, stdout: '' }
 
-  expect(await findPlanRoot($$)).toEqual({ outline: '/cwd/.tmp/plan', state: '/cwd/.tmp/waffles', isFromGit: false, isGitDown: false })
+  expect(await findPlanRoot($$)).toEqual({ top: '/cwd', outline: '/cwd/.waffles/plan', state: '/cwd/.waffles', isFromGit: false, isGitDown: false })
   expect(disk.ran).toHaveLength(1)
 })
 
-test('a .tmp/plan that is a file lists no goals and refuses a save; a state folder that is a file refuses a claim', async () => {
+test('an outline folder that is a file lists no goals and refuses a save; a state folder that is a file refuses a claim and a save', async () => {
   const disk = fakeStoreDisk()
   const $$ = disk.$
   disk.files.set(ROOT, 'x')
-  disk.files.set(STATE, 'x')
 
   expect(await listGoals($$)).toEqual([])
-  for (const [pending, path] of [
-    [saveGoal($$, 'g', goal()), ROOT],
-    [claim($$, 'g', 'me', NOW), STATE],
-  ] as const) {
+  const unsaved = await failure(saveGoal($$, 'g', goal()))
+  expect(unsaved).toBeInstanceOf(PlanError)
+  expect((unsaved as Error).message).toBe(`Not a folder: ${ROOT}`)
+
+  disk.files.delete(ROOT)
+  disk.files.delete(`${STATE}/.gitignore`)
+  disk.files.set(STATE, 'x')
+  for (const pending of [claim($$, 'g', 'me', NOW), saveGoal($$, 'g', goal())]) {
     const error = await failure(pending)
     expect(error).toBeInstanceOf(PlanError)
-    expect((error as Error).message).toBe(`Not a folder: ${path}`)
+    expect((error as Error).message).toBe(`Not a folder: ${STATE}`)
   }
-  expect(disk.writes).toEqual([])
+  expect(disk.writes).toEqual([`${STATE}/.gitignore`])
 })
 
-test('listing a checkout without .tmp/plan returns nothing and writes nothing', async () => {
+test('listing a checkout with no outline folder returns nothing and writes nothing', async () => {
   const disk = fakeStoreDisk()
   const $$ = disk.$
 
@@ -87,14 +90,15 @@ test('listing a checkout without .tmp/plan returns nothing and writes nothing', 
   expect(disk.writes).toEqual([])
 })
 
-test('a save writes the goal file with no .gitignore beside it: it is committed on the branch', async () => {
+test("a save writes the state folder's .gitignore first, then the goal file beside the locks", async () => {
   const disk = fakeStoreDisk()
   const $$ = disk.$
   await saveGoal($$, 'g', goal())
   expect(await claim($$, 'g', 'me', NOW)).toBe(true)
   await recordActive($$, 'me', 'g')
 
-  expect(disk.writes).toEqual([`${ROOT}/g.md`, `${STATE}/.gitignore`, LOCK, `${STATE}/sessions/me.json`])
+  expect(disk.writes).toEqual([`${STATE}/.gitignore`, `${ROOT}/g.md`, LOCK, `${STATE}/sessions/me.json`])
+  expect(disk.files.get(`${STATE}/.gitignore`)).toBe('*\n')
 })
 
 test('git failing inside a repository is told apart from no repository, by a .git above the working directory', async () => {
@@ -103,7 +107,7 @@ test('git failing inside a repository is told apart from no repository, by a .gi
   disk.git = { exitCode: 128, stdout: '' }
   disk.cwd = '/repo/src/app'
   disk.files.set('/repo/.git/HEAD', 'ref: refs/heads/main\n')
-  expect(await findPlanRoot($$)).toEqual({ outline: '/repo/src/app/.tmp/plan', state: '/repo/src/app/.tmp/waffles', isFromGit: false, isGitDown: true })
+  expect(await findPlanRoot($$)).toEqual({ top: '/repo/src/app', outline: '/repo/src/app/.waffles/plan', state: '/repo/src/app/.waffles', isFromGit: false, isGitDown: true })
 
   // A worktree's or a submodule's .git is a file.
   disk.files.delete('/repo/.git/HEAD')
@@ -142,13 +146,13 @@ test('a missing goal file and one that cannot be read fail with their own messag
   const $$ = disk.$
   const missing = await failure(loadGoal($$, 'g'))
   expect(missing).toBeInstanceOf(PlanError)
-  expect((missing as Error).message).toBe('No goal file .tmp/plan/g.md')
+  expect((missing as Error).message).toBe('No goal file /repo/.git/waffles/plan/g.md')
 
   disk.files.set(`${ROOT}/g.md`, serializeGoal(goal()))
   disk.isReadBroken = true
   const broken = await failure(loadGoal($$, 'g'))
   expect(broken).toBeInstanceOf(PlanError)
-  expect((broken as Error).message).toBe("Can't read .tmp/plan/g.md: EIO /repo/.tmp/plan/g.md")
+  expect((broken as Error).message).toBe("Can't read /repo/.git/waffles/plan/g.md: EIO /repo/.git/waffles/plan/g.md")
 })
 
 test('a goal file a listing could not read is read again by the next', async () => {
@@ -156,7 +160,7 @@ test('a goal file a listing could not read is read again by the next', async () 
   const $$ = disk.$
   disk.files.set(`${ROOT}/g.md`, serializeGoal(goal()))
   disk.isReadBroken = true
-  expect(await listGoals($$)).toEqual([{ slug: 'g', error: "Can't read .tmp/plan/g.md: EIO /repo/.tmp/plan/g.md" }])
+  expect(await listGoals($$)).toEqual([{ slug: 'g', error: "Can't read /repo/.git/waffles/plan/g.md: EIO /repo/.git/waffles/plan/g.md" }])
 
   disk.isReadBroken = false
   expect(await listGoals($$)).toEqual([{ slug: 'g', goal: goal() }])
@@ -194,9 +198,9 @@ test('a second listing reads only the goal files that changed since the last', a
   disk.files.set(`${ROOT}/b.md`, serializeGoal(renamed))
   const changed = await listGoals(disk.$)
 
-  expect(again).toEqual([{ slug: 'a', goal: goal() }, { slug: 'b', goal: goal() }, { slug: 'c', error: "Can't read .tmp/plan/c.md: line 1" }])
+  expect(again).toEqual([{ slug: 'a', goal: goal() }, { slug: 'b', goal: goal() }, { slug: 'c', error: "Can't read /repo/.git/waffles/plan/c.md: line 1" }])
   expect(unread).toEqual([])
-  expect(changed).toEqual([{ slug: 'a', goal: goal() }, { slug: 'b', goal: renamed }, { slug: 'c', error: "Can't read .tmp/plan/c.md: line 1" }])
+  expect(changed).toEqual([{ slug: 'a', goal: goal() }, { slug: 'b', goal: renamed }, { slug: 'c', error: "Can't read /repo/.git/waffles/plan/c.md: line 1" }])
   expect(disk.reads).toEqual([`${ROOT}/b.md`])
 })
 
@@ -218,7 +222,7 @@ test('a goal file that does not parse is listed with its error', async () => {
 
   expect(await listGoals($$)).toEqual([
     { slug: 'a', goal: goal() },
-    { slug: 'b', error: "Can't read .tmp/plan/b.md: line 1" },
+    { slug: 'b', error: "Can't read /repo/.git/waffles/plan/b.md: line 1" },
   ])
 })
 

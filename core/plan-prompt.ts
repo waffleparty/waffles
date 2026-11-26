@@ -6,12 +6,12 @@ import { renderTree } from './plan-tree.ts'
 /**
  * The plan outline's rules for the system prompt. The same names give the same bytes in every request,
  * so the prompt cache holds; the tree goes in the first message instead. They are there in a checkout
- * with no .tmp/plan/ too: the rules say when to start the first goal.
+ * with no goal file too: the rules say when to start the first goal.
  */
 export const planRules = ({ planTool: tool, ask, planMode }: Names): string =>
   `# waffles plan outline
 
-The waffles plugin keeps a plan outline: a tree of the work in this checkout, stored as one goal file per goal in .tmp/plan/ and shown to the person beside the chat. It shows the path from the goal to the current step, so the person can find the way back after side quests. Change it only with the ${tool} tool, never by editing its goal files.${planMode === null ? '' : ` The plan outline is not ${planMode}.`}
+The waffles plugin keeps a plan outline: a tree of the work in this checkout, stored as one goal file per goal in the checkout's git folder and shown to the person beside the chat. The goal files are not in the working tree and are never committed. It shows the path from the goal to the current step, so the person can find the way back after side quests. Change it only with the ${tool} tool, never by editing its goal files.${planMode === null ? '' : ` The plan outline is not ${planMode}.`}
 
 A session has 1 goal at a time. With no active goal, start one for any work that isn't done in the same reply; a question answered or a single change finished in the same reply gets none. When a prompt makes 2 or more steps, start the goal with those steps before starting the work. When a single change grows more steps, start the goal then. When the work matches an open goal named in the plan outline context, continue it with switch instead. While a goal is active, never start or switch to another goal, even for work that seems unrelated: it goes into the active goal's tree, so the way back stays in 1 tree. The other open goals are the work of other sessions.
 
@@ -27,23 +27,23 @@ The person sees each plan outline change in the transcript, so a reply needs to 
 
 /**
  * The first message's plan outline block: the active goal's tree, or the open goals no other session holds.
- * Empty in a checkout with no `.tmp/plan/` folder, which it never creates, and when the plan outline can't
- * be read: why goes to the debug log.
+ * Empty in a checkout with no plan outline folder, which it never creates, and when the plan outline
+ * can't be read: why goes to the debug log.
  */
 export async function planContext($: Host): Promise<string> {
   try {
     const { isGitDown, ...root } = await findPlanRoot($)
-    // Git failed inside a repository: the working directory's .tmp/plan is not the checkout's.
+    // Git failed inside a repository: the working directory's fallback folder is not the checkout's.
     if (isGitDown) return ''
-    // A `.tmp/plan` that is a file holds no goals.
+    // An outline folder that is a file holds no goals.
     const isOutline = (await $.fs.exists(root.outline)) && (await $.fs.stat(root.outline)).kind === 'dir'
     if (!isOutline) return ''
     const files = await listGoals($, root.outline)
     const slug = await activeGoal($)
     if (slug !== null) {
       const mine = files.find(f => f.slug === slug)
-      if (mine && 'goal' in mine) return [`plan outline: ${mine.goal.title} (${goalName(slug)})`, ...renderTree(mine.goal)].join('\n')
-      return `plan outline: the active goal can't be read. ${mine ? mine.error : `No goal file ${goalName(slug)}`}`
+      if (mine && 'goal' in mine) return [`plan outline: ${mine.goal.title} (${goalName(root.outline, slug)})`, ...renderTree(mine.goal)].join('\n')
+      return `plan outline: the active goal can't be read. ${mine ? mine.error : `No goal file ${goalName(root.outline, slug)}`}`
     }
     const lines = await openGoalLines($, files, root, { isInUseShown: false })
     return lines.length ? ['plan outline: no active goal. Open goals:', ...lines].join('\n') : 'plan outline: no active goal and no open goals.'

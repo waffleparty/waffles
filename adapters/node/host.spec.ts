@@ -126,12 +126,12 @@ test('the plan outline tool works end to end outside git, and a second process c
   assert.ok('result' in made, JSON.stringify(made))
   assert.match(made.result, /Ship it/)
   assert.equal(await $.state.get('planGoal'), 'ship-it')
-  assert.match(await fs.readFile(join(cwd, '.tmp', 'plan', 'ship-it.md'), 'utf8'), /Build/)
+  assert.match(await fs.readFile(join(cwd, '.waffles', 'plan', 'ship-it.md'), 'utf8'), /Build/)
 
   // The next event of the same session comes to a new process: the goal is still active there.
   const next = nodeHost({ sessionId: 's1', cwd, names: NAMES, stateFolder: state })
   await startPlan(next)
   const done = await callPlan(next, { op: 'done', ids: ['1'] })
   assert.ok('result' in done, JSON.stringify(done))
-  assert.match(await fs.readFile(join(cwd, '.tmp', 'plan', 'ship-it.md'), 'utf8'), /\[x\] 1 Build/)
+  assert.match(await fs.readFile(join(cwd, '.waffles', 'plan', 'ship-it.md'), 'utf8'), /\[x\] 1 Build/)
 })

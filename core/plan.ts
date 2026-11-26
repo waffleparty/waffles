@@ -59,14 +59,14 @@ const AGENT_ID = /^[\w.:-]+$/
 const LIVE: readonly string[] = ['pending', 'running', 'waiting']
 
 const DESCRIPTION =
-  'Changes the plan outline: the tree of goals and steps for this repo that the person sees beside the chat. The only way to change its goal files in .tmp/plan/. Each call returns the changes and the new path.'
+  "Changes the plan outline: the tree of goals and steps for this repo that the person sees beside the chat. The only way to change its goal files, which are kept in the checkout's git folder, outside the working tree. Each call returns the changes and the new path."
 const NO_GOAL = 'No active goal. Start one with op "goal".'
 const GIT_DOWN = 'git did not answer, so the plan outline was not saved. Try again.'
 // The active goal has no file in the repo of the shell's working directory, most often because the shell
 // moved (a cd into a submodule or another repo). A result, not a refusal: it is common, the pane already
 // says so, and the call's row draws it dim. It names the folder, so Claude cds back rather than searching.
 const elsewhere = (slug: string, root: Where) =>
-  `${ELSEWHERE} ${goalName(slug)} isn't in ${root.outline.slice(0, -'/.tmp/plan'.length)}, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again.`
+  `${ELSEWHERE} the active goal ${slug} has no goal file in ${root.top}, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again.`
 const NO_GOAL_OPEN ='No active goal. Continue one with op "goal" and switch, or start one with op "goal" and title.'
 
 const OPS = ['goal', 'add', 'focus', 'done', 'drop', 'defer', 'move', 'rename', 'show'] as const
@@ -268,7 +268,7 @@ async function refresh(
   const shown = slug ?? (await $.state.get('planKept'))
   const mine = shown === null ? undefined : files.find(f => f.slug === shown)
   const isRead = mine !== undefined && 'goal' in mine
-  const error = slug === null ? null : !mine ? `No goal file ${goalName(slug)}` : 'error' in mine ? mine.error : null
+  const error = slug === null ? null : !mine ? `No goal file ${goalName(root.outline, slug)}` : 'error' in mine ? mine.error : null
   // With no active goal, the kept goal's tree stays drawn though its file is gone or unreadable: the pane says so.
   const issue = slug !== null || shown === null || isRead ? null : mine ? 'unreadable' : 'missing'
   const others: OtherGoal[] = []
@@ -645,7 +645,7 @@ async function restore($: Host, me: string, root: Where, isFromGit: boolean, now
   }
 }
 
-/** One poll: the heartbeat every BEAT_MS, then the redraw, with 1 git run. Writes nothing in a checkout with no `.tmp/plan/`. */
+/** One poll: the heartbeat every BEAT_MS, then the redraw, with 1 git run. Writes nothing in a checkout with no goal file. */
 async function poll($: Host) {
   const at = vars($).ends
   const isEnded = () => vars($).ends !== at
@@ -658,7 +658,7 @@ async function poll($: Host) {
   const slug = await $.state.get('planGoal')
   // Where git failed (a timeout), the root is the working directory's: while a tree is drawn, the pane
   // keeps it rather than an error, and no lock is written there. Once git has given a
-  // root, only that root is trusted; before that (outside git), the working directory's .tmp/plan is,
+  // root, only that root is trusted; before that (outside git), the working directory's .waffles/plan is,
   // since the drawn goal was created there.
   const shown = slug ?? (await $.state.get('planKept'))
   const { lastRoot } = vars($)
