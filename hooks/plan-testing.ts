@@ -128,6 +128,7 @@ function answers(disk: Disk) {
         const path = argv[argv.length - 1] ?? ''
         disk.removed.push(path)
         disk.files.delete(path)
+        if (argv[1] === '-rf') for (const file of under(path)) disk.files.delete(file)
         return done(0, '')
       }
       disk.ran.push([...argv])
@@ -192,8 +193,8 @@ export function fakeStoreDisk(): Disk & { $: StoreEngine } {
       exists: async path => at.exists(path),
       list: async path => at.list(path),
       stat: async path => at.stat(path, false),
-      remove: async path => {
-        await at.run(['rm', '-f', path])
+      remove: async (path, options) => {
+        await at.run(['rm', options?.recursive ? '-rf' : '-f', path])
       },
       realPath: async path => path,
     },

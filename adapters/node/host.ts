@@ -153,7 +153,7 @@ export function nodeHost({ sessionId, cwd, names, stateFolder: folder = stateFol
         const stat = await fs.stat(path)
         return { kind: kindOf(stat), size: stat.size, mtimeMs: stat.mtimeMs }
       },
-      remove: path => fs.rm(path, { force: true }),
+      remove: (path, options) => fs.rm(path, { force: true, recursive: options?.recursive ?? false }),
       realPath: path => fs.realpath(path),
     },
     process: {
@@ -184,6 +184,7 @@ export function nodeHost({ sessionId, cwd, names, stateFolder: folder = stateFol
     session: { id: async () => sessionId, cwd: async () => cwd },
     clock: { now: async () => Date.now(), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) },
     home: async () => homedir() || undefined,
+    env: async name => process.env[name],
     state: parts.state ?? {
       get: async key => {
         const all = await session.read()

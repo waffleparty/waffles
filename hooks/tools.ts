@@ -35,6 +35,7 @@ export function registerTools(on: On) {
   on('tool.call', { tool: 'mcp__waffles__checkpoint' }, ($, e) => answer($, 'checkpoint', e))
   on('tool.call', { tool: 'mcp__waffles__review_branch' }, ($, e) => answer($, 'review_branch', e))
   on('tool.call', { tool: 'mcp__waffles__backlog_queue' }, ($, e) => answer($, 'backlog_queue', e))
+  on('tool.call', { tool: 'mcp__waffles__builders' }, ($, e) => answer($, 'builders', e))
 }
 
 // The module's one session.start hook calls this. The engine reads no name here, so every tool registers from the list.

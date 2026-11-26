@@ -36,13 +36,15 @@ export type FakeHostInit = {
   names?: Partial<Names>
   /** Folders whose files read and do not change: a write, a create, or a remove under one is refused. */
   readOnly?: string[]
+  /** The environment's variables. */
+  env?: Record<string, string>
 }
 
 const NAMES: Names = { assistant: 'Agent', product: 'the test', planTool: 'plan', ask: 'question', planMode: null }
 
 const missing = (path: string) => Object.assign(new Error(`ENOENT: no such file, '${path}'`), { code: 'ENOENT' })
 
-export function fakeHost({ run, files = {}, cwd = '/work', sessionId = 'test', now = 0, names = {}, readOnly = [] }: FakeHostInit = {}): FakeHost {
+export function fakeHost({ run, files = {}, cwd = '/work', sessionId = 'test', now = 0, names = {}, readOnly = [], env = {} }: FakeHostInit = {}): FakeHost {
   const disk = new Map(Object.entries(files))
   const mtimes = new Map<string, number>()
   const ran: Ran[] = []
@@ -100,10 +102,12 @@ export function fakeHost({ run, files = {}, cwd = '/work', sessionId = 'test', n
         if (isDir(path)) return { kind: 'dir', size: 0, mtimeMs: 0 }
         throw missing(path)
       },
-      remove: async path => {
-        if (!disk.has(path)) return
-        change(path)
-        disk.delete(path)
+      remove: async (path, options) => {
+        const under = options?.recursive ? [...disk.keys()].filter(file => file.startsWith(`${path.replace(/\/$/, '')}/`)) : []
+        for (const file of [...(disk.has(path) ? [path] : []), ...under]) {
+          change(file)
+          disk.delete(file)
+        }
       },
       realPath: async path => path,
     },
@@ -119,6 +123,7 @@ export function fakeHost({ run, files = {}, cwd = '/work', sessionId = 'test', n
     session: { id: async () => sessionId, cwd: async () => cwd },
     clock: { now: async () => clock, sleep: async ms => void (clock += ms) },
     home: async () => '/home',
+    env: async name => env[name],
     state: {
       get: async key => (key in values ? values[key] : INITIAL[key]) as SessionState[typeof key],
       set: async (key, value) => void Object.assign(values, { [key]: value }),

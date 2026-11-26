@@ -18,8 +18,8 @@ export type Host = {
     exists(path: string): Promise<boolean>
     list(path: string): Promise<FileEntry[]>
     stat(path: string): Promise<FileStat>
-    /** Removes a file; one that isn't there is nothing to remove. */
-    remove(path: string): Promise<void>
+    /** Removes a file, or with `recursive` a folder and all it holds; one that isn't there is nothing to remove. */
+    remove(path: string, options?: { recursive?: boolean }): Promise<void>
     /** The path with every link in it followed. */
     realPath(path: string): Promise<string>
   }
@@ -40,6 +40,8 @@ export type Host = {
   }
   /** The person's home folder, where the platform knows it. */
   home(): Promise<string | undefined>
+  /** A variable of the environment the platform runs in; undefined when it is not set. */
+  env(name: EnvName): Promise<string | undefined>
   /**
    * The session's values: they last as long as the session, come back when it is resumed, and never
    * reach another session. A key never set reads as `INITIAL` has it.
@@ -95,6 +97,9 @@ export type Names = {
   /** The platform's own feature named "plan mode", which the plan outline is not; null where it has none. */
   planMode: string | null
 }
+
+/** The variables the core reads. Claude Code lists the ones a module reads from its source, so each has its name here. */
+export type EnvName = 'WAFFLES_BUILDERS_ROOT'
 
 export type FileKind = 'file' | 'dir' | 'other'
 export type FileEntry = { name: string; kind: FileKind; size: number; mtimeMs: number }

@@ -131,6 +131,22 @@ test('of 2 creators of a file at once, 1 wins; create makes the folders and leav
   }
 })
 
+test('a recursive remove takes a folder and all it holds; env reads the process environment', async () => {
+  const { $, cwd } = await host()
+  await $.fs.write(join(cwd, 'clone', 'a', 'b.txt'), 'b')
+  await $.fs.remove(join(cwd, 'clone'), { recursive: true })
+  assert.equal(await $.fs.exists(join(cwd, 'clone')), false)
+  await $.fs.remove(join(cwd, 'clone'), { recursive: true })
+  const saved = process.env.WAFFLES_BUILDERS_ROOT
+  process.env.WAFFLES_BUILDERS_ROOT = '/clones'
+  try {
+    assert.equal(await $.env('WAFFLES_BUILDERS_ROOT'), '/clones')
+  } finally {
+    if (saved === undefined) delete process.env.WAFFLES_BUILDERS_ROOT
+    else process.env.WAFFLES_BUILDERS_ROOT = saved
+  }
+})
+
 test('sleep waits on the clock', async () => {
   const { $ } = await host()
   const start = await $.clock.now()

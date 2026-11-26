@@ -140,9 +140,15 @@ export function hostOf($: EngineInterface): Host {
       exists: path => $.fs.exists(path),
       list: path => $.fs.list(path),
       stat: path => $.fs.stat(path),
-      // `$.fs` removes nothing; `rm -f` leaves a file that isn't there alone.
-      remove: async path => {
-        await $.process.run(['rm', '-f', path])
+      // `$.fs` removes nothing; `rm -f` leaves a file that isn't there alone. A folder may hold a whole clone:
+      // its removal gets 2 minutes, and one that fails rejects, so nothing says a folder is gone that is not.
+      remove: async (path, options) => {
+        if (!options?.recursive) {
+          await $.process.run(['rm', '-f', path])
+          return
+        }
+        const r = await $.process.run(['rm', '-rf', path], { timeoutMs: 120_000 })
+        if (r.exitCode !== 0) throw new Error(`cannot remove ${path}: ${r.stderr.trim() || `rm exited with ${r.exitCode}`}`)
       },
       realPath: async path => (await $.fs.stat(path, { resolve: true })).realPath ?? path,
     },
@@ -157,6 +163,13 @@ export function hostOf($: EngineInterface): Host {
     session: { id: () => $.session.id(), cwd: () => $.session.cwd() },
     clock: { now: () => $.clock.now(), sleep: ms => $.clock.sleep(ms) },
     home: () => $.env.get('HOME'),
+    // The engine reads a variable's name from the call: each one the core reads is written out.
+    env: async name => {
+      switch (name) {
+        case 'WAFFLES_BUILDERS_ROOT':
+          return $.env.get('WAFFLES_BUILDERS_ROOT')
+      }
+    },
     state: {
       get: key => getState($, key) as Promise<SessionState[typeof key]>,
       set: (key, value) => setState($, key, value),

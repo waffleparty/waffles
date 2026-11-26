@@ -129,6 +129,37 @@ test('2 backlog queue calls at once both land, each holding the lock that the sh
   expect(JSON.parse(listed.result ?? '{}').entries.length).toBe(2)
 })
 
+test('builders limits refuses a list of pull requests that Claude Code cut, and names the cap otherwise', async ($, on) => {
+  const runs: [string[], number | undefined][] = []
+  let isCut = true
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('clock.now', () => ({ value: 1000 }))
+  on('fs.exists', () => ({ value: true }))
+  on('fs.stat', ($, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } }) as never)
+  on('process.run', ($, e) => {
+    runs.push([[...e.argv], e.init?.timeoutMs])
+    const stdout = e.argv[0] === 'git' ? '/repo\n' : JSON.stringify([{ number: 1, isDraft: false, reviewRequests: [{}] }])
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: e.argv[0] === 'gh' && isCut, isStderrTruncated: false } }
+  })
+  const limits = () => $.tool.call({ tool: 'mcp__waffles__builders', op: 'limits', repo: '.', cap: 1 } as never)
+
+  expect(await limits()).toEqual({ deny: 'gh pr list printed more than the platform passes on, so nothing is answered from a part of it' })
+  isCut = false
+  expect((await limits()).deny).toMatch(/^Refused: 1 open pull requests in repo wait for human review/)
+  expect(runs.map(([argv, ms]) => [argv[0], ms])).toEqual([['git', 30_000], ['gh', 45_000], ['git', 30_000], ['gh', 45_000]])
+})
+
+test('builders takes WAFFLES_BUILDERS_ROOT over root, as the script does', async ($, on) => {
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.stat', ($, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } }) as never)
+  on('clock.now', () => ({ value: 1000 }))
+  mock.env(on, { WAFFLES_BUILDERS_ROOT: '/clones' })
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__builders', op: 'remove', root: '/scratch/builders', path: '/scratch/builders/o/r/ITEM-1' } as never)
+
+  expect(r).toEqual({ deny: "Refused: /scratch/builders/o/r/ITEM-1 is not a builder's clone under /clones." })
+})
+
 test('a stdout that Claude Code cut is refused, not read in part', async ($, on) => {
   on('session.cwd', () => ({ value: '/repo' }))
   on('clock.now', () => ({ value: 1000 }))
