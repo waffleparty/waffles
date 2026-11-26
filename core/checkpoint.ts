@@ -55,10 +55,8 @@ const STEP_ID = /^\p{Nd}+(?:\.\p{Nd}+)*\.?$/u
 const LIST_LINE = new RegExp(`^[${WS}]*(?:[-*+]|\\p{Nd}+\\.) |^[${WS}]*>`, 'u')
 const FOOTER = /^(?:Written by Claude(?![\p{L}\p{N}_])|🤖 Generated with |https:\/\/claude\.ai\/code\/)/u
 
-// A number as Python's `str.isdigit` takes one: decimal digits of any script, and the superscript and
-// circled digits too, which gh then finds no pull request for.
-const DIGITS =
-  /^[\p{Nd}\u{b2}-\u{b3}\u{b9}\u{1369}-\u{1371}\u{19da}\u{2070}\u{2074}-\u{2079}\u{2080}-\u{2089}\u{2460}-\u{2468}\u{2474}-\u{247c}\u{2488}-\u{2490}\u{24ea}\u{24f5}-\u{24fd}\u{24ff}\u{2776}-\u{277e}\u{2780}-\u{2788}\u{278a}-\u{2792}\u{10a40}-\u{10a43}\u{10e60}-\u{10e68}\u{11052}-\u{1105a}\u{1f100}-\u{1f10a}]+$/u
+// A pull request's number: ASCII digits only, since gh finds no pull request for another script's digits.
+const DIGITS = /^[0-9]+$/
 
 const LEADING = new RegExp(`^[${WS}]+`, 'u')
 const TRAILING = new RegExp(`[${WS}]+$`, 'u')
@@ -402,7 +400,10 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
         if (!('number' in info)) throw new TypeError('No "number" in the pull request.')
         return str(get('number'))
       }
+      // A field gh left out says so, rather than reading as None.
+      if (get('state') == null) return out(`gh gave no state for pull request #${number()}: nothing to update.`)
       if (get('state') !== 'OPEN') return out(`Pull request #${number()} is ${str(get('state')).toLowerCase()}: its checklist stays as it ended.`)
+      if (get('headRefName') == null) return out(`gh gave no head branch for pull request #${number()}: nothing to update.`)
       if (get('headRefName') !== branch) return out(`Pull request #${number()} is for ${str(get('headRefName'))}, not ${branch}: nothing to update.`)
       const found = await outlineFiles(c, top, await baseRef(c, get('baseRefName')))
       if (found === null) return out(`No plan outline in .tmp/plan/: #${number()} stays as it is.`)
@@ -414,8 +415,9 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
       if (isDryRun) return out(next)
       if (next === body) return out(`The plan outline in #${number()} is up to date.`)
       await run(c, ['gh', 'pr', 'edit', number(), '--body-file', '-'], next)
-      if (!('url' in info)) throw new TypeError('No "url" in the pull request.')
-      return out(`Updated the plan outline in #${number()}${note ? ' (ahead of the branch)' : ''}: ${str(get('url'))}`)
+      // The description is written: a url that gh left out only shortens the line.
+      const url = get('url')
+      return out(`Updated the plan outline in #${number()}${note ? ' (ahead of the branch)' : ''}${url == null ? '.' : `: ${str(url)}`}`)
     } catch (error) {
       if (error instanceof Failure) return { exitCode: 1, stdout: `checkpoint: ${error.message}\n`, stderr: '' }
       throw error

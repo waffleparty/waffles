@@ -462,3 +462,59 @@ test('a body with crlf line ends keeps them', () => {
   assert.equal(placed, `## Summary\r\nText\r\n\r\n${START}\r\nA\r\n${END}\r\n`)
   assert.equal(place(placed, block), placed)
 })
+
+checkoutTest('the working files removed in an earlier commit of the branch still give the checklist', async co => {
+  co.git('rm', '-q', '-r', '.tmp')
+  co.git('commit', '-q', '-m', 'Remove the working files')
+  await co.write('b.txt', 'b\n')
+  co.git('add', 'b.txt')
+  co.git('commit', '-q', '-m', 'B')
+  // main moves on, and the branch takes it in with a merge after the removal.
+  co.git('switch', '-q', 'main')
+  await co.write('c.txt', 'c\n')
+  co.git('add', 'c.txt')
+  co.git('commit', '-q', '-m', 'C')
+  co.git('push', '-q', 'origin', 'main')
+  co.git('switch', '-q', 'feat')
+  co.git('merge', '-q', '--no-edit', 'main')
+  co.git('push', '-q')
+
+  const [code, out] = await co.checkpoint()
+
+  assert.equal(code, 0, out)
+  assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section([...CHECKLIST.slice(0, 3), '- [x] 3. Remove the working files'])}`)
+})
+
+checkoutTest('a pull request with no url is still updated, and the run ends well', async co => {
+  const pr: Partial<Pr> = (await co.gh()).pr!
+  delete pr.url
+  await co.setPr(pr as Pr)
+
+  const [code, out] = await co.checkpoint()
+
+  assert.equal(code, 0, out)
+  assert.equal(out, 'Updated the plan outline in #7.\n')
+  assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section(CHECKLIST)}`)
+})
+
+checkoutTest('a pull request with no state or no head branch says which, and is left alone', async co => {
+  for (const [key, line] of [
+    ['state', 'gh gave no state for pull request #7: nothing to update.'],
+    ['headRefName', 'gh gave no head branch for pull request #7: nothing to update.'],
+  ] as const) {
+    const pr: Partial<Pr> = { number: 7, url: 'u', body: BODY, headRefName: 'feat', baseRefName: 'main', state: 'OPEN' }
+    delete pr[key]
+    await co.setPr(pr as Pr)
+
+    const [code, out] = await co.checkpoint()
+
+    assert.equal(code, 0, out)
+    assert.equal(out, `${line}\n`)
+    assert.deepEqual(await co.edits(), [])
+  }
+})
+
+test('--pr takes ASCII digits only', () => {
+  assert.deepEqual(parseArgs(['--pr', '12']), { pr: '12' })
+  for (const number of ['²', '①', '٣', '１２', '1²']) assert.equal(parseArgs(['--pr', number]), null, number)
+})
