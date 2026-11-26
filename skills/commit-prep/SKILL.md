@@ -17,47 +17,38 @@ and the review checks the pending changes against them.
 
 ## Commit and push rules
 
-These rules hold for work that has a plan outline (the goal files in
-`.tmp/plan/` on the feature branch), in production mode and during a run.
-Where the user's own rules or the repo's say more, follow those too.
+These rules hold for work that has a plan outline, in production mode and
+during a run. The plan outline is not in the working tree and is never
+committed. Where the user's own rules or the repo's say more, follow those too.
 
 ```
-outline ─► commit 1: the outline alone ─► push ─► draft pull request
-   │
-   ▼
-step ─► checks pass ─► commit (the step, and its box ticked) ─► milestone? ─► push
-   │                                                             stop?    ─► push
-   ▼
-last step: "Remove the working files" ─► git rm -r .tmp ─► commit ─► push ─► gh pr ready
+step ─► checks pass ─► commit ─► first commit? ─► push ─► draft pull request
+                                 milestone?    ─► push
+                                 stop?         ─► push
+last commit ─► push ─► gh pr ready
 ```
 
-1. **Start.** On the feature branch, write the plan outline. The first
-   commit holds the outline alone. Push the branch, then open the pull request
-   as a draft: `gh pr create --draft`. Its body has the sections of the repo's
-   pull request template. The waffles hook renders the outline into the body as a
+1. **Start.** On the feature branch, write the plan outline. After the first
+   commit, push the branch, then open the pull request as a draft:
+   `gh pr create --draft`. Its body has the sections of the repo's pull request
+   template. The waffles hook renders the outline into the body as a
    checklist after each push and after `gh pr create`. Those are the only
    checkpoints today: at the end of a run or a session nothing renders it, so
-   push before you stop (rule 5).
-2. **Every outline ends with the step "Remove the working files".** Add it
-   when you write the outline.
-3. **One commit per step.** A commit holds one step of the outline: its change,
-   and the step closed with the plan tool (op `done`), so the ticked box is in
-   the same commit. Run the repo's checks (tests, linters, type checks) first,
-   and commit only when they pass. Make no commit only to save state.
-4. **Push at a milestone.** A milestone is a top-level step done with all its
+   push before you stop (rule 4).
+2. **One commit per step.** A commit holds one step of the outline: its change.
+   Run the repo's checks (tests, linters, type checks) first, and commit only
+   when they pass. Make no commit only to save state.
+3. **Push at a milestone.** A milestone is a top-level step done with all its
    child steps, and the last commit before review. Between milestones, commits
    stay local.
-5. **Push at a stop.** Push also when work stops short of a milestone: at the
+4. **Push at a stop.** Push also when work stops short of a milestone: at the
    end of a session, at the end of a run that does not finish the item, and at
    a handoff to another machine, person, or agent. The push carries finished
-   commits only. Work that is not committed stays in the checkout, and the
-   checklist in the pull request says "Ahead of the branch".
-6. **No skip tag.** No commit message holds `[skip ci]`, `[ci skip]`,
+   commits only. Work that is not committed stays in the checkout.
+5. **No skip tag.** No commit message holds `[skip ci]`, `[ci skip]`,
    `[no ci]`, `[skip actions]`, or `skip-checks:`. CI runs on every push.
-7. **Finish.** The last step is `git rm -r .tmp` in its own commit, "Remove
-   the working files". Push, then mark the pull request ready:
-   `gh pr ready`. Nothing stops a merge while `.tmp/` is on the head branch:
-   check that this commit is pushed before you merge.
+6. **Finish.** Push the last commit, then mark the pull request ready:
+   `gh pr ready`.
 
 ### Squash digest
 
@@ -98,9 +89,8 @@ EOF
    upstream (`git fetch` first), unpushed commits already ahead, conflict
    markers in any file.
 5. Where the work has a plan outline, check it against the commit and push
-   rules: the changes hold one step, and that step's box is ticked in them; no
-   message of the commits ahead of the upstream holds a skip tag; the outline
-   ends with "Remove the working files".
+   rules: the changes hold one step; no message of the commits ahead of the
+   upstream holds a skip tag.
 
 ## 2. Prerequisites
 

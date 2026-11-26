@@ -9,11 +9,11 @@ request, merged by squash or by the method the repo's merge queue requires. The 
 check on the work. Don't push to the default branch directly.
 
 ```
-outline ─► commit it alone ─► push ─► draft pull request
+outline ─► first step ─► commit ─► push ─► draft pull request
    │
 step ─► commit ─► push at a milestone or a stop
    │
-last steps: Remove the working files ─► push ─► gh pr ready
+last step: commit ────────────────────► push ─► gh pr ready
                                           │
                          wait for its checks (waffles:watch-ci)
                            │ pass              │ fail ─► fix, push again
@@ -40,11 +40,11 @@ last steps: Remove the working files ─► push ─► gh pr ready
 - **One pull request per piece**, on the piece's branch, from its builder's
   clone (see `pieces.md`). Follow the commit and push rules of
   the `waffles:commit-prep` skill, which the waffles modes section states in short. The
-  first commit holds the plan outline alone. Push the branch then, and open
-  the pull request as a draft (`gh pr create --draft`). Each outline step is
-  one commit; push at a milestone and at a stop. The last steps are "Remove
-  the working files" (`git rm -r .tmp` in its own commit), a push, and
-  `gh pr ready`. The body says what changed and why, how it was verified, and
+  plan outline is not in the working tree and is never committed. After the
+  first commit, push the branch, and open the pull request as a draft
+  (`gh pr create --draft`). Each outline step is one commit; push at a
+  milestone and at a stop. The last steps are a push and `gh pr ready`. The
+  body says what changed and why, how it was verified, and
   the decisions a reviewer should know. The waffles hook renders the outline into
   its `## Plan outline` section after each push and after `gh pr create`;
   where no hook did, update the section with

@@ -222,9 +222,9 @@ adapter call ─► queue empty? ─no─► replay the queue first ─► unrea
   `--data` (`{"event": "merged", "url": "<pull request>"}`,
   `{"text": "<note>", "needs_person": "set"}`). The local file of an item with no
   `id` takes the change too, as in a repo with no tracker. A note's `files` go
-  in `--data` as paths; when the replay finds one gone from the checkout (the
-  working files were removed), the note links it at the last commit that held
-  it instead.
+  in `--data` as paths; when the replay finds one gone from the checkout (a
+  later commit removed it), the note links it at the last commit that held it
+  instead.
 - **A claim that fell back holds no lock.** `in work` is the lock across
   machines and people only once the tracker holds it. Say so in the line:
   `… Queued as call <seq>. The tracker does not show <item> as started, so someone else can claim it.`

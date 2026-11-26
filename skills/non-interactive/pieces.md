@@ -8,8 +8,8 @@ back from a clone: each piece reaches the repo as its own pull request, and is
 reviewed and merged there.
 
 ```
-builder: clone ─► branch ─► outline commit ─► push ─► draft pull request
-         one commit per outline step ─► push at milestones ─► Remove the working files ─► gh pr ready
+builder: clone ─► branch ─► outline ─► first commit ─► push ─► draft pull request
+         one commit per outline step ─► push at milestones ─► push the last commit ─► gh pr ready
 you:     review the pull request ─► merge it (pull-requests.md) ─► restack the pieces on it ─► remove the clone
 ```
 
@@ -72,10 +72,11 @@ brief names the piece, the clone, the branch, the base, and these rules:
 
 - You are the piece's builder: work only in the clone. Commit and push as the
   `waffles:commit-prep` skill's rules for work with a plan outline say: the plan
-  outline in `.tmp/plan/` alone first, `git push -u origin <branch>`,
-  `gh pr create --draft --base <base>`, then one commit per outline step with
-  its checks passing, and a push at each milestone. A step left for the user
-  goes in that outline (see The plan outline in SKILL.md).
+  outline in the clone's plan folder, `<git dir>/waffles/plan/`, which is not
+  in the working tree and is never committed; one commit per outline step with
+  its checks passing; after the first, `git push -u origin <branch>` and
+  `gh pr create --draft --base <base>`; and a push at each milestone. A step
+  left for the user goes in that outline (see The plan outline in SKILL.md).
 - Run the tests, linters, and type checks through
   `node <scripts>/builders.ts test-slot -- <command>` (`<scripts>` is
   `<skill-dir>/../../scripts`, as an absolute path).
@@ -83,8 +84,8 @@ brief names the piece, the clone, the branch, the base, and these rules:
   `start.md` tests), run, before each commit,
   `echo ok | gpg --batch --pinentry-mode error --clearsign >/dev/null 2>&1`:
   exit code 0, commit as usual; otherwise commit with `--no-gpg-sign`.
-- When it is finished and verified: "Remove the working files" in its own
-  commit, push, `gh pr ready`, and report the pull request's URL.
+- When it is finished and verified: push, `gh pr ready`, and report the pull
+  request's URL.
 - Don't merge. Add no dependency and change no CI unless the brief says so
   (say so when the piece needs it).
 

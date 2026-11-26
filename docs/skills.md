@@ -14,16 +14,17 @@ Skills that are not part of the backlog or unattended-run workflows. Each runs a
 The skill also holds the commit and push rules for work with a plan outline. The modes' system prompt section states them, so they hold in production mode and during a run:
 
 ```
-outline ─► commit 1: the outline alone ─► push ─► draft pull request
-step ─► checks pass ─► commit (the step, and its box ticked) ─► milestone or stop? ─► push
-last step: "Remove the working files" ─► git rm -r .tmp ─► commit ─► push ─► gh pr ready
+step ─► checks pass ─► commit ─► first commit? ─► push ─► draft pull request
+                                 milestone or stop? ─► push
+last commit ─► push ─► gh pr ready
 ```
 
-- The first commit is the outline alone, and its push opens a draft pull request.
-- Each outline step is one commit, made once the checks pass, with its box ticked in it.
+- The plan outline is not in the working tree and is never committed.
+- The push of the first commit opens a draft pull request.
+- Each outline step is one commit, made once the checks pass.
 - The branch is pushed at each milestone (a top-level step done with all its children, or the last commit before review), and whenever work stops short of one.
 - No commit message holds a skip tag such as `[skip ci]`.
-- The last step of every outline, "Remove the working files", deletes `.tmp/` in its own commit before `gh pr ready`.
+- Once the last commit is pushed, `gh pr ready` marks the pull request ready.
 - The squash commit's body is a digest: the essence of the change in about 10 lines, then the pull request's link.
 
 ## Dev server

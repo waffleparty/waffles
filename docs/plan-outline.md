@@ -20,14 +20,39 @@ Detours carry a kind mark: `⤷` for work that changes something, `?` for resear
 
 | What | Where |
 | --- | --- |
-| Goal files | `.tmp/plan/<goal>.md`, one file per goal, at the top level of the checkout |
-| Locks and session records | `waffles/` inside the checkout's git dir (`.git/waffles/` in a plain clone), which git never commits |
+| Goal files | `waffles/plan/<goal>.md` inside the checkout's git dir (`.git/waffles/plan/` in a plain clone), one file per goal |
+| Locks and session records | `waffles/` inside the checkout's git dir (`.git/waffles/` in a plain clone) |
+| The copy on the remote | The ref `refs/waffles/plan/<branch>` |
 
-The `.tmp/plan/` folder is committed on the feature branch, so a second machine or a teammate reads the plan outline after a pull. The last step of every outline, "Remove the working files", deletes `.tmp/` before the merge. Each worktree and each submodule has its own outline, on its own branch.
+The plan outline is not in the working tree and is never committed: git never commits its own git dir. It does not show in `git status`, in a diff, or in a pull request's files. Each worktree and each submodule has its own git dir, so its own outline. `git rev-parse --git-dir` prints the git dir of a checkout.
 
-The plan document can sit beside the goal files in `.tmp/plan/`. A Markdown file there that is not a goal file stays out of the pane and out of the lists of open goals.
+The plan document can sit beside the goal files. A Markdown file in the plan folder that is not a goal file stays out of the pane and out of the lists of open goals.
 
-Outside a git repository, and in a bare repository, both folders are in the working directory: `.tmp/plan/` and `.tmp/waffles/`, with a `.gitignore` of `*` in `.tmp/waffles/`. When git does not answer inside a repository (a timeout), the tool refuses the change and writes nothing, so no lock lands in the working tree.
+Outside a git repository, and in a bare repository, both folders are in the working directory: `.waffles/plan/` and `.waffles/`, with a `.gitignore` of `*` in `.waffles/`, so a repository made there later does not pick them up. When git does not answer inside a repository (a timeout), the tool refuses the change and writes nothing, so no lock lands in the working tree.
+
+### The copy on the remote
+
+A push does not carry the git dir, so the plugin keeps a copy of each branch's plan folder on the remote, for another machine, a teammate, or a fresh clone.
+
+```
+git push / gh pr create ─► worked? ─► plan folder changed since the last copy? ─► push refs/waffles/plan/<branch>
+first plan outline poll or call of a session ─► plan folder empty? ─► copy on the remote? ─► fetch it, write its files
+gh pr merge ─► worked, and gh reports it merged or closed? ─► delete refs/waffles/plan/<head branch>
+```
+
+- **The ref.** One per branch, `refs/waffles/plan/<branch>`, with the branch name as it is: `feat/x` has `refs/waffles/plan/feat/x`. A detached HEAD has no branch, so nothing is copied or restored there.
+- **What it holds.** A commit whose files are the plan folder's Markdown files: the goal files and `assumed-for-you.md`. The plugin makes it with git's plumbing, so the index, the working tree, and the branches stay as they are. The commit is never signed and names `waffles` as its author, so it needs neither your key nor your identity.
+- **The remote.** The one the branch's upstream names, else `origin`. With neither, nothing is copied.
+- **When it is written.** After a `git push` or a `gh pr create` that worked, in the folder the command ran in. When the plan folder is the same as the last copy, nothing is pushed. A push of the copy skips the repository's pre-push hooks, which are for its branches. When the copy fails, the model reads one line, and the command's result stays as it was.
+- **Restore.** At a session's first plan outline poll or call, once per session: when the plan folder holds no Markdown file and the branch has a copy on the remote, the plugin fetches it and writes its files. It never writes over a file.
+- **Both sides changed.** Local wins. A plan folder that holds a file is not restored, and the next push writes the local folder over the copy.
+- **After the merge.** After a `gh pr merge` that worked, when `gh` reports the pull request merged or closed, the plugin deletes its head branch's copy on the remote and in the local repository. A pull request merged another way, such as on GitHub's site or by a merge queue, keeps its copy. This command removes it:
+
+  ```sh
+  git push origin --delete refs/waffles/plan/<branch>
+  ```
+
+GitHub accepts the ref and shows it nowhere on its site. A clone or a fetch of the branches does not fetch it; `git ls-remote origin 'refs/waffles/*'` lists the copies.
 
 The folder follows the shell's working directory. After a `cd` into a submodule or another repo, the active goal's file is not there. The pane says so, and a call on the goal changes nothing and returns a plain result that tells Claude to `cd` back. The pane draws it as one dim row, not as a failed call.
 
@@ -82,19 +107,17 @@ A resumed conversation (`--continue`, `--resume`, or `/resume`) gets its active 
 node <plugin root>/scripts/checkpoint.ts [--pr <number>] [--dry-run]
 ```
 
-- It reads the goal files in `.tmp/plan/`. Where there are none, it reads a plain checklist file there. A plan document is not a checklist and stays out. Several goals each get a `###` heading.
+- It reads the goal files in the checkout's plan folder, `<git dir>/waffles/plan/`. Where there are none, it reads a plain checklist file there. A plan document is not a checklist and stays out. Several goals each get a `###` heading.
 - A done step is ticked. A dropped step is ticked and struck through, and a step moved to the backlog is ticked and names its backlog file. Notes and kind markers are left out.
-- When `.tmp/plan/assumed-for-you.md` is there, the section ends with its list under `### Assumed for you`: a record of the decisions an agent made in your place.
-- Changes that are not committed, or commits that are not pushed, put an "Ahead of the branch" line above the checklist.
-- After the commit that removes `.tmp/`, the checklist is the outline from before that commit, with "Remove the working files" ticked. A merged or closed pull request is left as it ended.
+- When `assumed-for-you.md` is in the plan folder, the section ends with its list under `### Assumed for you`: a record of the decisions an agent made in your place.
+- A branch that is not pushed, or commits that are not pushed, put an "Ahead of the branch" line above the checklist.
+- A merged or closed pull request is left as it ended.
 - It never commits or pushes, and a second run with nothing changed changes nothing.
-- It exits 0 when the description is up to date or there is nothing to do, 1 when git or `gh` fails, and 2 for bad arguments.
+- It exits 0 when the description is up to date or there is nothing to do, 1 when git or `gh` fails, and 2 for bad arguments. What it did goes to stdout, and why it failed goes to stderr.
 
 Checkpoints run after each `git push` and `gh pr create`, through the hooks below. A checkpoint at the end of a run or at the end of a session is not made: the push at a stop is what brings the checklist up to date.
 
-A hook on the Bash tool runs the script after `git push` and `gh pr create`, for Claude and for subagents alike. When the command worked, the hook runs the checkpoint script in the folder the command ran in, and the model reads its one-line outcome. A leading `cd <dir> &&`, or `git -C <dir>` for a push, names that folder, and `~` is the home folder. A folder named with `$` cannot be told from the command, so that push gets no checkpoint.
-
-The plugin does not stop a merge while `.tmp/` is on the head branch. The "Remove the working files" step is what keeps the working files off the default branch. A repo can add a CI check that fails while `.tmp/` is on a branch.
+A hook on the Bash tool runs the script after `git push` and `gh pr create`, for Claude and for subagents alike. When the command worked, the hook runs the checkpoint script in the folder the command ran in, then updates [the copy on the remote](#the-copy-on-the-remote), and the model reads the checkpoint's one-line outcome, or its failure line. After a `gh pr merge` that worked, the hook runs no checkpoint: it only removes the merged branch's copy. A leading `cd <dir> &&`, or `git -C <dir>` for a push, names that folder, and `~` is the home folder. A folder named with `$` cannot be told from the command, so that push gets no checkpoint.
 
 ## Runs
 

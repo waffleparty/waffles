@@ -24,8 +24,5 @@ outline in SKILL.md).
   links exactly.
 - **The count.** "Steps left for you" in the final message counts only the
   open `Yours:` steps. Other open steps are not counted.
-- **On the branch.** When the outline is a file under `.tmp/` on the branch,
-  its last step is "Remove the working files": `git rm -r .tmp` in its own
-  commit, before the merge. Take that step also when the pull request stays
-  open for the user. The pull request's `## Plan outline` section keeps the
-  checklist after that.
+- **Not on the branch.** The plan outline is not in the working tree and is
+  never committed. The pull request's `## Plan outline` section shows it.

@@ -185,11 +185,13 @@ that still counts as one.
 > `.backlog/` and nothing else in the main checkout.
 >
 > 1. Commit and push as the `waffles:commit-prep` skill's rules for work with a
->    plan outline say. Write the item's plan outline in `.tmp/plan/` and
->    commit it alone. Push it with `git push -u origin <branch>`, open a draft
->    pull request with `gh pr create --draft --base <base>`, titled as the
->    repo's convention says, and record its URL in `pr:`. Then make one commit
->    per outline step, with its checks passing, and push at each milestone.
+>    plan outline say. Write the item's plan outline in your clone's plan
+>    folder, `<git dir>/waffles/plan/` (`git rev-parse --git-dir` prints the
+>    git dir): it is not in the working tree and is never committed. Make one
+>    commit per outline step, with its checks passing. After the first, push
+>    with `git push -u origin <branch>`, open a draft pull request with
+>    `gh pr create --draft --base <base>`, titled as the repo's convention
+>    says, and record its URL in `pr:`. Then push at each milestone.
 >    Nothing may wait for a passphrase. When git signs commits with GPG
 >    (`git config commit.gpgsign` prints `true`, and `git config gpg.format`
 >    prints nothing or `openpgp`), run, before each commit,
@@ -213,9 +215,7 @@ that still counts as one.
 > 6. When done and verified, write a short summary of the change and how you
 >    verified it under `## Progress`, plus a `Pages:` line listing the URL
 >    paths (e.g. `/settings/billing`) where the change can be seen, if any.
->    Take the outline's last step ("Remove the working files":
->    `git rm -r .tmp` in its own commit), push, and mark the pull request ready
->    with `gh pr ready`. Set `status: review` and `finished:` to the current
+>    Push, and mark the pull request ready with `gh pr ready`. Set `status: review` and `finished:` to the current
 >    UTC time (ISO 8601), and finish.
 >
 > You may split repetitive work across your own subagents, in your clone. Your
