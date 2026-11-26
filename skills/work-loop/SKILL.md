@@ -151,9 +151,9 @@ item, leave it `new`, and say in 1 line which limit held and why:
 
 | Limit | What it guards | How it is counted |
 | --- | --- | --- |
-| At most 10 open pull requests per repo that wait for human review | The pile of work that waits for people | From GitHub, across every developer: `python3 -I <skill-dir>/../../scripts/builders.py limits --repo <main>`. A pull request waits for review when it is marked ready and a review is requested; one that an agent merges itself has none requested. At 10 it refuses, and its reason lists them: start no builder in this repo. When it cannot count (exit code 1), start none either, and say why. |
+| At most 10 open pull requests per repo that wait for human review | The pile of work that waits for people | From GitHub, across every developer: `node <skill-dir>/../../scripts/builders.ts limits --repo <main>`. A pull request waits for review when it is marked ready and a review is requested; one that an agent merges itself has none requested. At 10 it refuses, and its reason lists them: start no builder in this repo. When it cannot count (exit code 1), start none either, and say why. |
 | One item at a time per component | Overlap in the code | An item holds its component from its claim until its pull request merges: `running`, `escalated`, `stale`, `active`, or `review`. Start no item whose component has another one, unless it depends on that one: it is then stacked on it, and the stack counts as 1. The component is the item's `component` through the adapter; a `.backlog/` file's is the repo, so one item at a time per repo. |
-| 3 builders running tests at once on this machine | The machine | Each builder runs its tests, linters, and type checks through `builders.py test-slot -- <command>`, which waits for 1 of 3 slots, shared by every session. On a typical workstation, test runs at once stop adding throughput at about 3: past that, each one only slows the others. |
+| 3 builders running tests at once on this machine | The machine | Each builder runs its tests, linters, and type checks through `builders.ts test-slot -- <command>`, which waits for 1 of 3 slots, shared by every session. On a typical workstation, test runs at once stop adding throughput at about 3: past that, each one only slows the others. |
 
 Within them, recommend up to 5 in Q1. One item may fan out into its own
 subagents (e.g. repetitive work split across files) in its builder's clone;
@@ -168,7 +168,7 @@ that still counts as one.
    merged (status `review`), its `branch:` instead: the item is stacked on it,
    and its pull request's base is that branch.
 3. **Clone.** In the main checkout, run
-   `python3 -I <skill-dir>/../../scripts/builders.py clone --root <scratchpad>/builders --repo <main> --item <item filename stem> --branch <branch> [--base <base>]`.
+   `node <skill-dir>/../../scripts/builders.ts clone --root <scratchpad>/builders --repo <main> --item <item filename stem> --branch <branch> [--base <base>]`.
    It prints the clone's `path` (under `<scratchpad>/builders/<owner>/<repo>/`, or `$WAFFLES_BUILDERS_ROOT` when it is set; `<scratchpad>` is this session's scratchpad directory, as an absolute path). It
    refuses an existing clone of the item that is on another branch, and a base
    that is not on origin; say why in 1 line and leave the item `new`. Record
@@ -197,7 +197,7 @@ that still counts as one.
 >    exit code 0, commit as usual; otherwise commit with `--no-gpg-sign`.
 > 2. Implement the Request, following the answers under `## Clarifications`.
 >    Run the repo's tests, linters, and type checks in your clone, each through
->    `python3 -I <scripts>/builders.py test-slot -- <command>`, which waits
+>    `node <scripts>/builders.ts test-slot -- <command>`, which waits
 >    while 3 test runs already run on this machine.
 > 3. If the change has a dev server or stack, pick a free port, start it in
 >    your clone, and record the exact start command (including port and
@@ -294,7 +294,7 @@ To look at several finished UI items at once, build 1 throwaway local branch
 in the main checkout that merges every pull request waiting for the user, and
 serve it with 1 dev server:
 
-1. `python3 -I <skill-dir>/../../scripts/review_branch.py build --repo <main> --waiting`
+1. `node <skill-dir>/../../scripts/review_branch.ts build --repo <main> --waiting`
    (or `--pr <number>…` for the items the user named). It refuses a main
    checkout with changes to tracked files: say so, and offer the items one by
    one instead. It switches the checkout to the local branch `waffles-review`:
@@ -312,14 +312,14 @@ serve it with 1 dev server:
 4. Never push `waffles-review`, and never commit on it: it has no upstream, and it
    is rebuilt whenever a waiting pull request changes.
 5. When the review ends, run
-   `python3 -I <skill-dir>/../../scripts/review_branch.py done --repo <main>`.
+   `node <skill-dir>/../../scripts/review_branch.ts done --repo <main>`.
    It switches the checkout back to the branch it was on and deletes
    `waffles-review`. Merge the items the user picked as below.
 
 ### Merging a pull request
 
 1. If you started the clone's dev server yourself, stop it.
-2. Merge as `python3 -I <skill-dir>/../../scripts/merge_queue.py mode <number>`
+2. Merge as `node <skill-dir>/../../scripts/merge_queue.ts mode <number>`
    says. Without a merge queue:
    `gh pr merge <number> --squash --subject <subject> --body <digest>`, with
    the subject and digest that the `waffles:commit-prep` skill describes. When it
@@ -333,14 +333,14 @@ serve it with 1 dev server:
    the digest in the pull request's body, run `gh pr merge <number>` (no
    merge method, no `--auto`), and write under `## Progress` that it is in
    the queue. Then start Monitor with an until-loop that runs
-   `merge_queue.py state <number>` every 60 seconds and ends at `merged`,
+   `merge_queue.ts state <number>` every 60 seconds and ends at `merged`,
    `removed`, or `closed`; its notification starts the next pass, and the
    item stays `review` until then. Go on with steps 3 to 5 once it is
    `merged`. When the queue removed it, set `status: escalated`, write
    GitHub's reason under `## Progress`, and offer it in Q2: its fix is made in
    the clone, pushed, and added to the queue again.
 3. Remove the clone:
-   `python3 -I <skill-dir>/../../scripts/builders.py remove --root <scratchpad>/builders --path <clone>`.
+   `node <skill-dir>/../../scripts/builders.ts remove --root <scratchpad>/builders --path <clone>`.
    It refuses a clone that holds work origin lacks; then say what it holds and
    keep the clone.
 4. Restack the items stacked on this one (their `depends:` names it). The squash

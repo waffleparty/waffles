@@ -10,15 +10,15 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Codex | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. |
 | Cursor | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
 
-Skills follow the open Agent Skills format. The hooks (modes, plan outline, auto effort, checkpoint, dev servers pane) and the agents load only in Claude Code. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code.
+Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, and the checkpoint. On other platforms only the skills load. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code for now.
 
 ## Requirements
 
 | Requirement | Needed for |
 | --- | --- |
-| Claude Code | The hooks and the agents. |
+| Claude Code, or OpenCode 2 | The hooks: modes, the plan outline, and the checkpoint. The agents, auto effort, and the dev servers pane need Claude Code. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
-| `python3` | The scripts in `scripts/`: the checkpoint, builders, the merge queue, the review branch, the backlog queue, and the CI watcher. They use the standard library only. |
+| Node.js 22.18 or later | The scripts in `scripts/` that skills run from the shell: builders, the merge queue, the review branch, the backlog queue, and the CI watcher. They use Node.js built-ins only and run with no build step. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
@@ -116,7 +116,7 @@ Do not edit `version` fields by hand. To add a file that holds the version, add 
 
 ## Development
 
-Requirements: Node.js 26.13 or later, `jq`, `python3`, [Claude Code](https://claude.com/claude-code), and [pre-commit](https://pre-commit.com/).
+Requirements: Node.js 26.13 or later, `jq`, [Claude Code](https://claude.com/claude-code), and [pre-commit](https://pre-commit.com/).
 
 ```sh
 npm ci
@@ -129,8 +129,9 @@ Check a change before you push it:
 
 ```sh
 claude plugin validate .                                     # the manifests, skills, agents, and hooks
-claude plugin test                                           # the hooks' tests
-python3 -m unittest discover -s scripts -p '*_test.py'       # the scripts' tests
+claude plugin test                                           # the Claude Code adapter's tests
+npm run typecheck                                            # the core, the adapters, and the scripts
+npm run test:node                                            # their tests, on Node.js
 claude --plugin-dir .                                        # try the plugin from this checkout
 ```
 

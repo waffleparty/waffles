@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T17:33:20.567Z
+updated: 2026-11-26T17:34:41.844Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -63,9 +63,9 @@ updated: 2026-11-26T17:33:20.567Z
     - [ ] 6.6.7 Document how to install waffles on OpenCode
   - [ ] 6.7 Add an Antigravity manifest
   - [ ] 6.8 Move the Codex manifest to a root plugin.json
-  - [ ] 6.9 Port the Python scripts to TypeScript
+  - [x] 6.9 Port the Python scripts to TypeScript
     - [x] 6.9.1 Port backlog_queue.py and builders.py
     - [x] 6.9.2 Port merge_queue.py, review_branch.py, and watch.py
     - [x] 6.9.3 Port checkpoint.py into the core
-    - [ ] 6.9.4 Point the skills, agents, docs, and CI at the TypeScript scripts and remove the Python files
+    - [x] 6.9.4 Point the skills, agents, docs, and CI at the TypeScript scripts and remove the Python files
   - [x] 6.10 Add the Node.js host that the command adapter, the MCP server, and OpenCode share

@@ -11,7 +11,7 @@ act on the result: report success and stop, or debug and fix a failure. You can
 be invoked by the user or by another agent, usually right after a push.
 
 The order matters: **map the whole pipeline first, then start one watcher.** The
-watcher (`watch.py` in this skill's base directory) only polls the targets in the
+watcher (`watch.ts` in this skill's base directory) only polls the targets in the
 map. It never decides what to watch next.
 
 ```
@@ -148,7 +148,7 @@ abc1234 → feature/x (PR #12)
 
 ## 4. Snapshot
 
-Run `python3 -I <skill-dir>/watch.py <map> --once`. It polls each target one
+Run `node <skill-dir>/watch.ts <map> --once`. It polls each target one
 time and prints its state.
 
 - Ends with `ALL_DONE`: everything already finished. Don't start a watcher. Report
@@ -163,7 +163,7 @@ Start the `waffles:ci-watcher` agent in the background (Agent tool,
 this brief:
 
 ```
-Run: python3 -I <skill-dir>/watch.py <map> --until-actionable
+Run: node <skill-dir>/watch.ts <map> --until-actionable
 ```
 
 Don't use the Monitor tool, and don't poll the runs yourself. Every Monitor event
@@ -192,7 +192,7 @@ is the event lines since it started, then `RETURN` or `ALL_DONE <result>`:
 After `RETURN`, start the watcher again with the same brief if targets are still
 in flight. The watcher keeps its state in `<map>.state.json`, so it never
 repeats an event. If the user asks for status while it runs, run
-`watch.py <map> --once`.
+`watch.ts <map> --once`.
 
 ## 6. Act
 

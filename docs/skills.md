@@ -54,7 +54,7 @@ The map then goes to a background `waffles:ci-watcher` agent that runs `skills/w
 - It never approves deploys.
 - If the runs already finished, it reports the result, and fixes failures, without starting a watcher.
 
-Claude also runs it on its own after a push. It requires `python3`, and an authenticated `gh` for GitHub-hosted CI. The plugin does not install them.
+Claude also runs it on its own after a push. It requires Node.js 22.18 or later, and an authenticated `gh` for GitHub-hosted CI. The plugin does not install them.
 
 ## Debate
 

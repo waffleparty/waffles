@@ -221,7 +221,7 @@ describe('no patch recipes', () => {
     const text = readFileSync(join(SKILLS, 'work-loop', 'SKILL.md'), 'utf8').split(/\s+/).filter(Boolean).join(' ')
     assert.ok(text.includes(`At most ${REVIEW_CAP} open pull requests per repo that wait for human review`))
     assert.ok(text.includes(`${TEST_SLOTS} builders running tests at once on this machine`))
-    assert.ok(text.includes('builders.py limits --repo <main>'))
+    assert.ok(text.includes('builders.ts limits --repo <main>'))
   })
 })
 

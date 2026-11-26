@@ -41,7 +41,7 @@ Before each builder, check the 3 limits that the `waffles:work-loop` skill's
 Limits section sets; they hold in a run too:
 
 - **10 open pull requests per repo that wait for human review.** Run
-  `python3 -I <skill-dir>/../../scripts/builders.py limits --repo <main checkout>`.
+  `node <skill-dir>/../../scripts/builders.ts limits --repo <main checkout>`.
   When it refuses (exit code 3), or cannot count (exit code 1), start no
   builder in that repo. Leave each piece there open, with a note that names
   the limit and the pull requests the script listed, and go on with the other
@@ -51,7 +51,7 @@ Limits section sets; they hold in a run too:
   counts with the one below it.
 - **3 builders running tests at once** on this machine: brief each builder to
   run its tests, linters, and type checks through
-  `python3 -I <scripts>/builders.py test-slot -- <command>`.
+  `node <scripts>/builders.ts test-slot -- <command>`.
 
 ## Giving a builder its clone
 
@@ -61,7 +61,7 @@ For each piece, in the main checkout of its repo:
    standards it names, such as `<type>/<ID>[-<description>]`); with none,
    `run/<timestamp>-<piece>`.
 2. Run
-   `python3 -I <skill-dir>/../../scripts/builders.py clone --root <scratchpad>/builders --repo <main checkout> --item <piece ID> --branch <branch> [--base <branch of the piece below>]`.
+   `node <skill-dir>/../../scripts/builders.ts clone --root <scratchpad>/builders --repo <main checkout> --item <piece ID> --branch <branch> [--base <branch of the piece below>]`.
    It prints the clone's `path`, under `<scratchpad>/builders/<owner>/<repo>/` (`<scratchpad>` is this session's scratchpad directory, as an absolute path), or under `$WAFFLES_BUILDERS_ROOT` when it is set. When
    it refuses, the reason says why; settle it as any other decision.
 
@@ -77,7 +77,7 @@ brief names the piece, the clone, the branch, the base, and these rules:
   its checks passing, and a push at each milestone. A step left for the user
   goes in that outline (see The plan outline in SKILL.md).
 - Run the tests, linters, and type checks through
-  `python3 -I <scripts>/builders.py test-slot -- <command>` (`<scripts>` is
+  `node <scripts>/builders.ts test-slot -- <command>` (`<scripts>` is
   `<skill-dir>/../../scripts`, as an absolute path).
 - Nothing may wait for a passphrase. When git signs commits with GPG (as
   `start.md` tests), run, before each commit,
@@ -101,7 +101,7 @@ brief if the first one has finished.
    push with `--force-with-lease`, and `gh pr edit <number> --base <default branch>`.
    Where that builder still runs, send it these steps with SendMessage.
 2. Remove the merged piece's clone:
-   `python3 -I <skill-dir>/../../scripts/builders.py remove --root <scratchpad>/builders --path <clone>`.
+   `node <skill-dir>/../../scripts/builders.ts remove --root <scratchpad>/builders --path <clone>`.
    It refuses a clone that holds work origin lacks; then find out why before
    you go on.
 3. Close the piece's step in the plan outline.

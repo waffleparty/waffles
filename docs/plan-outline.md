@@ -76,10 +76,10 @@ A resumed conversation (`--continue`, `--resume`, or `/resume`) gets its active 
 
 ## The checklist in the pull request
 
-`scripts/checkpoint.py` renders the plan outline into the description of the open pull request for the checked-out branch. The result is a Markdown task list between `<!-- waffles:plan-outline:start -->` and `<!-- waffles:plan-outline:end -->` under `## Plan outline`. The rest of the description stays as it is. Where it has no markers yet, the section replaces a `## Plan outline` section, or goes after the other sections, ahead of the attribution lines at the end. It needs `gh`, signed in. Run it in the checkout, where `<plugin root>` is the plugin's folder:
+`scripts/checkpoint.ts` renders the plan outline into the description of the open pull request for the checked-out branch. The result is a Markdown task list between `<!-- waffles:plan-outline:start -->` and `<!-- waffles:plan-outline:end -->` under `## Plan outline`. The rest of the description stays as it is. Where it has no markers yet, the section replaces a `## Plan outline` section, or goes after the other sections, ahead of the attribution lines at the end. It needs `gh`, signed in. Run it in the checkout, where `<plugin root>` is the plugin's folder:
 
 ```sh
-python3 -I <plugin root>/scripts/checkpoint.py [--pr <number>] [--dry-run]
+node <plugin root>/scripts/checkpoint.ts [--pr <number>] [--dry-run]
 ```
 
 - It reads the goal files in `.tmp/plan/`. Where there are none, it reads a plain checklist file there. A plan document is not a checklist and stays out. Several goals each get a `###` heading.

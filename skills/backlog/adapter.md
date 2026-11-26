@@ -184,9 +184,9 @@ Adds an answer or a note to an item, or marks that it waits for a person.
 ## Fallback
 
 In a repo that names an adapter, `.backlog/` is a temporary queue for the time
-the tracker cannot be reached. The queue is `scripts/backlog_queue.py` of the
-waffles plugin (`${CLAUDE_PLUGIN_ROOT}/scripts/backlog_queue.py`, which is
-`<skill-dir>/../../scripts/backlog_queue.py` from a skill's base directory). It keeps the calls in `.backlog/queue.json` of the main
+the tracker cannot be reached. The queue is `scripts/backlog_queue.ts` of the
+waffles plugin (`${CLAUDE_PLUGIN_ROOT}/scripts/backlog_queue.ts`, which is
+`<skill-dir>/../../scripts/backlog_queue.ts` from a skill's base directory). It keeps the calls in `.backlog/queue.json` of the main
 checkout, and never calls the tracker itself. The queue belongs to 1 machine:
 the script keeps it out of git (a line in `.git/info/exclude`), so another
 clone never replays it again.
@@ -214,7 +214,7 @@ adapter call ─► queue empty? ─no─► replay the queue first ─► unrea
   It queues nothing.
 - **raise** falls back by writing the item as a `.backlog/` file, as in a repo
   with no tracker, then queuing the raise with the file's name:
-  `python3 -I <queue> add raise <file> --why "<cause>" --data '{"actor": "<actor>"}'`.
+  `node <queue> add raise <file> --why "<cause>" --data '{"actor": "<actor>"}'`.
   The file stays a local item until the raise is replayed: the other skills can
   groom it and work it.
 - **claim, ship, note** fall back by queuing the call with the item's `id`, or
@@ -229,8 +229,8 @@ adapter call ─► queue empty? ─no─► replay the queue first ─► unrea
   machines and people only once the tracker holds it. Say so in the line:
   `… Queued as call <seq>. The tracker does not show <item> as started, so someone else can claim it.`
 - **Replay** at the start of the next call to the adapter, before the call
-  itself: list the queue (`python3 -I <queue> list`), make its first call
-  through the adapter, then remove it (`python3 -I <queue> done <seq>`). For a
+  itself: list the queue (`node <queue> list`), make its first call
+  through the adapter, then remove it (`node <queue> done <seq>`). For a
   raise, pass `--id <new id>`: the script names the new `id` in the calls after
   it and in the `depends:` of the other item files, and deletes the item file,
   or, when work on it already started, renames it to `<id>.md` with an `id:`
