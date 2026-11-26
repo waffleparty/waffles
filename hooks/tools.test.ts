@@ -96,6 +96,16 @@ test('the checkpoint runs in the folder it is given, from the session’s folder
   expect(runs).toEqual([[['git', 'rev-parse', '--path-format=absolute', '--git-dir'], '/repo/app']])
 })
 
+test('the review branch runs git in the main checkout it names', async ($, on) => {
+  const { runs } = world(on)
+  on('fs.exists', () => ({ value: true }))
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__review_branch', op: 'done', repo: 'app' } as never)
+
+  expect(r).toEqual({ deny: 'git rev-parse --show-toplevel failed: not here' })
+  expect(runs).toEqual([[['git', 'rev-parse', '--show-toplevel'], '/repo/app']])
+})
+
 test('a stdout that Claude Code cut is refused, not read in part', async ($, on) => {
   on('session.cwd', () => ({ value: '/repo' }))
   on('clock.now', () => ({ value: 1000 }))

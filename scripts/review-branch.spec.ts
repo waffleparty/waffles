@@ -37,10 +37,10 @@ describe('review-branch', () => {
   }
 
   // The parsed JSON when the script printed it, else its message.
-  const runScript = (...args: string[]): [number, any] => {
+  const runScript = async (...args: string[]): Promise<[number, any]> => {
     let text = ''
     let error = ''
-    const code = main(args, { write: (s: string) => (text += s) }, { write: (s: string) => (error += s) })
+    const code = await main(args, { write: (s: string) => (text += s) }, { write: (s: string) => (error += s) })
     return [code, code === 0 ? JSON.parse(text) : error]
   }
 
@@ -81,8 +81,8 @@ describe('review-branch', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
-  test('3 UI pull requests are merged into one local branch that has no upstream', () => {
-    const [code, result] = runScript('build', '--repo', app, '--pr', '1', '2', '3')
+  test('3 UI pull requests are merged into one local branch that has no upstream', async () => {
+    const [code, result] = await runScript('build', '--repo', app, '--pr', '1', '2', '3')
     assert.equal(code, 0, result)
     assert.deepEqual([result.merged, result.conflicts, result.from], [[1, 2, 3], [], 'feat/mine'])
     assert.equal(sh(app, 'git', 'branch', '--show-current'), 'waffles-review')
@@ -93,64 +93,64 @@ describe('review-branch', () => {
     assert.ok(!sh(app, 'git', 'ls-remote', 'origin').includes('waffles-review'))
   })
 
-  test('a pull request that conflicts is left out and named', () => {
-    const [code, result] = runScript('build', '--repo', app, '--pr', '1', '4', '2')
+  test('a pull request that conflicts is left out and named', async () => {
+    const [code, result] = await runScript('build', '--repo', app, '--pr', '1', '4', '2')
     assert.equal(code, 0, result)
     assert.deepEqual([result.merged, result.conflicts], [[1, 2], [4]])
     assert.equal(sh(app, 'git', 'status', '--porcelain'), '')
   })
 
-  test('a rebuild starts over, and done switches back and deletes the branch', () => {
-    runScript('build', '--repo', app, '--pr', '1')
-    let [code, result] = runScript('build', '--repo', app, '--pr', '2', '3')
+  test('a rebuild starts over, and done switches back and deletes the branch', async () => {
+    await runScript('build', '--repo', app, '--pr', '1')
+    let [code, result] = await runScript('build', '--repo', app, '--pr', '2', '3')
     assert.deepEqual([code, result.merged, result.from], [0, [2, 3], 'feat/mine'])
     assert.equal(readFileSync(join(app, 'app.txt'), 'utf8'), 'header\nbody\n')
-    ;[code, result] = runScript('done', '--repo', app)
+    ;[code, result] = await runScript('done', '--repo', app)
     assert.equal(code, 0, result)
     assert.equal(sh(app, 'git', 'branch', '--show-current'), 'feat/mine')
     assert.equal(sh(app, 'git', 'branch', '--list', 'waffles-review'), '')
     assert.equal(sh(app, 'git', 'for-each-ref', 'refs/waffles-review'), '')
   })
 
-  test('waiting takes the ready pull requests that ask for a review', () => {
+  test('waiting takes the ready pull requests that ask for a review', async () => {
     process.env.GH_STUB_PRS = JSON.stringify([{ number: 3, isDraft: false }, { number: 2, isDraft: false }, { number: 9, isDraft: true }])
-    const [code, result] = runScript('build', '--repo', app, '--waiting')
+    const [code, result] = await runScript('build', '--repo', app, '--waiting')
     assert.deepEqual([code, result.merged], [0, [2, 3]])
   })
 
-  test('the review file records the branch to go back to, and done reads it', () => {
-    runScript('build', '--repo', app, '--pr', '1', '4')
+  test('the review file records the branch to go back to, and done reads it', async () => {
+    await runScript('build', '--repo', app, '--pr', '1', '4')
     const path = join(app, '.git', 'waffles', 'review.json')
     assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { branch: 'waffles-review', from: 'feat/mine', base: 'origin/main', merged: [1], conflicts: [4] })
     // A file that an earlier version wrote, with its own spacing, still reads.
     writeFileSync(path, '{"branch": "waffles-review", "from": "main", "base": "origin/main", "merged": [1], "conflicts": [4]}')
-    assert.deepEqual(runScript('done', '--repo', app), [0, { branch: 'main', deleted: 'waffles-review' }])
+    assert.deepEqual(await runScript('done', '--repo', app), [0, { branch: 'main', deleted: 'waffles-review' }])
     assert.equal(sh(app, 'git', 'branch', '--show-current'), 'main')
     assert.ok(!existsSync(path))
   })
 
-  test('wrong arguments exit 2 and change nothing', () => {
+  test('wrong arguments exit 2 and change nothing', async () => {
     for (const args of [[], ['build'], ['build', '--repo', app], ['build', '--repo', app, '--pr', '1', '--waiting'], ['build', '--repo', app, '--pr', 'x'], ['done'], ['done', '--repo', app, '--pr', '1'], ['merge', '--repo', app]]) {
-      const [code, text] = runScript(...args)
+      const [code, text] = await runScript(...args)
       assert.equal(code, 2, args.join(' '))
       assert.ok(text.includes('usage:'), args.join(' '))
     }
     assert.equal(sh(app, 'git', 'branch', '--show-current'), 'feat/mine')
   })
 
-  test('changes to tracked files are refused', () => {
+  test('changes to tracked files are refused', async () => {
     appendFileSync(join(app, 'app.txt'), 'work in progress\n')
-    const [code, text] = runScript('build', '--repo', app, '--pr', '1')
+    const [code, text] = await runScript('build', '--repo', app, '--pr', '1')
     assert.equal(code, 3)
     assert.ok(text.includes('has changes to tracked files'))
     assert.equal(sh(app, 'git', 'branch', '--show-current'), 'feat/mine')
   })
 
-  test('own commits on waffles-review are never lost', () => {
-    runScript('build', '--repo', app, '--pr', '1')
+  test('own commits on waffles-review are never lost', async () => {
+    await runScript('build', '--repo', app, '--pr', '1')
     commit('mine.txt', 'my own work\n')
     for (const args of [['build', '--repo', app, '--pr', '2'], ['done', '--repo', app]]) {
-      const [code, text] = runScript(...args)
+      const [code, text] = await runScript(...args)
       assert.equal(code, 3, args.join(' '))
       assert.ok(text.includes('holds commits that are not merges of the pull requests'))
       assert.ok(text.includes('Change mine.txt'))
@@ -162,7 +162,7 @@ describe('review-branch', () => {
     sh(app, 'git', 'switch', '-q', '-c', 'waffles-review')
     commit('other.txt', 'other\n')
     sh(app, 'git', 'switch', '-q', 'feat/mine')
-    const [code, text] = runScript('build', '--repo', app, '--pr', '1')
+    const [code, text] = await runScript('build', '--repo', app, '--pr', '1')
     assert.equal(code, 3)
     assert.ok(text.includes('Change other.txt'))
   })
