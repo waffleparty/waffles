@@ -55,7 +55,7 @@ test('a goal call changes the outline, a refused call is a tool error, and other
   const made = await s.request('tools/call', { name: 'plan', arguments: { op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] } })
   assert.equal(made.result.isError, false)
   assert.match(text(made), /Ship it/)
-  assert.match(await fs.readFile(join(work, '.tmp', 'plan', 'ship-it.md'), 'utf8'), /Build/)
+  assert.match(await fs.readFile(join(work, '.waffles', 'plan', 'ship-it.md'), 'utf8'), /Build/)
 
   const refused = await s.request('tools/call', { name: 'plan', arguments: { op: 'done', ids: ['9'] } })
   assert.equal(refused.error, undefined)
@@ -136,7 +136,7 @@ test('a second process with the same session ID continues the goal; one with non
   await second.initialize()
   const done = await second.request('tools/call', { name: 'plan', arguments: { op: 'done', ids: ['1'] } })
   assert.equal(done.result.isError, false, text(done))
-  assert.match(await fs.readFile(join(work, '.tmp', 'plan', 'ship-it.md'), 'utf8'), /\[x\] 1 Build/)
+  assert.match(await fs.readFile(join(work, '.waffles', 'plan', 'ship-it.md'), 'utf8'), /\[x\] 1 Build/)
   // SIGTERM ends it as cleanly as the end of stdin.
   second.child.kill('SIGTERM')
   assert.deepEqual(await second.exited, { code: 0, signal: null })

@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T20:53:52.104Z
+updated: 2026-11-26T21:08:16.424Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -39,11 +39,11 @@ updated: 2026-11-26T20:53:52.104Z
   - [ ] 2.13 Make the builder limits and the remote name configurable
   - [x] 2.14 ? Verify which hook features other agent platforms offer
 - [ ] 3 Remove the working files
-- [ ] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead) <!-- agent=a4c6d9f150fcd181e -->
+- [x] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead)
   - [x] 4.1 ? Decide where the plan outline is stored
-  - [ ] 4.2 Keep the plan outline's files in the git folder, outside the working tree
-  - [ ] 4.3 Mirror the plan outline to a git ref at each push, and restore from it on another machine
-  - [ ] 4.4 Remove the plan outline's commit and cleanup rules from the commit protocol
+  - [x] 4.2 Keep the plan outline's files in the git folder, outside the working tree
+  - [x] 4.3 Mirror the plan outline to a git ref at each push, and restore from it on another machine
+  - [x] 4.4 Remove the plan outline's commit and cleanup rules from the commit protocol
 - [ ] 5 Phase 2: bring back the design layer
 - [ ] 6 Phase 2: move the hook logic into one vendor-neutral library behind per-platform adapters
   - [x] 6.1 Choose the language of the core library
@@ -92,3 +92,4 @@ updated: 2026-11-26T20:53:52.104Z
     - [ ] 6.14.2 Offer the scripts as tools
     - [ ] 6.14.3 Let hook events reach the core through the server
     - [ ] 6.14.4 Look into a plan outline view through MCP Apps
+  - [ ] 6.15 Clean up after the parallel adapter work
