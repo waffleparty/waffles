@@ -1,0 +1,35 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "waffles",
+  "version": "0.1.0",
+  "description": "Skills, agents, and hooks for coding agents",
+  "author": {
+    "name": "WaffleParty",
+    "url": "https://waffleparty.ai"
+  },
+  "homepage": "https://github.com/waffleparty/waffles",
+  "repository": "https://github.com/waffleparty/waffles",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "agents",
+    "workflow"
+  ],
+  "extensions": {
+    "com.openai": {
+      "hooks": "./adapters/command/codex-hooks.json",
+      "interface": {
+        "displayName": "Waffles",
+        "shortDescription": "Skills, agents, and hooks for coding agents",
+        "developerName": "WaffleParty",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Interactive",
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://github.com/waffleparty/waffles"
+      }
+    }
+  }
+}

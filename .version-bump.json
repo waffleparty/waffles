@@ -5,7 +5,7 @@
       "field": "version"
     },
     {
-      "path": ".codex-plugin/plugin.json",
+      "path": "plugin.json",
       "field": "version"
     },
     {
