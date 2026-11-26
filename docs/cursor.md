@@ -22,7 +22,7 @@ waffles runs on Cursor through Cursor's plugin format and its command hooks. Cur
 
 ## What does not work
 
-- **No pane.** Cursor has no place a plugin draws in. The plan outline shows only in the model's context and in the goal files in the checkout's git folder (`<git dir>/waffles/plan/`).
+- **No pane.** Cursor has no place a plugin draws in. The plan outline shows only in the model's context and in the goal files in the plan outline's store (`<git dir>/waffles/plan/`).
 - **No footer.** The mode and an active run don't show under the prompt. A mode command's text shows only as the message Cursor shows for a stopped prompt.
 - **No auto effort.** Cursor gives a hook no way to set the reasoning effort.
 - **No unattended runs.** Cursor has no event before a permission prompt, and its documentation names no tool the agent asks a question with, so no hook can refuse either. A `/non-interactive` run still loads its skill and tells the model the mode, but a permission prompt or a question waits for you.

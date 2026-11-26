@@ -27,7 +27,7 @@ This wiring follows Antigravity's documentation (Plugins, Build plugins, Hooks, 
 
 ## What does not work
 
-- **No pane.** Antigravity has no place a plugin draws in. The plan outline shows only in the model's context and in the goal files in the checkout's git folder (`<git dir>/waffles/plan/`).
+- **No pane.** Antigravity has no place a plugin draws in. The plan outline shows only in the model's context and in the goal files in the plan outline's store (`<git dir>/waffles/plan/`).
 - **No footer.** The mode and an active run don't show under the prompt.
 - **No notice line.** Antigravity has no hook output that shows a line to you and not to the model. A mode command's text reaches you through the model's reply.
 - **No auto effort.** Antigravity gives a hook no way to set the reasoning effort.

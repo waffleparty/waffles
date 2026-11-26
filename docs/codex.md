@@ -15,7 +15,7 @@ waffles runs on OpenAI Codex through Codex's plugin format and its command hooks
 
 ## What does not work
 
-- **No pane.** Codex has no place a plugin draws in. The plan outline shows only in the model's context and in the goal files in `<git dir>/waffles/plan/`.
+- **No pane.** Codex has no place a plugin draws in. The plan outline shows only in the model's context and in the goal files in the plan outline's store (`<git dir>/waffles/plan/`).
 - **No footer.** The mode and an active run don't show under the prompt. A mode command's text shows as a warning line, where Codex shows one.
 - **No auto effort.** Codex gives a hook no way to set the reasoning effort.
 - **The start question has no time limit.** A hook can't close Codex's question after 60 seconds, so the run's first question waits for you.
