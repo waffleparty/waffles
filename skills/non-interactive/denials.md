@@ -2,9 +2,10 @@
 
 Read this file at the first denial or classifier block (see Denials in SKILL.md).
 
-Two things can refuse an action. Auto mode's classifier blocks what it judges
-risky. Where Claude Code would ask the user, waffles' hooks answer no, with a
-message that starts "Denied: The user is away".
+Two things can refuse an action. The platform's permission checks block what
+they judge risky (on Claude Code, auto mode's classifier). Where the platform
+would ask the user, waffles' hooks answer no, with a message that starts
+"Denied: The user is away".
 
 A denial stops one action, not the goal:
 
@@ -22,8 +23,8 @@ When a sub-agent reports a denial, handle it the same way.
 
 Three limits shape this:
 
-- 3 classifier blocks in a row pause auto mode: every write then asks, and is
-  denied. After a block, make your next action or two plainly safe, like an
+- On Claude Code, 3 classifier blocks in a row pause auto mode: every write
+  then asks, and is denied. After a block, make your next action or two plainly safe, like an
   edit in the repo, before you try anything else near the line.
 - After 5 denials in a row, the hooks tell you to wrap up. Start nothing new:
   leave what's blocked to the user in the plan outline, and finish (see

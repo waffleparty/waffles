@@ -161,18 +161,22 @@ time and prints its state.
 
 ## 5. Watch
 
-Start the `waffles:ci-watcher` agent in the background (Agent tool,
-`run_in_background: true`, `description`: `Watch CI/CD for <short-sha>`), with
-this brief:
+Start the CI watcher in the background: an agent that runs the script below
+and returns what it printed. On Claude Code it is the `waffles:ci-watcher`
+agent (Agent tool, `run_in_background: true`, `description`:
+`Watch CI/CD for <short-sha>`); on another platform, start its own background
+agent for the role, and where the platform has no background subagents, run
+the script yourself as a shell command: it prints the same report. The brief:
 
 ```
 Run: node <skill-dir>/watch.ts <map> --until-actionable
 ```
 
-Don't use the Monitor tool, and don't poll the runs yourself. Every Monitor event
-wakes you for a turn, and every turn pings the user. The watcher agent blocks on
+Don't use a background watch that wakes you on each line (Claude Code's Monitor
+tool), and don't poll the runs yourself. Every such event wakes you for a turn,
+and every turn pings the user. The watcher agent blocks on
 the script and returns only when you must act, so you wake once per decision. It
-also keeps the session marked as busy while CI runs. Its current Bash
+also keeps the session marked as busy while CI runs. On Claude Code, its current Bash
 description shows the live progress (`CI 3/5 jobs · now "Run tests"`) in the
 background-task panel, so you don't need to report progress.
 
@@ -204,7 +208,7 @@ reports every event.
 ### Success
 
 Report it in one line and stop: `CI/CD green for abc1234: CI ✓ · Deploy preview ✓ · Vercel ✓`.
-Stop any watcher agent still running (TaskStop).
+Stop any watcher agent still running (TaskStop on Claude Code).
 
 ### Failure
 

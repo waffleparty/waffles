@@ -15,7 +15,7 @@ step ─► commit ─► push at a milestone or a stop
    │
 last step: commit ────────────────────► push ─► gh pr ready
                                           │
-                         wait for its checks (waffles:watch-ci)
+                         wait for its checks (watch-ci skill)
                            │ pass              │ fail ─► fix, push again
                            ▼
         finished, reviewed, and nothing that stays with the user?
@@ -34,12 +34,12 @@ last step: commit ────────────────────�
                                   └─ removed ─► ship removed (back to in work, note:
                                                 GitHub's reason); fix, push, add it again
 
-   merged ─► waffles:watch-ci on the default branch ── fail ─► fix through a new pull request
+   merged ─► watch-ci skill on the default branch ── fail ─► fix through a new pull request
 ```
 
 - **One pull request per piece**, on the piece's branch, from its builder's
   clone (see `pieces.md`). Follow the commit and push rules of
-  the `waffles:commit-prep` skill, which the waffles modes section states in short. The
+  the waffles commit-prep skill, which the waffles modes section states in short. The
   plan outline is not in the working tree and is never committed. After the
   first commit, push the branch, and open the pull request as a draft
   (`gh pr create --draft`). Each outline step is one commit; push at a
@@ -51,11 +51,12 @@ last step: commit ────────────────────�
   `gh pr edit <number> --body-file <file>`. When a feature branch already has
   an open pull request, update that one. The whole feature branch merges,
   including work the task did not cover.
-- **Checks.** Watch the pull request's checks with the `waffles:watch-ci` skill;
+- **Checks.** Watch the pull request's checks with the waffles watch-ci skill;
   where it says to ask, decide instead. Fix a failure and push again.
 - **When to merge.** All 3 must hold: the piece is finished and verified, and
-  the pieces below it in a stack are merged; the `waffles:reviewer` review (see Finishing in SKILL.md)
-  has no open **must fix** finding; the pull request's checks pass. Then run the
+  the pieces below it in a stack are merged; the review by the reviewer agent
+  (`waffles:reviewer` on Claude Code; see Finishing in SKILL.md) has no open
+  **must fix** finding; the pull request's checks pass. Then run the
   production check below, and find how the pull request merges: call the
   waffles merge queue tool (`merge_queue`; each platform adds its own prefix
   to the name, such as `mcp__waffles__merge_queue`) with
@@ -85,26 +86,29 @@ last step: commit ────────────────────�
     the pull request on the newest base branch with the ones ahead of it,
     then merges it, or removes it. It writes the commit from the repo's
     settings for the queue's merge method, so put the digest in the pull request's body
-    before you add it. Then wait for the result with Monitor: an until-loop
-    that runs
+    before you add it. Then wait for the result with a background watch
+    (Claude Code's Monitor tool): an until-loop that runs
     `node <skill-dir>/../../scripts/merge-queue.ts state <number>` every
     60 seconds (a shell loop, so the script and not the tool) and ends at
-    `merged`, `removed`, or `closed`, for at most 2 hours. To read the state
+    `merged`, `removed`, or `closed`, for at most 2 hours. Where the platform
+    has no background watch, run the same loop as a shell command, and run it
+    again each time the platform ends it, until the 2 hours are up. To read the state
     once, outside the loop, call the tool with `{"op": "state", "pr": "<number>"}`.
     - `merged`: go on as After a merge says.
     - `removed`: in a repo that names a backlog adapter, `ship` the item
       with `removed` and a `note` that gives GitHub's reason: the item goes
-      back to `in work`. Find why with `waffles:watch-ci` on the queue's run (its
+      back to `in work`. Find why with the waffles watch-ci skill on the queue's run (its
       event is `merge_group`), fix it, push, and add the pull request to the
       queue again.
     - Still `queued` or `waiting` after 2 hours: leave the merge to the
       user, with the state as the reason.
 - **`--admin`.** It merges past branch protection (a required review or
   required signatures), so the user decides whether a run may use it, with
-  an auto mode rule of their own that names it. Add it only after a plain
-  merge was refused by such a rule, and only when the pull request's checks
-  pass: never to get past a failing check. When auto mode blocks the
-  command, the user has not allowed it. Then leave the pull request open and
+  a permission rule of their own that names it (on Claude Code, an auto mode
+  rule). Add it only after a plain merge was refused by such a rule, and only
+  when the pull request's checks pass: never to get past a failing check.
+  When the platform's permission checks block the command, the user has not
+  allowed it. Then leave the pull request open and
   leave the merge to the user, with the rule's name as the reason, and look
   for no other way to merge it. Merge with the merge method the repo or its
   merge queue requires. Never change branch protection settings. When
@@ -118,8 +122,8 @@ last step: commit ────────────────────�
   a release rollout pull request, list each change in the release with the
   flag that covers it and that flag's state for customers, and write the list
   into the pull request's body before you merge.
-- **After a merge.** Watch the default branch's CI and CD run with
-  `waffles:watch-ci`. Fix a failure through a new pull request on this same path.
+- **After a merge.** Watch the default branch's CI and CD run with the
+  waffles watch-ci skill. Fix a failure through a new pull request on this same path.
   Then restack the pieces on it and remove its clone (see After a piece merges
   in `pieces.md`), and bring the session's checkout to the merged state when
   the run committed there (see The local checkout).
@@ -130,12 +134,13 @@ last step: commit ────────────────────�
 ## Attribution
 
 Check which login a tool posts as (`gh api user --jq .login`). Where only the
-user's own login can post, the text itself says that Claude wrote it:
+user's own login can post, the text itself says that Claude wrote it (on
+another platform, its assistant's name in place of Claude):
 
 | Text | Attribution |
 | --- | --- |
 | A comment or a review reply | First line: "Written by Claude during an unattended run for `<login>`." |
-| A pull request's body | Last lines: the same sentence, then Claude Code's own attribution lines |
+| A pull request's body | Last lines: the same sentence, then the platform's own attribution lines, where it gives any (on Claude Code, Claude Code's) |
 | A commit, and the squashed commit on the default branch | The `Co-Authored-By` trailer |
 | Release notes and changelogs that a release tool generates | Nothing added |
 | Release notes that you write by hand | Last line: the same sentence |
@@ -171,7 +176,7 @@ skip step 4, and leave the switch to the user as a step in the plan outline
   the workflow triggers and no pipeline run on that branch deploys anything.
   On that branch you may defeat checks to test (skip a step, force a
   failure). None of that goes into the run's pull request.
-- Watch the runs the push starts (the `waffles:watch-ci` skill does this; where it
+- Watch the runs the push starts (the waffles watch-ci skill does this; where it
   says to ask, decide instead). Delete the test branch when you're
   done with it. If one has to stay on the remote, say so in the pull request
   body.

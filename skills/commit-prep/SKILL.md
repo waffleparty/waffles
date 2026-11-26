@@ -116,9 +116,10 @@ push: the commit is fine locally, but CI or another environment would fail.
 - **Lockfiles** out of sync with their manifests.
 
 If there are any, list them in the order they must happen ("publish
-`@scope/pkg@1.4.0`, then replace the link with `^1.4.0`, then push") and ask with
-AskUserQuestion: **Resolve first** (stop here and help with them), **Continue**
-(the user handles them before pushing), **Stop**. Recommend Resolve first when
+`@scope/pkg@1.4.0`, then replace the link with `^1.4.0`, then push") and ask the
+user a multiple-choice question (`AskUserQuestion` on Claude Code): **Resolve
+first** (stop here and help with them), **Continue** (the user handles them
+before pushing), **Stop**. Recommend Resolve first when
 anything blocks the commit. Don't publish, push, or touch other repos yourself.
 
 ## 3. Review and local CI
@@ -184,8 +185,8 @@ Escalate a fix instead of making it when the right answer is the user's call:
 - The fix would delete code or tests, install or upgrade dependencies, or
   change CI config.
 
-Batch escalations: give a short overview in chat, then ask each one with
-AskUserQuestion, with your recommendation first and the evidence for it. Keep
+Batch escalations: give a short overview in chat, then ask each one with the
+question tool, with your recommendation first and the evidence for it. Keep
 fixing everything else while you wait.
 
 ## 4. Report

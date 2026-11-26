@@ -30,7 +30,7 @@ never poll.
 
 ## Items
 
-Each item is one `.md` file in `.backlog/`. `/waffles:backlog` writes items already in
+Each item is one `.md` file in `.backlog/`. The waffles backlog skill writes items already in
 this format; the user may also drop in free-form text. The first time you see a file
 without frontmatter, normalize it:
 
@@ -65,14 +65,14 @@ one of them is not built yet: its file exists and is not `review`. An item whose
 dependency is `review` (its pull request is ready but not merged) is stacked on
 that item's branch (see Background agents). `clone:`, `branch:`, and `pr:` are
 the builder's checkout, its branch, and its pull request's URL. When `clone:` names a folder that is gone (it was in an earlier session's scratchpad), clone again with the same branch (see Clone, below): the new clone checks out the branch as origin has it. `## Clarifications` holds the user's answers
-to questions asked ahead of time by `/waffles:backlog-review`, which may write to `new`
+to questions asked ahead of time by the waffles backlog-review skill, which may write to `new`
 items from another session.
 
 Statuses:
 
 | Status | Meaning | Owner |
 | --- | --- | --- |
-| `new` | Triaged, not started | main thread (`/waffles:backlog-review` may add clarifications) |
+| `new` | Triaged, not started | main thread (the backlog-review skill may add clarifications) |
 | `running` | A builder is building it in its clone | that builder |
 | `review` | Built; its pull request is marked ready and waits for review | main thread |
 | `escalated` | Agent stopped and needs the user; question is in Progress | main thread |
@@ -108,8 +108,8 @@ Each pass:
 2. Order the candidates. Choose recommendations that keep concurrent builders
    from touching the same areas — hold back a background item that overlaps one
    already `running` or the interactive item you're recommending.
-3. Ask with AskUserQuestion (the tool can't preselect, and allows 4 options per
-   question):
+3. Ask the user multiple-choice questions (`AskUserQuestion` on Claude Code,
+   which can't preselect, and allows 4 options per question):
    - **Q1, multiSelect: "Run in background?"** — `new` background items. Label
      `[bg] <title>`, description `<summary>`. Append ` (Recommended)` to each one
      you'd run now, up to the target (see Background agents). A question
@@ -133,7 +133,8 @@ Each pass:
    say what's running and stop until an agent finishes or they re-invoke.
 
 When nothing is `new`, `review`, `escalated`, or `stale`, and no agents are
-running, report briefly and stop. The user re-runs `/waffles:work-loop` after adding items.
+running, report briefly and stop. The user runs this skill again
+(`/waffles:work-loop` on Claude Code) after adding items.
 
 ## Background agents
 
@@ -141,7 +142,8 @@ Each background item gets a builder: a background agent with its own full
 clone of the repo, its own branch, and its own draft pull request. Builders
 never share a checkout, not even with the main checkout, and nothing comes back
 from a clone: the work reaches the repo as a pull request, and is reviewed and
-merged there.
+merged there. Where the platform has no background agents, leave out Q1: every
+item is worked on the main thread.
 
 ### Limits
 
@@ -182,10 +184,10 @@ that still counts as one.
    refuses an existing clone of the item that is on another branch, and a base
    that is not on origin; say why in 1 line and leave the item `new`. Record
    `clone:` and `branch:` in the item's frontmatter.
-4. Set `status: running`, then launch the Agent tool in the background, with
-   no `isolation`, and a prompt with the item file's absolute path, the clone,
-   the branch, the base, `<scripts>` (`<skill-dir>/../../scripts`, as an
-   absolute path), and these instructions:
+4. Set `status: running`, then start a background agent (on Claude Code, the
+   Agent tool in the background, with no `isolation`) with a prompt with the
+   item file's absolute path, the clone, the branch, the base, `<scripts>`
+   (`<skill-dir>/../../scripts`, as an absolute path), and these instructions:
 
 > You're the builder of one backlog item. Work only in your clone,
 > `<clone path>`, on branch `<branch>`: a full clone of the repo that no other
@@ -193,7 +195,7 @@ that still counts as one.
 > checkout. It's yours to edit while you work; touch no other file under
 > `.backlog/` and nothing else in the main checkout.
 >
-> 1. Commit and push as the `waffles:commit-prep` skill's rules for work with a
+> 1. Commit and push as the waffles commit-prep skill's rules for work with a
 >    plan outline say. Write the item's plan outline in your clone's plan
 >    folder, `<git dir>/waffles/plan/` (`git rev-parse --git-dir` prints the
 >    git dir): it is not in the working tree and is never committed. Make one
@@ -235,9 +237,10 @@ that still counts as one.
 
 ### The finish queue
 
-Claude Code delivers each finished agent's notification between turns, never in
-the middle of one, so agents that finish close together arrive together. The
-item files are the queue, not the notifications:
+Finished agents' notifications can arrive together: Claude Code, for one,
+delivers each between turns, never in the middle of one, so agents that finish
+close together arrive together. The item files are the queue, not the
+notifications:
 
 - Handle every notification that has arrived in one pass, not a pass each.
   Read all statuses with one command
@@ -263,11 +266,11 @@ Set the item `status: active` and work it with the user. Read its
   below.
 - **review** — the review is of the item's pull request. If the item has
   `dev:`, find the clone's dev server: usually the builder's is still running.
-  Look for a listener that passes `/waffles:dev-server`'s ownership check against
+  Look for a listener that passes the waffles dev-server skill's ownership check against
   the clone and use it. Only if none is running, start one from `dev:` the way
-  `/waffles:dev-server` does; if its port is taken, use a free one and update `dev:`.
+  the dev-server skill does; if its port is taken, use a free one and update `dev:`.
   Never run two servers for one clone. Summarize the change, print the review
-  links block in chat, then ask with AskUserQuestion:
+  links block in chat, then ask with the question tool:
   **Merge** ("Merge the pull request"), **Revise** ("Tell me what to
   change"), **Drop** ("Close the pull request and delete the clone and the
   item"). Every option's preview is the review links block. On Revise, make the
@@ -317,7 +320,7 @@ serve it with 1 dev server:
    origin's default branch with each pull request merged into it. Its answer
    names each pull request that conflicted with the ones before it and was
    left out (`conflicts`): review those one by one.
-2. Serve it with `/waffles:dev-server` in the main checkout: one server for all the
+2. Serve it with the waffles dev-server skill in the main checkout: one server for all the
    items. Stop the builders' own servers for those items first, if you
    started them.
 3. Print one review links block: the server's URL joined with the `Pages:` of
@@ -344,7 +347,7 @@ serve it with 1 dev server:
    `node <skill-dir>/../../scripts/merge-queue.ts mode <number>`, which prints
    the same answer as JSON. Merge as the answer says. Without a merge queue:
    `gh pr merge <number> --squash --subject <subject> --body <digest>`, with
-   the subject and digest that the `waffles:commit-prep` skill describes. When it
+   the subject and digest that the waffles commit-prep skill describes. When it
    is refused (a check failed, a review is required), say why and leave the
    item in `review`. With a merge queue, merging is adding to the queue, and
    GitHub adds a pull request only when it has a valid approval (its
@@ -354,11 +357,14 @@ serve it with 1 dev server:
    for a reviewer's approval, and leave the item in `review`. With one, put
    the digest in the pull request's body, run `gh pr merge <number>` (no
    merge method, no `--auto`), and write under `## Progress` that it is in
-   the queue. Then start Monitor with an until-loop that runs
+   the queue. Then start a background watch (Claude Code's Monitor tool) with
+   an until-loop that runs
    `node <skill-dir>/../../scripts/merge-queue.ts state <number>` every 60
    seconds (a shell loop, so the script and not the tool) and ends at `merged`,
    `removed`, or `closed`; its notification starts the next pass, and the
-   item stays `review` until then. Go on with steps 3 to 5 once it is
+   item stays `review` until then. Where the platform has no background watch,
+   read the state with the merge queue tool (`{"op": "state", "pr": "<number>"}`)
+   at the start of each pass instead. Go on with steps 3 to 5 once it is
    `merged`. When the queue removed it, set `status: escalated`, write
    GitHub's reason under `## Progress`, and offer it in Q2: its fix is made in
    the clone, pushed, and added to the queue again.
@@ -373,7 +379,8 @@ serve it with 1 dev server:
    `git rebase --onto origin/<default branch> <this item's branch tip> <branch>`,
    push with `--force-with-lease`, and set its base with
    `gh pr edit <number> --base <default branch>`. Where that item's builder is
-   still running, send it these steps with SendMessage instead.
+   still running, send it these steps as a message instead (SendMessage on
+   Claude Code); where the platform can't, do them once it has finished.
 5. Delete the item file. When the main checkout is on the default branch with
    no changes, `git pull --ff-only`; otherwise say in 1 line that it is behind.
 
@@ -390,7 +397,8 @@ works on, and the items that fell back.
   item that is neither `done`, `waiting for deploy`, nor `in review` (an item
   whose blocker is `in review` is stacked on the blocker's branch, its `work`);
   an item with no `actor`, which was not adopted yet (say how many in 1 line,
-  and that `/waffles:backlog <id>` adopts one); and an item whose `component` holds
+  and that the waffles backlog skill adopts one by its ID, `/waffles:backlog <id>`
+  on Claude Code); and an item whose `component` holds
   another item of this loop (see Limits). Keep `pull`'s order: it is the order
   of `due`. `actor: agent` items are the background items; `actor: human` and
   `actor: assignee` items are interactive.

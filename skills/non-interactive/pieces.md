@@ -24,7 +24,9 @@ when its pull request is merged, or left to the user.
 - Make a piece a change that is worth its own pull request. Fold a change too
   small for one into the piece it belongs to.
 - Launch every piece whose dependencies are all finished, in parallel, each in
-  the background. Start each Agent call's description with its step's ID and
+  the background (on Claude Code, the Agent tool with `run_in_background`;
+  where the platform has no background subagents, build the pieces one at a
+  time in the main conversation). Start each subagent's description with its step's ID and
   a colon (`3.2: Build the export endpoint`), so the plan outline shows the
   step as the builder's while it works. Wait for their notifications; never
   poll. Ending your turn while they run is fine: each notification starts the
@@ -37,7 +39,7 @@ when its pull request is merged, or left to the user.
 
 ## Limits
 
-Before each builder, check the 3 limits that the `waffles:work-loop` skill's
+Before each builder, check the 3 limits that the waffles work-loop skill's
 Limits section sets; they hold in a run too. The clones and the pull request
 limit go through the waffles builders tool (`builders`; each platform adds its
 own prefix to the name, such as `mcp__waffles__builders`). Where that tool is
@@ -81,11 +83,13 @@ For each piece, in the main checkout of its repo:
 
 ## Briefing a builder
 
-Launch `waffles:implementer` or `waffles:implementer-hard` with no `isolation`. The
-brief names the piece, the clone, the branch, the base, and these rules:
+Launch `waffles:implementer` or `waffles:implementer-hard` with no `isolation`.
+They are Claude Code's agents for a builder of specified work and a builder of
+work that needs judgment; on another platform, launch its own agent for the
+role. The brief names the piece, the clone, the branch, the base, and these rules:
 
 - You are the piece's builder: work only in the clone. Commit and push as the
-  `waffles:commit-prep` skill's rules for work with a plan outline say: the plan
+  waffles commit-prep skill's rules for work with a plan outline say: the plan
   outline in the clone's plan folder, `<git dir>/waffles/plan/`, which is not
   in the working tree and is never committed; one commit per outline step with
   its checks passing; after the first, `git push -u origin <branch>` and
@@ -106,9 +110,10 @@ brief names the piece, the clone, the branch, the base, and these rules:
   (say so when the piece needs it).
 
 When a builder reports a gap or a decision, settle
-it as you would any other decision (see Deciding in SKILL.md), then send it the
-answer with SendMessage, or start a new builder in the same clone with the full
-brief if the first one has finished.
+it as you would any other decision (see Deciding in SKILL.md), then send the
+running builder the answer as a message (SendMessage on Claude Code), or start
+a new builder in the same clone with the full brief if the first one has
+finished or the platform can't send a running agent a message.
 
 ## After a piece merges
 
@@ -116,7 +121,8 @@ brief if the first one has finished.
    each one's clone run `git fetch origin`, then
    `git rebase --onto origin/<default branch> <merged branch tip> <branch>`,
    push with `--force-with-lease`, and `gh pr edit <number> --base <default branch>`.
-   Where that builder still runs, send it these steps with SendMessage.
+   Where that builder still runs, send it these steps as a message (SendMessage
+   on Claude Code); where the platform can't, do them once it has finished.
 2. Remove the merged piece's clone: call the builders tool with
    `{"op": "remove", "root": "<scratchpad>/builders", "path": "<clone>"}`;
    where it is missing, run

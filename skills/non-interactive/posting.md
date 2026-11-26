@@ -13,4 +13,5 @@ where other people read (see Ground rules in SKILL.md).
 - **Say that Claude wrote it.** Before you post where other people read, check which identity
   the tool posts as. Post as Claude when a Claude identity can. When only the user's own login
   works, add "Written by Claude during an unattended run for <login>." as the first line of a
-  comment and as the last line of a pull request body.
+  comment and as the last line of a pull request body. On another platform, its assistant's name
+  stands in place of Claude.

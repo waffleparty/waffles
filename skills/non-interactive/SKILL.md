@@ -33,12 +33,14 @@ attribution, the checkout after a merge, and changes to CI).
 
 ## Ground rules
 
-- After the start of the run (below), don't use AskUserQuestion, and don't end
-  a turn with a question or a plan waiting for approval. Make the decision,
-  note it if it is worth checking (see Deciding), and keep going.
+- After the start of the run (below), don't ask the user a multiple-choice
+  question (`AskUserQuestion` on Claude Code), and don't end a turn with a
+  question or a plan waiting for approval. Make the decision, note it if it is
+  worth checking (see Deciding), and keep going.
 - **Do the work.** When the task needs an action, take it: edit any local repo
   the task involves, run the commands it needs, install a dependency, change
-  CI, use the network. Auto mode's classifier is the safety check. Don't add
+  CI, use the network. The platform's permission checks (on Claude Code, auto
+  mode's classifier) are the safety check. Don't add
   your own by skipping work it might block: when you're unsure whether an
   action is allowed, try it.
 - **Act without asking.** Do what the task needs, including what other people will see: push
@@ -89,7 +91,7 @@ reading and building.
 
 Read `start.md` and do its 2 steps first, in order, before any other work:
 test-sign, then ask once about commits that aren't on the remote (this is the
-only question of a run; the hooks refuse every other AskUserQuestion call).
+only question of a run; the hooks refuse every other call to the question tool).
 
 Then start the plan outline (see The plan outline): a goal for the run's work,
 and its steps.
@@ -98,7 +100,8 @@ and its steps.
 
 The plan outline is the run's only record. The user reads it when they return,
 in the pull request's `## Plan outline` section. Change it only with the
-`mcp__waffles__plan` tool, as in production mode: start a goal, add its steps, and
+waffles plan outline tool (`plan`; each platform adds its own prefix to the
+name, such as `mcp__waffles__plan`), as in production mode: start a goal, add its steps, and
 close each step (op `done`) when its commit is made. After a context
 compaction, show it (op `show`) before you continue.
 
@@ -133,8 +136,9 @@ When to add `--admin` to `gh pr merge` is in `pull-requests.md`.
 
 ## Denials
 
-Two things can refuse an action: auto mode's classifier, and waffles' hooks, which
-answer no where Claude Code would ask the user, with a message that starts
+Two things can refuse an action: the platform's permission checks (on Claude
+Code, auto mode's classifier), and waffles' hooks, which answer no where the
+platform would ask the user, with a message that starts
 "Denied: The user is away". A denial stops one action, not the goal. Read
 `denials.md` at the first denial: it says how to find another way, when to
 leave the step to the user, and the limits (3 classifier blocks in a row, 5
@@ -164,6 +168,16 @@ no model, so pass its `model` as `deciding.md` says. If they aren't in the Agent
 | Build a piece that needs judgment: an unknown cause, a multi-file refactor, or anything touching auth, security, migrations, money, or concurrency | `waffles:implementer-hard` | `general-purpose`, opus, high |
 | Review finished work | `waffles:reviewer` | `general-purpose`, opus, high |
 | Make a hard decision | `waffles:decider`, with `model` the most capable in the Agent tool's options (see `deciding.md`) | see `deciding.md` |
+
+The `waffles:*` agent types are Claude Code agent files, one per role: a test
+runner (`waffles:test-runner`), a builder for specified work
+(`waffles:implementer`), a builder for work that needs judgment
+(`waffles:implementer-hard`), a reviewer (`waffles:reviewer`), and a decider
+(`waffles:decider`). On another platform, start the platform's own agent for
+the role. The table's model and effort are for a platform whose subagents take
+them (Claude Code's Agent tool takes `model` and `effort`); where the platform
+can't set them, start the agent as it is. Where the platform has no subagents,
+do the piece in the main conversation.
 
 If a spawn fails because its model isn't available, retry with `model: "opus"`,
 then with `model` unset. Once a model has failed, don't try it again this run.

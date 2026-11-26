@@ -6,16 +6,17 @@ this order, before any other work.
 
 1. **Test-sign.** In a setup that signs commits with GPG
    (`git config commit.gpgsign` prints `true`, and `git config gpg.format`
-   prints nothing or `openpgp`), run `echo ok | gpg --clearsign >/dev/null` with the Bash
-   tool's `timeout: 60000`. The gpg-agent then keeps the passphrase for the
-   first hours of the run, or shows its prompt while the user is still there.
+   prints nothing or `openpgp`), run `echo ok | gpg --clearsign >/dev/null` with a
+   60-second time limit (the Bash tool's `timeout: 60000` on Claude Code). The
+   gpg-agent then keeps the passphrase for the first hours of the run, or shows its prompt while the user is still there.
    If the command doesn't finish in those 60 seconds, nobody answered: commit
    unsigned.
 2. **Ask about commits that aren't on the remote.** In each repo the task
    involves, list them with `git log --oneline @{upstream}..HEAD` (with no
    upstream, `git log --oneline origin/<default branch>..HEAD`). They are the
    user's own work, or unsigned commits from an earlier run. When any repo has
-   some, ask once with AskUserQuestion, in 1 call with 1 question, whether
+   some, ask the user once with a multiple-choice question (`AskUserQuestion`
+   on Claude Code), in 1 call with 1 question, whether
    they belong to this run. The question stands alone: it names each repo and
    branch, lists the commits' subjects, and says what each answer leads to.
 
@@ -30,7 +31,8 @@ this order, before any other work.
    hooks refuse all mean: include them. When no repo has such commits, ask
    nothing.
 
-   This is the only question of a run. The hooks refuse every other
-   AskUserQuestion call at once. If the hooks aren't loaded (a cloud session
-   loads this skill without its plugin, so the `waffles:*` agent types are missing
-   from the Agent tool's list), don't ask: include the commits.
+   This is the only question of a run. The hooks refuse every other call to
+   the question tool at once. If the hooks aren't loaded (on Claude Code, a
+   cloud session loads this skill without its plugin, so the `waffles:*` agent
+   types are missing from the Agent tool's list), don't ask: include the
+   commits.

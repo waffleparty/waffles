@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Go through the backlog items that need the user's input and ask them, preemptively,
 what an agent would otherwise have to stop and ask. This usually runs in its own
-session while `/waffles:work-loop` builds the backlog in another, so other sessions may
+session while the waffles work-loop skill builds the backlog in another, so other sessions may
 be changing these files as you go.
 
 ## Setup
@@ -24,7 +24,7 @@ or has no candidates, say so in one line and stop.
 
 Items with `status: new`, `type: interactive`, and `groomed:` not `true`. Skip
 everything else — escalated, stale, review, running, and active items belong to
-`/waffles:work-loop` or its agents. Review items that others list in `depends:` first,
+the work-loop skill or its agents. Review items that others list in `depends:` first,
 then the rest, oldest first.
 
 ## Each item
@@ -38,7 +38,8 @@ skipped questions.
 Ask about each gap in turn. Each question is atomic — ask it, then record the
 answer, before asking the next:
 
-1. Ask with AskUserQuestion, **one question per call**. Name the item in the
+1. Ask the user a multiple-choice question (`AskUserQuestion` on Claude Code),
+   **one question per call**. Name the item in the
    question text; the header is a short form of its title. Offer 2–3 likely
    answers, your recommendation first with ` (Recommended)`, and a final
    **Skip** option ("Don't ask this again"). The user can always type their own
@@ -60,7 +61,7 @@ When no gaps are left, re-read the item. If it's still `new`:
 - Set `groomed: true`.
 - If an agent could now finish it without asking the user anything — intent
   unambiguous, scope contained, an obvious way to verify it, and nothing risky
-  needing their authorization — set `type: background` so `/waffles:work-loop` offers it
+  needing their authorization — set `type: background` so the work-loop skill offers it
   to an agent.
 - Update `title:` and `summary:` if the answers changed them. Never edit
   `## Request`.

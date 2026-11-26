@@ -32,7 +32,7 @@ If the check fails, the port belongs to something else. Say what it is
 (`ps -o pid=,command= -p <pid>` plus its directory), and treat the port as
 taken (step 3).
 
-A review branch (`waffles-review`, which the `waffles:work-loop` skill builds in the
+A review branch (`waffles-review`, which the waffles work-loop skill builds in the
 main checkout to show several pull requests at once) is the main checkout's
 project: one server serves it. When that branch is rebuilt, the running
 server stays, if it reloads changed files; otherwise restart it once.
@@ -71,9 +71,9 @@ Use the first source that answers it:
 | Only `compose.yaml` / `docker-compose.yml` | `docker compose up` |
 
 If several candidates remain and the docs don't settle it (e.g. separate
-frontend and backend with no combined script), ask with AskUserQuestion, with
-your recommendation first. If there's no server at all (a library or CLI), say
-so and stop.
+frontend and backend with no combined script), ask the user a multiple-choice
+question (`AskUserQuestion` on Claude Code), with your recommendation first. If
+there's no server at all (a library or CLI), say so and stop.
 
 ## 3. Prerequisites
 
@@ -92,13 +92,18 @@ so and stop.
 
 ## 4. Start it
 
-Run the command with Bash `run_in_background: true` from the directory it
-belongs in. Don't add `&`, `nohup`, or `disown`; the harness tracks the task
-and captures its output. Leave out flags that open a browser.
+Run the command as a background task of the platform (on Claude Code, Bash
+with `run_in_background: true`) from the directory it belongs in. Don't add
+`&`, `nohup`, or `disown`; the harness tracks the task and captures its output.
+Where the platform has no background task, start it with
+`nohup <command> > <log> 2>&1 &` instead, and read `<log>` as the task's
+output. Leave out flags that open a browser.
 
-Wait until it's ready: use Monitor with an until-loop that watches the task's
-output for a ready line ("Local:", "ready", "listening on", "started server")
-or an error, and give up after ~2 minutes. It's up only when all of these hold:
+Wait until it's ready: use a background watch (Claude Code's Monitor tool)
+with an until-loop that watches the task's output for a ready line ("Local:",
+"ready", "listening on", "started server") or an error, and give up after
+~2 minutes. Where the platform has no background watch, run the until-loop as
+a shell command. It's up only when all of these hold:
 
 - The background task is still running. "Address already in use" or
   `EADDRINUSE` in the output means it failed, even if the port answers.

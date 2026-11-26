@@ -3,7 +3,11 @@
 Read this file before you delegate a hard decision (see Deciding in SKILL.md).
 
 Spawn `waffles:decider`, which runs at high effort (these calls get the
-strongest reasoning) and can't edit files. It names no model:
+strongest reasoning) and can't edit files. It is Claude Code's agent for this
+role: on another platform, start the platform's own agent that reads and does
+not edit, on its most capable model where the platform lets you choose one.
+Where the platform has no subagents, make the decision yourself from the same
+goal, options, and evidence. `waffles:decider` names no model:
 pass as `model` the most capable model in the Agent tool's options. When the
 spawn fails on the model, try the next most capable, then leave `model` unset
 so the agent uses the session's model; keep its own effort. Without the
