@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { after, test } from 'node:test'
 
 import { ASSESS_PROMPT } from '../../core/modes.ts'
+import { modesModule } from './modes.ts'
+import { registryOf } from './registry.ts'
 import { folders, LIMIT, META, server, stopAll, text } from './testing.ts'
 
 after(stopAll)
@@ -84,4 +86,12 @@ test('the mode tool reads and sets the mode, and refuses a mode it lacks', LIMIT
   assert.equal(back.result.resultType, 'complete')
   assert.match(text(back), /^waffles mode: production\. Backlog mode has ended/)
   await s.close()
+})
+
+test("the instructions say no mode statement comes with the first message, unless the platform's hooks send one", () => {
+  const without = registryOf([modesModule], {}).instructions
+  assert.match(without, /prompts of the waffles MCP server, and no mode statement comes with the first message: the mcp__waffles__mode tool returns the current one when called with no input\.$/)
+  const withHooks = registryOf([modesModule], { WAFFLES_HOOKS: '1' }).instructions
+  assert.doesNotMatch(withHooks, /no mode statement/)
+  assert.match(withHooks, /prompts of the waffles MCP server, and the mcp__waffles__mode tool returns the current mode statement when called with no input\.$/)
 })

@@ -4,7 +4,10 @@
     "waffles": {
       "type": "stdio",
       "command": "node",
-      "args": ["${PLUGIN_ROOT}/adapters/mcp/server.ts"]
+      "args": ["${PLUGIN_ROOT}/adapters/mcp/server.ts"],
+      "env": {
+        "WAFFLES_HOOKS": "1"
+      }
     }
   }
 }

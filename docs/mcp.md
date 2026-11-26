@@ -16,7 +16,7 @@ Cursor, Codex, and Antigravity take tools only from MCP servers: their plugins c
 
 A refused call (an unknown step, no active goal) is a tool result with `isError: true` and the reason, so the model reads it and corrects the call. A tool that fails is a tool result with `isError: true` and a short reason too; the stack goes to stderr.
 
-The current mode is not in the instructions: a client reads them once or caches them, so a mode statement there would go stale at the first change, and a fresh one would change the client's system prompt. The instructions say to call the `mode` tool with no input to read the mode, and each prompt and each `mode` call with `set` returns the statement of the change. On these clients no statement comes beside a prompt typed in backlog mode: the platforms give the server no hook on the person's prompts.
+The current mode is not in the instructions: a client reads them once or caches them, so a mode statement there would go stale at the first change, and a fresh one would change the client's system prompt. The instructions say to call the `mode` tool with no input to read the mode, and each prompt and each `mode` call with `set` returns the statement of the change. They also say that no mode statement comes with the first message, unless `WAFFLES_HOOKS` is `1`: the platform's hooks then send one. On these clients no statement comes beside a prompt typed in backlog mode: the platforms give the server no hook on the person's prompts.
 
 The server needs Node.js 22.18 or later and no npm packages.
 
@@ -68,6 +68,7 @@ Set `env` in the entry when the client shows tools under another pattern, or sta
 | `WAFFLES_MCP_MODULES` | Every module | The modules to offer, comma-separated: `modes`, `plan`. The server announces a capability only for what they provide. |
 | `WAFFLES_SESSION_ID` | A new ID for each server process | The session the mode and the active goal belong to. Set it to the ID the platform's hooks use, so the hooks and the server agree. |
 | `WAFFLES_CWD` | The process's working directory | The folder whose checkout holds the plan outline |
+| `WAFFLES_HOOKS` | Not set | `1` where the platform's hooks run beside the server and send the mode statement with the first message. The instructions then leave out that no statement comes. The plugin's MCP configurations for Codex, Cursor, and Antigravity set it. On the Codex CLI, which runs no plugin hooks, it still leaves the instructions true: it only removes that sentence, and the `mode` tool still returns the mode. |
 | `WAFFLES_STATE_DIR` | `waffles` in `XDG_STATE_HOME`, else `~/.local/state/waffles` | Where the session's values are kept, shared with the hooks |
 | `WAFFLES_DEBUG` | Not set | When set, the plan outline's failures go to stderr with their stacks |
 

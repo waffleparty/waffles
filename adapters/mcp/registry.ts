@@ -72,6 +72,8 @@ export type TextContext = {
   names: Names
   /** A tool's name as the model sees it. */
   seenAs(tool: string): string
+  /** The platform's hooks run beside the server and add their own context, such as the mode statement (`WAFFLES_HOOKS=1`). */
+  hasHooks: boolean
 }
 
 /** A session as a module sees it. */
@@ -177,8 +179,9 @@ export function registryOf(modules: readonly Module[], env: NodeJS.ProcessEnv = 
   prompts()
   const seenAs = seenAsOf(env, tools())
   const names = namesOf(env, seenAs)
+  const hasHooks = env.WAFFLES_HOOKS === '1'
   const instructions = modules
-    .map(m => m.instructions?.({ names, seenAs }) ?? '')
+    .map(m => m.instructions?.({ names, seenAs, hasHooks }) ?? '')
     .filter(Boolean)
     .join('\n\n')
   const isListChanging = (kind: ListKind) => modules.some(m => m.listChanges?.includes(kind))

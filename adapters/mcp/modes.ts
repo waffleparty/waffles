@@ -87,10 +87,14 @@ export const modesModule: Module = {
       return { description: person, messages: [userText(model)] }
     },
   })),
-  instructions: ({ seenAs }) =>
+  // Where the platform's hooks run, they send the mode statement with the first message, so the
+  // instructions don't say that none comes.
+  instructions: ({ seenAs, hasHooks }) =>
     `${MODES_TEXT}
 
-On this client the /${PROD_COMMAND}, /${RAPID_COMMAND} and /${BACKLOG_COMMAND} commands are prompts of the waffles MCP server, and no mode statement comes with the first message: the ${seenAs(MODE_TOOL.name)} tool returns the current one when called with no input.`,
+On this client the /${PROD_COMMAND}, /${RAPID_COMMAND} and /${BACKLOG_COMMAND} commands are prompts of the waffles MCP server, ${
+      hasHooks ? 'and the' : 'and no mode statement comes with the first message: the'
+    } ${seenAs(MODE_TOOL.name)} tool returns the current ${hasHooks ? 'mode statement' : 'one'} when called with no input.`,
   // The mode comes back from the session's values.
   start: async ({ $ }) => {
     await startMode($)
