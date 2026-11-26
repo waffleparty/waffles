@@ -56,13 +56,28 @@ export default Plugin.define({
             input.close()
           }
         })
+        // The current step is brought into view when it is outside the rows shown: when the panel opens,
+        // and when the step changes. A step already in view leaves the scroll position alone.
+        let box
+        const current = () => rows().findIndex((row) => row.some((piece) => piece.color === 'cyan'))
+        createEffect(() => {
+          const index = current()
+          if (index < 0) return
+          // After the rows are laid out, so the box knows its height.
+          setTimeout(() => {
+            if (!box) return
+            const height = box.viewport?.height ?? box.height ?? 0
+            const top = box.scrollTop ?? 0
+            if (height > 0 && (index < top || index >= top + height)) box.scrollTo(Math.max(0, index - Math.floor(height / 2)))
+          }, 50)
+        })
         return (
           <Show when={input.name === PANEL}>
             <box flexDirection="column" paddingLeft={1} paddingRight={1} flexGrow={1} minHeight={0}>
               <text fg={muted()}>Plan outline</text>
               <Show when={rows().length > 0} fallback={<text fg={muted()}>No active goal.</text>}>
                 {/* A goal can hold more steps than the terminal has rows: the rows scroll with the mouse wheel, and with the keys while the panel has the focus. */}
-                <scrollbox flexGrow={1} minHeight={0} focused={input.focused}>
+                <scrollbox ref={(el) => (box = el)} flexGrow={1} minHeight={0} focused={input.focused}>
                   <For each={rows()}>
                     {(row) => (
                       <text wrapMode="none">
