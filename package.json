@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./adapters/opencode/server.ts"
+    ".": "./adapters/opencode/server.ts",
+    "./tui": "./adapters/opencode/tui.tsx"
   },
   "description": "Development and release tooling for the waffles plugin. This file does not publish a package.",
   "license": "MIT",

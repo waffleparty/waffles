@@ -47,8 +47,11 @@ export const NAMES: Names = {
 
 // The session's metadata key that holds the values a session must get back when it is reopened.
 const METADATA = 'waffles'
-// The values written to the session's record. The rest are redrawn from the plan outline's files.
+// The values written to the session's record and read back when the session is reopened.
 const KEPT: readonly (keyof SessionState)[] = ['mode', 'rapidBase', 'run']
+// The values written to the record for the terminal UI part to draw, and never read back: the plan
+// outline is redrawn from its files.
+const SHOWN: readonly (keyof SessionState)[] = ['planTree']
 // The keys of the session's instruction entries: the blocks the model reads beside the instructions.
 const MODE_ENTRY = 'waffles-mode'
 const PLAN_ENTRY = 'waffles-plan-outline'
@@ -101,7 +104,8 @@ export function sessionState(ctx: Pick<Plugin.Context, 'session'>, sessionID: st
       // A record that can't be read leaves every key at its default, which is the safe one.
       const info = await ctx.session.get({ sessionID }).catch(() => null)
       const kept = (info?.metadata as Record<string, unknown> | undefined)?.[METADATA]
-      if (typeof kept === 'object' && kept !== null) Object.assign(values, kept)
+      if (typeof kept !== 'object' || kept === null) return
+      for (const key of KEPT) if (key in kept) Object.assign(values, { [key]: (kept as Record<string, unknown>)[key] })
     })())
   return {
     get: async key => {
@@ -111,9 +115,9 @@ export function sessionState(ctx: Pick<Plugin.Context, 'session'>, sessionID: st
     set: async (key, value) => {
       await load()
       values[key] = value
-      if (!KEPT.includes(key)) return
+      if (!KEPT.includes(key) && !SHOWN.includes(key)) return
       const info = await ctx.session.get({ sessionID })
-      const kept = Object.fromEntries(KEPT.filter(k => k in values).map(k => [k, values[k]]))
+      const kept = Object.fromEntries([...KEPT, ...SHOWN].filter(k => k in values).map(k => [k, values[k]]))
       await ctx.session.update({ sessionID, metadata: { ...info.metadata, [METADATA]: kept } as never })
     },
   }

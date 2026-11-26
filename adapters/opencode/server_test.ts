@@ -92,6 +92,10 @@ test('the session keeps its mode on its record, and the values a view draws from
   await state.set('planChanged', ['1'])
   // Another plugin's metadata stays, and only the kept values are written.
   assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid' } })
+  // The plan outline's tree is written for the terminal UI part, and not read back.
+  await state.set('planTree', null)
+  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planTree: null } })
+  assert.equal(await sessionState(ctx as never, 's1').get('planTree'), null)
   assert.deepEqual(await state.get('planChanged'), ['1'])
   // A reopened session reads its mode back from the record.
   assert.equal(await sessionState(ctx as never, 's1').get('mode'), 'rapid')
