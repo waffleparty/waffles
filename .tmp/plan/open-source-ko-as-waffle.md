@@ -1,16 +1,16 @@
 ---
 goal: Open-source ko as waffle
 status: open
-current: 2
+current: 6.3
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T05:44:21.685Z
+updated: 2026-11-26T16:46:28.571Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
   - [-] 1.2 Review the skills
   - [-] 1.3 Review the agents
   - [-] 1.4 Review the scripts
-- [ ] 2 Import ko into waffles
+- [~] 2 Import ko into waffles <!-- parked=2026-11-26T16:05:33.407Z -->
   - [x] 2.1 Rename the repo references from waffle to waffles
   - [ ] 2.2 Point the marketplace entry at waffles
   - [x] 2.3 Import and scrub the hooks
@@ -32,11 +32,28 @@ updated: 2026-11-26T05:44:21.685Z
     - [x] 2.8.11 ⤷ Remove the design layer
     - [x] 2.8.12 ⤷ Stop authorizing --admin merges by default
     - [x] 2.8.13 ⤷ Neutralize the sample text and the company names
-  - [ ] 2.9 Replace semantic-release with a shell release step
-  - [ ] 2.10 Drop the Codex and Cursor manifests
+  - [-] 2.9 Replace semantic-release with a shell release step
+  - [-] 2.10 Drop the Codex and Cursor manifests
   - [ ] 2.11 Make the hooks and scripts fail clearly without lsof, gh, or fcntl
-  - [ ] 2.12 State the minimum Claude Code version in the README
+  - [ ] 2.12 State in the README the minimum Claude Code version and what works on other platforms
   - [ ] 2.13 Make the builder limits and the remote name configurable
+  - [x] 2.14 ? Verify which hook features other agent platforms offer
 - [ ] 3 Remove the working files
 - [ ] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead)
 - [ ] 5 Phase 2: bring back the design layer
+- [ ] 6 Phase 2: move the hook logic into one vendor-neutral library behind per-platform adapters
+  - [x] 6.1 Choose the language of the core library
+  - [x] 6.2 Verify the OpenCode plugin API against its official docs
+  - [ ] 6.3 Move the hook logic into the core library
+    - [x] 6.3.1 Design the boundary between the core library and the adapters
+    - [ ] 6.3.2 Confirm that Claude Code's hook runtime loads imports with a .ts extension
+    - [ ] 6.3.3 Define the host interface and its store
+    - [ ] 6.3.4 Move the plan outline into the core
+    - [ ] 6.3.5 Move the modes and the unattended-run rules into the core
+    - [ ] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
+  - [ ] 6.4 Serve the plan outline tool from an MCP server
+  - [ ] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
+  - [ ] 6.6 Add an in-process adapter for OpenCode
+  - [ ] 6.7 Add an Antigravity manifest
+  - [ ] 6.8 Move the Codex manifest to a root plugin.json
+  - [ ] 6.9 Port the Python scripts to TypeScript
