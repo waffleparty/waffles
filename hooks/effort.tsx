@@ -1,7 +1,9 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, On, PromptSubmitInput, SessionMessage } from 'claude-code'
+import type { EngineInterface, On, PromptSubmitInput } from 'claude-code'
 
+import { LEVEL_NAMES as NAMES, LEVELS, levelLabel, pickEffort, RUN_LEVEL, type EffortPick as Pick } from '../core/effort.ts'
 import type { EffortLevel } from '../types'
+import { hostOf } from './host'
 import { isRunCommand, isTypedPrompt } from './unattended'
 
 const current = atom({ plugin: 'waffles', key: 'effort' } as const, null)
@@ -10,78 +12,7 @@ const shown = atom({ plugin: 'waffles', key: 'effortMode' } as const, 'auto')
 const picking = atom({ plugin: 'waffles', key: 'effortPicking' } as const, false)
 
 const COMMAND = 'auto-effort'
-const LEVELS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh']
-const NAMES: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high' }
-const PICK_MS = 8_000
-// Unattended runs hold every main-chat turn here until the person types again.
-const RUN_LEVEL: EffortLevel = 'xhigh'
-
-type Pick = { level: EffortLevel | 'keep'; why: string }
-
-// Stops at the first match, so the order is the rubric.
-function pickPrompt(text: string, lastReply: string, setting: string) {
-  return `You pick the reasoning effort a coding agent (Claude Code) should use for one prompt. Effort sets how much the agent reads, checks and thinks before acting. Pick the lowest level that will get the job done right.
-
-Go through these in order and stop at the first that fits:
-
-1. keep: the prompt only approves, answers a question Claude asked, picks an option, or says to go on with earlier work ("yes", "2", "go on", "do it", "looks good").
-2. low: a question about code or a tool, a lookup, a rename, a small edit the prompt spells out, a shell or git one-liner, a commit message or a piece of copy.
-3. high: debugging where the cause is unknown, a change across several files, a refactor, a review for correctness, designing an API or a schema, or anything that touches auth, security, data migrations, money or concurrency.
-4. xhigh: the person hands off a long, hard job and walks away, with no time to answer questions ("build all of X, don't ask me").
-5. medium: everything else, such as ordinary feature work in one area, a single-file bug fix, tests for existing code, or docs. If you are not sure, medium.
-
-A long prompt is not a hard task. Following a written recipe stays low or medium.
-
-The current setting: ${setting}
-
-Claude's last reply (first 600 characters, for context):
-<reply>
-${lastReply || '(none, this is the first prompt)'}
-</reply>
-
-The new prompt:
-<prompt>
-${text}
-</prompt>
-
-Reply with JSON only: {"level": "low|medium|high|xhigh|keep", "why": "the reason in under 8 plain words"}`
-}
-
-function parsePick(text: string): Pick | null {
-  const json = /\{[\s\S]*\}/.exec(text)?.[0]
-  if (!json) return null
-  try {
-    const { level, why } = JSON.parse(json) as { level?: unknown; why?: unknown }
-    const isLevel = level === 'keep' || LEVELS.includes(level as EffortLevel)
-    if (!isLevel) return null
-    const reason = typeof why === 'string' ? why.replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '') : ''
-    return { level: level as Pick['level'], why: reason.slice(0, 80) }
-  } catch {
-    return null
-  }
-}
-
-function lastAssistantText(messages: readonly SessionMessage[]) {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const m = messages[i]!
-    if (m.role === 'assistant' && m.text.trim()) return m.text
-  }
-  return ''
-}
-
-async function pick($: EngineInterface, text: string, setting: string): Promise<Pick | null> {
-  const lastReply = lastAssistantText(await $.session.messages()).slice(0, 600)
-  const r = await $.model.complete({
-    model: 'haiku',
-    prompt: pickPrompt(text.slice(0, 4000), lastReply, setting),
-    maxTokens: 100,
-    effort: 'low',
-    timeoutMs: PICK_MS,
-  })
-  return r.isAnswered ? parsePick(r.text) : null
-}
-
-const label = (level: string) => NAMES[level]?.toLowerCase() ?? level
+const label = levelLabel
 
 /**
  * The footer's effort state: the setting while auto effort is off, else `auto`,
@@ -113,7 +44,7 @@ async function choose($: EngineInterface, text: string, setting: string): Promis
   await update($, picking, () => true)
   let p: Pick | null = null
   try {
-    p = await pick($, text, setting)
+    p = await pickEffort(hostOf($), text, setting)
   } finally {
     await update($, picking, () => false)
   }

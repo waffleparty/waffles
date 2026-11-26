@@ -15,6 +15,8 @@ export type Host = {
     stat(path: string): Promise<FileStat>
     /** Removes a file; one that isn't there is nothing to remove. */
     remove(path: string): Promise<void>
+    /** The path with every link in it followed. */
+    realPath(path: string): Promise<string>
   }
   process: {
     /** Runs a command to its end. Rejects when it can't start. */
@@ -58,7 +60,13 @@ export type Host = {
     /** A goal became active: at the session's start, or by a call. */
     planActive(when: 'start' | 'call'): Promise<void>
   }
+  model: {
+    /** One question to a fast, cheap model: its answer's text, or null when it gave none in time. */
+    ask(prompt: string, init: { maxTokens: number; timeoutMs: number }): Promise<string | null>
+  }
   conversation: {
+    /** The assistant's last reply that holds text; empty when there is none. */
+    lastReply(): Promise<string>
     /** Adds a row the model reads at the end of the conversation. False where the platform refuses it. */
     note(text: string): Promise<boolean>
   }
@@ -71,6 +79,8 @@ export type Host = {
 export type Names = {
   /** What the person calls the assistant. */
   assistant: string
+  /** The product the assistant runs in. */
+  product: string
   /** The plan outline tool's name, as the model calls it. */
   planTool: string
   /** The tool the model asks the person a multiple-choice question with. */

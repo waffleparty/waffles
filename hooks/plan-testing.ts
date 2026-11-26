@@ -169,6 +169,7 @@ export function fakeStoreDisk(): Disk & { $: StoreEngine } {
       remove: async path => {
         await at.run(['rm', '-f', path])
       },
+      realPath: async path => path,
     },
     process: { run: argv => at.run(argv) },
     session: { cwd: async () => disk.cwd },

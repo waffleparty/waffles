@@ -90,6 +90,7 @@ export const MEMORY = { memory }
 /** What Claude Code calls its own things. hooks/plan.ts names the same tool where it hooks its calls. */
 export const NAMES: Names = {
   assistant: 'Claude',
+  product: 'Claude Code',
   planTool: 'mcp__waffles__plan',
   ask: 'AskUserQuestion',
   planMode: "Claude Code's plan mode",
@@ -108,6 +109,7 @@ export function hostOf($: EngineInterface): Host {
       remove: async path => {
         await $.process.run(['rm', '-f', path])
       },
+      realPath: async path => (await $.fs.stat(path, { resolve: true })).realPath ?? path,
     },
     process: { run: (argv, init) => $.process.run(argv, init) },
     session: { id: () => $.session.id(), cwd: () => $.session.cwd() },
@@ -122,7 +124,21 @@ export function hostOf($: EngineInterface): Host {
     agents: { list: () => $.agent.list() },
     view: { planActive: when => (when === 'start' ? openAtStart($) : openUnlessClosed($)) },
     // A session no plugin may shape refuses the row, as may a plugin above.
+    model: {
+      ask: async (prompt, { maxTokens, timeoutMs }) => {
+        const r = await $.model.complete({ model: 'haiku', prompt, maxTokens, effort: 'low', timeoutMs })
+        return r.isAnswered ? r.text : null
+      },
+    },
     conversation: {
+      lastReply: async () => {
+        const messages = await $.session.messages()
+        for (let i = messages.length - 1; i >= 0; i -= 1) {
+          const m = messages[i]!
+          if (m.role === 'assistant' && m.text.trim()) return m.text
+        }
+        return ''
+      },
       note: text => $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } }).then(r => r.deny === undefined),
     },
     names: NAMES,

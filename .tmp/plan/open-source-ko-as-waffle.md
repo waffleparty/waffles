@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.3
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T16:58:48.773Z
+updated: 2026-11-26T17:00:04.512Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -50,7 +50,7 @@ updated: 2026-11-26T16:58:48.773Z
     - [x] 6.3.3 Define the host interface and its store
     - [x] 6.3.4 Move the plan outline into the core
     - [x] 6.3.5 Move the modes and the unattended-run rules into the core
-    - [ ] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
+    - [x] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
   - [ ] 6.4 Serve the plan outline tool from an MCP server
   - [ ] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
   - [ ] 6.6 Add an in-process adapter for OpenCode
