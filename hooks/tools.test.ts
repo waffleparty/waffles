@@ -3,6 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { fakeHost } from '../core/testing.ts'
+import { fakeDisk } from './plan-testing'
 import { textOf, TOOLS } from '../core/tools.ts'
 
 const MERGED = { state: 'MERGED', merged: true, isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest: null, timelineItems: { nodes: [] } }
@@ -104,6 +105,28 @@ test('the review branch runs git in the main checkout it names', async ($, on) =
 
   expect(r).toEqual({ deny: 'git rev-parse --show-toplevel failed: not here' })
   expect(runs).toEqual([[['git', 'rev-parse', '--show-toplevel'], '/repo/app']])
+})
+
+test('2 backlog queue calls at once both land, each holding the lock that the shell create made', async ($, on) => {
+  const disk = fakeDisk(on)
+  disk.cwd = '/repo'
+  disk.files.set('/repo/.backlog/fix-cors.md', '---\nstatus: new\n---\n')
+  on('clock.now', () => ({ value: 1_700_000_000_000 }))
+  on('clock.sleep', () => ({ value: undefined }))
+  on('session.id', () => ({ value: 's1' }))
+  const add = (item: string) => $.tool.call({ tool: 'mcp__waffles__backlog_queue', op: 'add', step: 'note', item, why: 'no network', backlog: '.backlog' } as never)
+
+  const [one, two] = await Promise.all([add('ITEM-1'), add('fix-cors.md')])
+
+  expect([one.deny, two.deny]).toEqual([undefined, undefined])
+  const queue = JSON.parse(disk.files.get('/repo/.backlog/queue.json') ?? '[]') as { seq: number; item: string }[]
+  expect(queue.map(e => e.item).sort()).toEqual(['ITEM-1', 'fix-cors.md'])
+  expect(new Set(queue.map(e => e.seq)).size).toBe(2)
+  // Each call made the lock with the shell create and removed it after.
+  expect(disk.created.filter(path => path === '/repo/.backlog/.queue-lock').length).toBeGreaterThanOrEqual(2)
+  expect(disk.files.has('/repo/.backlog/.queue-lock')).toBe(false)
+  const listed = await $.tool.call({ tool: 'mcp__waffles__backlog_queue', op: 'list', backlog: '/repo/.backlog' } as never)
+  expect(JSON.parse(listed.result ?? '{}').entries.length).toBe(2)
 })
 
 test('a stdout that Claude Code cut is refused, not read in part', async ($, on) => {

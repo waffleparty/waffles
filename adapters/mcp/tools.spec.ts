@@ -60,3 +60,15 @@ test('the merge queue answers with a structured value, and a failure of gh is a 
   assert.equal(merged.result.resultType, 'complete')
   await s.close()
 })
+
+test('the backlog queue adds and lists in the folder it is given, from the session’s folder', LIMIT, async () => {
+  const { work, state } = await folders()
+  const s = server(work, state)
+  const added = await s.request('tools/call', { _meta: META, name: 'backlog_queue', arguments: { op: 'add', step: 'note', item: 'ITEM-1', why: 'no network', backlog: '.backlog' } })
+  assert.equal(added.result.isError, false, text(added))
+  assert.equal(added.result.structuredContent.item, 'ITEM-1')
+  const listed = await s.request('tools/call', { _meta: META, name: 'backlog_queue', arguments: { op: 'list', backlog: join(work, '.backlog') } })
+  assert.deepEqual(listed.result.structuredContent.entries.map((e: { item: string }) => e.item), ['ITEM-1'])
+  assert.deepEqual(await fs.readdir(join(work, '.backlog')), ['queue.json'])
+  await s.close()
+})

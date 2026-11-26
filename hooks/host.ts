@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import type { Host, Memory, Names, SessionState } from '../core/host.ts'
+import { CREATE_SCRIPT } from './create'
 import { openAtStart, openUnlessClosed } from './plan-ui'
 
 // The session's values are `$.state` atoms, so a drawing that reads one is drawn again when the core
@@ -129,6 +130,13 @@ export function hostOf($: EngineInterface): Host {
     fs: {
       read: path => $.fs.read(path),
       write: (path, text) => $.fs.write(path, text),
+      // `$.fs` has no exclusive create: a shell's noclobber redirect is one (hooks/create.ts).
+      create: async (path, text) => {
+        const r = await $.process.run(['sh', '-c', CREATE_SCRIPT, 'sh', path], { stdin: text })
+        if (r.exitCode === 0) return true
+        if (r.exitCode === 3) return false
+        throw new Error(`cannot create ${path}: ${r.stderr.trim() || `sh exited with ${r.exitCode}`}`)
+      },
       exists: path => $.fs.exists(path),
       list: path => $.fs.list(path),
       stat: path => $.fs.stat(path),
@@ -147,7 +155,7 @@ export function hostOf($: EngineInterface): Host {
       },
     },
     session: { id: () => $.session.id(), cwd: () => $.session.cwd() },
-    clock: { now: () => $.clock.now() },
+    clock: { now: () => $.clock.now(), sleep: ms => $.clock.sleep(ms) },
     home: () => $.env.get('HOME'),
     state: {
       get: key => getState($, key) as Promise<SessionState[typeof key]>,

@@ -1,3 +1,4 @@
+import { BACKLOG_QUEUE_TOOL } from './backlog-queue.ts'
 import { CHECKPOINT_TOOL } from './checkpoint.ts'
 import type { Host } from './host.ts'
 import { MERGE_QUEUE_TOOL } from './merge-queue.ts'
@@ -57,7 +58,7 @@ export type CoreTool = {
 }
 
 /** The core's tools: each adapter offers every one. */
-export const TOOLS: readonly CoreTool[] = [MERGE_QUEUE_TOOL, CHECKPOINT_TOOL, REVIEW_BRANCH_TOOL]
+export const TOOLS: readonly CoreTool[] = [MERGE_QUEUE_TOOL, CHECKPOINT_TOOL, REVIEW_BRANCH_TOOL, BACKLOG_QUEUE_TOOL]
 
 /** An answer as text, for a platform whose tools return text alone: a structured value as its JSON. */
 export const textOf = (answer: ToolAnswer): { text: string } | { refusal: string } =>

@@ -1,5 +1,5 @@
-// A lock between processes on 1 machine, kept in a lock file: the queue of backlog-queue.ts and the test slots of
-// builders.ts.
+// A lock between processes on 1 machine, kept in a lock file: the test slots of builders.ts. The backlog queue's lock
+// is core/lock.ts, which works through the core's Host and goes by age, since the Host names no process.
 //
 // Node has no flock, and flock does not exist on Windows. Here the lock is a file that 1 process creates exclusively
 // (open with O_CREAT | O_EXCL, Node's 'wx'), which no other process can then create, and which holds the creator's

@@ -114,6 +114,30 @@ test('files: write makes the folders, list and stat describe, remove is quiet fo
   await assert.rejects($.fs.read(path))
 })
 
+test('of 2 creators of a file at once, 1 wins; create makes the folders and leaves a file that is there alone', async () => {
+  const [one, two] = [await host('s1'), await host('s2')]
+  const path = join(one.cwd, 'locks', 'x.lock')
+  const won = await Promise.all(Array.from({ length: 20 }, (_, i) => (i % 2 ? one.$ : two.$).fs.create(path, `${i}\n`)))
+  assert.equal(won.filter(Boolean).length, 1)
+  assert.equal(await one.$.fs.read(path), `${won.indexOf(true)}\n`)
+  assert.equal(await one.$.fs.create(path, 'again'), false)
+  // A folder at the path is something there too; a folder that can't be written rejects.
+  assert.equal(await one.$.fs.create(join(one.cwd, 'locks'), 'x'), false)
+  await fs.chmod(join(one.cwd, 'locks'), 0o555)
+  try {
+    await assert.rejects(one.$.fs.create(join(one.cwd, 'locks', 'y.lock'), 'y'), { code: 'EACCES' })
+  } finally {
+    await fs.chmod(join(one.cwd, 'locks'), 0o755)
+  }
+})
+
+test('sleep waits on the clock', async () => {
+  const { $ } = await host()
+  const start = await $.clock.now()
+  await $.clock.sleep(30)
+  assert.ok((await $.clock.now()) - start >= 25)
+})
+
 test('a run answers with the exit code and output, takes input, and rejects when it cannot start or runs too long', async () => {
   const { $ } = await host()
   const node = process.execPath

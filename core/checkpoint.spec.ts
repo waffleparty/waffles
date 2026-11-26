@@ -342,7 +342,7 @@ checkoutTest('the time limit bounds all the commands together', async co => {
   const host = co.host()
   const $: Host = {
     ...host,
-    clock: { now: async () => now },
+    clock: { ...host.clock, now: async () => now },
     process: {
       run: (argv, init) => {
         limits.push(init?.timeoutMs)

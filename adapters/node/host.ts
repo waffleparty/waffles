@@ -124,6 +124,17 @@ export function nodeHost({ sessionId, cwd, names, stateFolder: folder = stateFol
         await fs.mkdir(dirname(path), { recursive: true })
         await fs.writeFile(path, text)
       },
+      // `wx` opens with O_CREAT | O_EXCL: the system creates the file, or finds one there, in one step.
+      create: async (path, text) => {
+        await fs.mkdir(dirname(path), { recursive: true })
+        try {
+          await fs.writeFile(path, text, { flag: 'wx' })
+          return true
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException | null)?.code === 'EEXIST') return false
+          throw error
+        }
+      },
       exists: path =>
         fs.lstat(path).then(
           () => true,
@@ -171,7 +182,7 @@ export function nodeHost({ sessionId, cwd, names, stateFolder: folder = stateFol
         }),
     },
     session: { id: async () => sessionId, cwd: async () => cwd },
-    clock: { now: async () => Date.now() },
+    clock: { now: async () => Date.now(), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) },
     home: async () => homedir() || undefined,
     state: parts.state ?? {
       get: async key => {

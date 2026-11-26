@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { test } from 'node:test'
 
+import type { Entry } from '../../core/backlog-queue.ts'
 import { MERGE_QUEUE_TOOL } from '../../core/merge-queue.ts'
 import { MODES_TEXT } from '../../core/modes.ts'
 import { SUBAGENT } from '../../core/plan.ts'
@@ -226,6 +227,21 @@ else { console.error('gh: HTTP 502'); process.exit(1) }
     await assert.rejects(tool.execute({ op: 'mode', pr: '12' }, { sessionID: 's1' }), /gh api rules\/branches\/main failed: gh: HTTP 502/)
   } finally {
     process.env.PATH = path
+    await cleanup()
+  }
+})
+
+test('the backlog queue answers a subagent with a structured value, in the folder it is given', async () => {
+  const { root, registered, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  try {
+    const tool = registered.tools.find(t => t.name === 'waffles_backlog_queue')!
+    const backlog = join(root, '.backlog')
+    const added = await tool.execute({ op: 'add', step: 'claim', item: 'ITEM-4', why: 'no network', backlog }, { sessionID: 'child' })
+    assert.equal((added.output as Entry).item, 'ITEM-4')
+    const listed = await tool.execute({ op: 'list', backlog }, { sessionID: 's1' })
+    assert.deepEqual((listed.output as { entries: Entry[] }).entries.map(e => e.item), ['ITEM-4'])
+    await assert.rejects(tool.execute({ op: 'done', seq: 1, backlog }, { sessionID: 's1' }), /Refused: no queued call 1/)
+  } finally {
     await cleanup()
   }
 })

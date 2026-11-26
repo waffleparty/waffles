@@ -10,6 +10,11 @@ export type Host = {
     read(path: string): Promise<string>
     /** Makes the folders above the file. */
     write(path: string, text: string): Promise<void>
+    /**
+     * Writes the file only when nothing is at the path, making the folders above it: true when it wrote the file,
+     * false when something was there. The check and the create are one step, so of 2 callers at once 1 gets true.
+     */
+    create(path: string, text: string): Promise<boolean>
     exists(path: string): Promise<boolean>
     list(path: string): Promise<FileEntry[]>
     stat(path: string): Promise<FileStat>
@@ -30,6 +35,8 @@ export type Host = {
   clock: {
     /** Milliseconds since the epoch. */
     now(): Promise<number>
+    /** Resolves after `ms` milliseconds: the core has no timers of its own. */
+    sleep(ms: number): Promise<void>
   }
   /** The person's home folder, where the platform knows it. */
   home(): Promise<string | undefined>
