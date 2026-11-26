@@ -10,8 +10,25 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["core/**/*.ts", "adapters/**/*.ts", "scripts/**/*.ts", "skills/**/*.ts"],
-  "exclude": ["**/*.test.ts", "node_modules", ".claude"]
+  "include": [
+    "core/**/*.ts",
+    "adapters/**/*.ts",
+    "scripts/**/*.ts",
+    "skills/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "node_modules",
+    ".claude",
+    "scripts/merge_queue.ts",
+    "scripts/merge_queue_test.ts",
+    "scripts/review_branch.ts",
+    "scripts/review_branch_test.ts",
+    "skills/watch-ci/watch.ts",
+    "skills/watch-ci/watch_test.ts"
+  ]
 }

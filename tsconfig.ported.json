@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false
+  },
+  "include": [
+    "scripts/merge_queue.ts",
+    "scripts/merge_queue_test.ts",
+    "scripts/review_branch.ts",
+    "scripts/review_branch_test.ts",
+    "skills/watch-ci/watch.ts",
+    "skills/watch-ci/watch_test.ts"
+  ],
+  "exclude": []
+}
