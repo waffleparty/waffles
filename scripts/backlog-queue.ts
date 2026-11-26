@@ -13,7 +13,7 @@
 // file: the file holds the item, and stays until the raise is replayed.
 //
 //   add   queues 1 call, after every call already queued. --data holds the call's other inputs as a JSON object (the
-//         actor of a raise, the event and URL of a ship, the text of a note). Prints the entry.
+//         actor of a raise, the event and URL of a ship, the text of a note). Prints the entry as 1 line of JSON.
 //   list  prints the queued calls, oldest first, as a JSON array. Each names the item by its ID once a replayed raise
 //         gave it one.
 //   done  removes call <seq> once the adapter answered it: done, or refused. For a raise, --id is the item's new ID:
@@ -27,51 +27,21 @@
 // to 1 machine. It never calls the tracker, and changes nothing but the queue file, that exclude line, its lock file
 // (.backlog/.queue-lock, there only while a session holds it), and, at a raise's done, the item files. Exit codes: 0
 // when it worked, 1 when the queue or an item file cannot be read or written, 2 for bad arguments.
-//
-// The output and the files are byte for byte what backlog_queue.py writes (./pycompat.ts keeps Python's JSON, repr,
-// and error texts), so either version reads the other's queue.
 
 import { spawnSync } from 'node:child_process'
-import { appendFileSync, closeSync, openSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
-import { randomInt } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseArgs } from 'node:util'
 
 import { lock, type Held } from './lock.ts'
-import {
-  NOT_SPACE,
-  PyException,
-  ValueError,
-  abspath,
-  asInt,
-  byCodePoint,
-  decodeUtf8,
-  dirname,
-  dumps,
-  exists,
-  isErrno,
-  isInt,
-  isdir,
-  isfile,
-  join,
-  loads,
-  makedirs,
-  osErrorText,
-  osException,
-  readText,
-  repr,
-  splitlines,
-  str,
-  strip,
-  universalNewlines,
-  type PyDict,
-  type PyValue,
-} from './pycompat.ts'
 
 const STEPS = ['raise', 'claim', 'ship', 'note']
 const QUEUE = 'queue.json'
 const EXCLUDES = ['/.backlog/queue.json', '/.backlog/.queue-*']
-const STATUS = new RegExp(`(?<=^|\\n)status:[ \\t]*(${NOT_SPACE}*)`, 'u')
-const DEPENDS = /(?<=^|\n)depends:[^\n]*/
+const STATUS = /^status:[ \t]*(\S*)/m
+const DEPENDS = /^depends:.*$/m
 // The lock file matches the second exclude line, so git never lists it.
 const LOCK = '.queue-lock'
 // A session holds the lock for 1 read and 1 write of the queue. One held this long is a pid that the system reused.
@@ -83,21 +53,33 @@ class Failure extends Error {}
 /** Bad arguments: exit code 2. */
 class Usage extends Error {}
 
-type Entry = PyDict
+type Entry = { seq: number; step: string; item: string; data: Record<string, unknown>; why: string; at: string }
 
-/** Runs git with its output captured and stdin passed on, as subprocess.run(capture_output=True) does. */
-function git(args: string[]) {
-  return spawnSync('git', args, { stdio: ['inherit', 'pipe', 'pipe'] })
+function code(error: unknown): string | undefined {
+  return (error as NodeJS.ErrnoException).code
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isDir(path: string): boolean {
+  return statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false
+}
+
+function isFile(path: string): boolean {
+  return statSync(path, { throwIfNoEntry: false })?.isFile() ?? false
+}
+
+function git(args: string[]): string | null {
+  const done = spawnSync('git', args, { encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] })
+  return done.error || done.status !== 0 ? null : done.stdout
 }
 
 /** The main checkout's .backlog/: the first worktree that git lists, else the working directory. */
 export function defaultBacklog(): string {
-  let main: string | undefined
-  const done = git(['worktree', 'list', '--porcelain'])
-  if (!done.error && done.status === 0) {
-    const out = universalNewlines(decodeUtf8(done.stdout))
-    main = splitlines(out).find((line) => line.startsWith('worktree '))?.slice('worktree '.length)
-  }
+  const out = git(['worktree', 'list', '--porcelain']) ?? ''
+  const main = out.split('\n').find((line) => line.startsWith('worktree '))?.slice('worktree '.length)
   return join(main ?? process.cwd(), '.backlog')
 }
 
@@ -106,11 +88,7 @@ function isFileName(item: string): boolean {
 }
 
 function checkItem(item: string): void {
-  if (!item || item.includes('/') || item.startsWith('.')) throw new Usage(`not an item ID or a .backlog/ file name: ${repr(item)}`)
-}
-
-function now(): string {
-  return new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+  if (!item || item.includes('/') || item.startsWith('.')) throw new Usage(`not an item ID or a .backlog/ file name: ${JSON.stringify(item)}`)
 }
 
 /** Runs body holding an exclusive lock on the backlog folder, so 2 sessions never write the queue at once. */
@@ -121,7 +99,7 @@ function locked<T>(backlog: string, body: () => T): T {
   } catch (error) {
     // A folder that this process cannot write it cannot change either, and every write replaces the queue file in 1
     // rename, so a read needs no lock there. A write fails on its own, with the queue file's name.
-    if (!isErrno(error, 'EACCES', 'EPERM', 'EROFS')) throw osException(error, backlog)
+    if (!['EACCES', 'EPERM', 'EROFS'].includes(code(error) ?? '')) throw new Failure(`cannot lock ${backlog}: ${message(error)}`)
   }
   try {
     return body()
@@ -132,106 +110,78 @@ function locked<T>(backlog: string, body: () => T): T {
 
 function readQueue(backlog: string): Entry[] {
   const path = join(backlog, QUEUE)
-  let entries: PyValue
+  let entries: unknown
   try {
-    entries = loads(readText(path))
+    entries = JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
-    if (isErrno(error, 'ENOENT')) return []
-    if (isErrno(error)) throw new Failure(`cannot read ${path}: ${osErrorText(error)}`)
-    if (error instanceof ValueError) throw new Failure(`cannot read ${path}: ${error.message}`)
-    throw error
+    if (code(error) === 'ENOENT') return []
+    throw new Failure(`cannot read ${path}: ${message(error)}`)
   }
-  const valid = Array.isArray(entries) && entries.every((e) => {
-    if (!(e instanceof Map)) return false
-    const step = e.get('step')
-    return isInt(e.get('seq')) && typeof e.get('item') === 'string' && typeof step === 'string' && STEPS.includes(step)
-  })
+  const valid = Array.isArray(entries) && entries.every((e: Partial<Entry> | null) =>
+    Number.isInteger(e?.seq) && typeof e?.item === 'string' && STEPS.includes(e.step as string))
   if (!valid) throw new Failure(`${path} does not hold a list of queued calls`)
   return entries as Entry[]
 }
 
-/** tempfile.mkstemp: a new file only this user can read, named like `.queue-k3x_9a2b.json`. */
-function mkstemp(folder: string, prefix: string, suffix: string): [number, string] {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789_'
-  for (let attempt = 0; ; attempt++) {
-    const name = Array.from({ length: 8 }, () => chars[randomInt(chars.length)]).join('')
-    const path = join(folder, `${prefix}${name}${suffix}`)
-    try {
-      return [openSync(path, 'wx', 0o600), path]
-    } catch (error) {
-      if (!isErrno(error, 'EEXIST') || attempt >= 10000) throw error
-    }
-  }
-}
-
+/** Replaces the queue file in 1 rename, so a reader sees the old queue or the new one, never a part. */
 function writeQueue(backlog: string, entries: Entry[]): void {
   const path = join(backlog, QUEUE)
   try {
     if (entries.length === 0) {
-      if (exists(path)) unlinkSync(path)
+      if (existsSync(path)) unlinkSync(path)
       return
     }
-    const [fd, tmp] = mkstemp(backlog, '.queue-', '.json')
+    const tmp = join(backlog, `.queue-${randomBytes(6).toString('hex')}.json`)
     try {
-      try {
-        writeSync(fd, `${dumps(entries, 2)}\n`)
-      } finally {
-        closeSync(fd)
-      }
+      writeFileSync(tmp, `${JSON.stringify(entries, null, 2)}\n`, { flag: 'wx', mode: 0o600 })
       renameSync(tmp, path)
     } catch (error) {
-      unlinkSync(tmp)
+      if (existsSync(tmp)) unlinkSync(tmp)
       throw error
     }
   } catch (error) {
-    if (isErrno(error)) throw new Failure(`cannot write ${path}: ${osErrorText(error)}`)
-    throw error
+    throw new Failure(`cannot write ${path}: ${message(error)}`)
   }
 }
 
 /** Adds the queue to the checkout's .git/info/exclude. Outside git, or when that fails, it does nothing. */
 function excludeFromGit(backlog: string): void {
+  const parent = dirname(resolve(backlog))
+  const common = git(['-C', parent, 'rev-parse', '--git-common-dir'])?.trim()
+  if (!common) return
   try {
-    const parent = dirname(abspath(backlog))
-    const done = git(['-C', parent, 'rev-parse', '--git-common-dir'])
-    if (done.error || done.status !== 0) return
-    const out = strip(universalNewlines(decodeUtf8(done.stdout)))
-    const info = join(parent, out, 'info')
+    const info = join(parent, common, 'info')
     const path = join(info, 'exclude')
-    const text = exists(path) ? readText(path) : ''
-    const have = new Set(splitlines(text).map((line) => strip(line)))
+    const text = existsSync(path) ? readFileSync(path, 'utf8') : ''
+    const have = new Set(text.split(/\r?\n/).map((line) => line.trim()))
     const missing = EXCLUDES.filter((line) => !have.has(line))
     if (missing.length > 0) {
-      makedirs(info)
+      mkdirSync(info, { recursive: true })
       // A file that does not end in a newline would join its last line to the first one added.
       appendFileSync(path, (text && !text.endsWith('\n') ? '\n' : '') + missing.map((line) => `${line}\n`).join(''))
     }
-  } catch (error) {
-    if (!isErrno(error)) throw error
+  } catch {
+    // The queue still works; git only lists it.
   }
 }
 
-function add(backlog: string, step: string, item: string, why: string | null, data: PyValue): Entry {
-  if (!STEPS.includes(step)) throw new Usage(`not a step that writes: ${repr(step)}; use one of ${STEPS.join(', ')}`)
+function add(backlog: string, step: string, item: string, why: string | undefined, data: Record<string, unknown>): Entry {
+  if (!STEPS.includes(step)) throw new Usage(`not a step that writes: ${JSON.stringify(step)}; use one of ${STEPS.join(', ')}`)
   checkItem(item)
   if (!why) throw new Usage('--why must say why the tracker could not be reached')
-  if (step === 'raise' && !isFileName(item)) throw new Usage(`a raise names the .backlog/ file that holds the item, not ${repr(item)}`)
+  if (step === 'raise' && !isFileName(item)) throw new Usage(`a raise names the .backlog/ file that holds the item, not ${JSON.stringify(item)}`)
   try {
-    makedirs(backlog)
+    mkdirSync(backlog, { recursive: true })
   } catch (error) {
-    if (isErrno(error)) throw new Failure(`cannot make ${backlog}: ${osErrorText(error)}`)
-    throw error
+    throw new Failure(`cannot make ${backlog}: ${message(error)}`)
   }
   const entry = locked(backlog, () => {
-    if (isFileName(item) && !isfile(join(backlog, item))) throw new Failure(`no item file ${join(backlog, item)}`)
+    if (isFileName(item) && !isFile(join(backlog, item))) throw new Failure(`no item file ${join(backlog, item)}`)
     const entries = readQueue(backlog)
     // Milliseconds since the epoch, past every seq queued: a seq is never used twice, also once the queue was empty.
-    let seq = BigInt(Date.now())
-    for (const e of entries) {
-      const next = asInt(e.get('seq') as bigint | boolean) + 1n
-      if (next > seq) seq = next
-    }
-    const entry: Entry = new Map<string, PyValue>([['seq', seq], ['step', step], ['item', item], ['data', data], ['why', why], ['at', now()]])
+    const seq = Math.max(Date.now(), ...entries.map((e) => e.seq + 1))
+    const at = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+    const entry: Entry = { seq, step, item, data, why, at }
     entries.push(entry)
     writeQueue(backlog, entries)
     return entry
@@ -241,47 +191,48 @@ function add(backlog: string, step: string, item: string, why: string | null, da
 }
 
 function pending(backlog: string): Entry[] {
-  if (!isdir(backlog)) return []
+  if (!isDir(backlog)) return []
   return locked(backlog, () => readQueue(backlog))
 }
 
 /** Removes call seq. Returns the lines that say what changed. */
-function done(backlog: string, seq: bigint, newId: string | null): string[] {
-  if (!isdir(backlog)) throw new Usage(`no queued call ${seq}: another session may have replayed it`)
+function done(backlog: string, seq: number, newId: string | undefined): string[] {
+  const gone = () => new Usage(`no queued call ${seq}: another session may have replayed it`)
+  if (!isDir(backlog)) throw gone()
   return locked(backlog, () => {
     let entries = readQueue(backlog)
-    const entry = entries.find((e) => asInt(e.get('seq') as bigint | boolean) === seq)
-    if (entry === undefined) throw new Usage(`no queued call ${seq}: another session may have replayed it`)
-    const name = entry.get('item') as string
-    const isRaise = entry.get('step') === 'raise' && isFileName(name)
-    if (newId !== null) {
+    const entry = entries.find((e) => e.seq === seq)
+    if (entry === undefined) throw gone()
+    const name = entry.item
+    const isRaise = entry.step === 'raise' && isFileName(name)
+    if (newId !== undefined) {
       checkItem(newId)
       if (isFileName(newId) || !isRaise) throw new Usage('--id goes with a raise of a .backlog/ file only, and names a tracker ID')
     }
     entries = entries.filter((e) => e !== entry)
-    const lines = [`Removed queued call ${seq}: ${str(entry.get('step')!)} ${name}.`]
-    if (isRaise && newId === null) {
+    const lines = [`Removed queued call ${seq}: ${entry.step} ${name}.`]
+    if (isRaise && newId === undefined) {
       // The raise was refused: the calls after it have no item to reach.
-      const dropped = entries.filter((e) => e.get('item') === name)
-      entries = entries.filter((e) => e.get('item') !== name)
-      lines.push(...dropped.map((e) => `Removed queued call ${str(e.get('seq')!)}: ${str(e.get('step')!)} ${name}, since ${name} was not raised.`))
+      for (const e of entries.filter((e) => e.item === name)) {
+        lines.push(`Removed queued call ${e.seq}: ${e.step} ${name}, since ${name} was not raised.`)
+      }
+      entries = entries.filter((e) => e.item !== name)
     }
-    if (newId !== null) {
-      for (const e of entries) if (e.get('item') === name) e.set('item', newId)
+    if (newId !== undefined) {
+      for (const e of entries) if (e.item === name) e.item = newId
     }
     // The queue first: a file deleted before a queue write that fails would leave a raise with no item.
     writeQueue(backlog, entries)
-    if (newId !== null) {
+    if (newId !== undefined) {
       try {
         lines.push(...raised(backlog, name, newId))
       } catch (error) {
-        if (!(error instanceof Failure)) throw error
         // The queue holds the raise no longer, so a replay cannot raise it twice; the file can still be taken for a
         // local item and raised by hand.
         throw new Failure(
-          `${error.message}. ${name} is ${newId} in the tracker, and the queue no longer holds its raise: rename or delete ` +
-            `${join(backlog, name)} by hand, and check the tracker for a duplicate of ${newId} if the ` +
-            'file was raised again',
+          `${message(error)}. ${name} is ${newId} in the tracker, and the queue no longer holds its raise: rename or ` +
+            `delete ${join(backlog, name)} by hand, and check the tracker for a duplicate of ${newId} if the file was ` +
+            'raised again',
         )
       }
     }
@@ -289,22 +240,7 @@ function done(backlog: string, seq: bigint, newId: string | null): string[] {
   })
 }
 
-/**
- * The text that re.sub puts in for a replacement string: Python reads its backslash escapes. A tracker ID holds none,
- * but the port keeps what Python would do with one.
- */
-function template(replacement: string): string {
-  return replacement.replace(/\\(.?)/gs, (whole, c: string, at: number) => {
-    const escapes: Record<string, string> = { '\\': '\\', a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' }
-    if (c in escapes) return escapes[c]!
-    if (c === '') throw new PyException('re.error', `bad escape (end of pattern) at position ${at}`)
-    if (/[0-9g]/.test(c)) throw new PyException('re.error', `invalid group reference at position ${at + 1}`)
-    if (/[A-Za-z]/.test(c)) throw new PyException('re.error', `bad escape \\${c} at position ${at}`)
-    return whole
-  })
-}
-
-/** re.escape for a JS pattern with the u flag, which refuses an escaped character that is not syntax. */
+/** Escapes text for a pattern with the u flag, which refuses an escaped character that is not syntax. */
 function escape(text: string): string {
   return text.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
 }
@@ -312,130 +248,98 @@ function escape(text: string): string {
 /** After a replayed raise: names the ID in other items' depends:, and deletes or renames the item file. */
 function raised(backlog: string, name: string, newId: string): string[] {
   const lines: string[] = []
-  // Python's \w: letters, digits, and the underscore of every script.
+  // The name as a whole word: not a part of a longer file name.
   const word = '[\\p{L}\\p{N}_.-]'
   const mention = new RegExp(`(?<!${word})${escape(name)}(?!${word})`, 'gu')
-  for (const other of readdirSync(backlog).sort(byCodePoint)) {
+  for (const other of readdirSync(backlog).sort()) {
     const path = join(backlog, other)
-    if (other === name || !isFileName(other) || !isfile(path)) continue
+    if (other === name || !isFileName(other) || !isFile(path)) continue
     try {
-      const text = readText(path)
-      // re.sub reads its replacement before it looks for a match, so an ID that it refuses fails at any depends: line.
-      const updated = text.replace(DEPENDS, (line) => {
-        const replacement = template(newId)
-        return line.replace(mention, () => replacement)
-      })
+      const text = readFileSync(path, 'utf8')
+      const updated = text.replace(DEPENDS, (line) => line.replace(mention, () => newId))
       if (updated !== text) {
         writeFileSync(path, updated)
         lines.push(`${other} now depends on ${newId}.`)
       }
     } catch (error) {
-      if (isErrno(error)) throw new Failure(`cannot update ${path}: ${osErrorText(error)}`)
-      throw error
+      throw new Failure(`cannot update ${path}: ${message(error)}`)
     }
   }
   const path = join(backlog, name)
   let text: string
   try {
-    text = readText(path)
+    text = readFileSync(path, 'utf8')
   } catch (error) {
-    if (isErrno(error, 'ENOENT')) return [...lines, `${name} is ${newId} in the tracker.`]
-    if (isErrno(error)) throw new Failure(`cannot read ${path}: ${osErrorText(error)}`)
-    throw error
+    if (code(error) === 'ENOENT') return [...lines, `${name} is ${newId} in the tracker.`]
+    throw new Failure(`cannot read ${path}: ${message(error)}`)
   }
-  const status = STATUS.exec(text)
+  const status = STATUS.exec(text)?.[1] ?? ''
   try {
-    if (status === null || status[1] === '' || status[1] === 'new') {
+    if (status === '' || status === 'new') {
       unlinkSync(path)
       lines.push(`${name} is ${newId} in the tracker; deleted ${path}.`)
     } else {
       const record = join(backlog, `${newId}.md`)
-      if (exists(record)) return [...lines, `${name} is ${newId} in the tracker; kept ${path}, since ${record} exists.`]
-      const header = template(`---\nid: ${newId}\n`)
-      writeFileSync(record, text.replace(/^---\n/, () => header))
+      if (existsSync(record)) return [...lines, `${name} is ${newId} in the tracker; kept ${path}, since ${record} exists.`]
+      writeFileSync(record, text.replace(/^---\n/, () => `---\nid: ${newId}\n`))
       unlinkSync(path)
       lines.push(`${name} is ${newId} in the tracker; its work goes on, so it is now ${record}.`)
     }
   } catch (error) {
-    if (isErrno(error)) throw new Failure(`cannot update ${path}: ${osErrorText(error)}`)
-    throw error
+    throw new Failure(`cannot update ${path}: ${message(error)}`)
   }
   const folder = path.slice(0, -'.md'.length)
-  if (isdir(folder)) lines.push(`Kept ${folder}/: check that the tracker holds its files, then delete it.`)
+  if (isDir(folder)) lines.push(`Kept ${folder}/: check that the tracker holds its files, then delete it.`)
   return lines
 }
 
-type Args = { backlog: string | null; why: string | null; data: string | null; id: string | null }
-
-function parse(argv: string[]): [string[], Args] {
-  const args: Args = { backlog: null, why: null, data: null, id: null }
-  const positional: string[] = []
-  for (let i = 0; i < argv.length;) {
-    const arg = argv[i]!
-    if (arg === '--backlog' || arg === '--why' || arg === '--data' || arg === '--id') {
-      if (i + 1 >= argv.length) throw new Usage(`${arg} needs a value`)
-      args[arg.slice(2) as keyof Args] = argv[i + 1]!
-      i += 2
-    } else if (arg.startsWith('--')) {
-      throw new Usage(`unknown option ${arg}`)
-    } else {
-      positional.push(arg)
-      i++
-    }
+function parse(argv: string[]) {
+  try {
+    return parseArgs({
+      args: argv,
+      allowPositionals: true,
+      options: { backlog: { type: 'string' }, why: { type: 'string' }, data: { type: 'string' }, id: { type: 'string' } },
+    })
+  } catch (error) {
+    throw new Usage(message(error))
   }
-  if (positional.length === 0) throw new Usage('name a command: add, list, or done')
-  return [positional, args]
 }
 
 export function main(argv: string[]): number {
   try {
-    const [positional, args] = parse(argv)
+    const { values: args, positionals } = parse(argv)
     const backlog = args.backlog || defaultBacklog()
-    const [command, ...rest] = positional as [string, ...string[]]
+    const [command, ...rest] = positionals
     if (command === 'add') {
       if (rest.length !== 2) throw new Usage('add takes <step> <item>')
-      let data: PyValue = new Map()
-      if (args.data !== null) {
+      let data: unknown = {}
+      if (args.data !== undefined) {
         try {
-          data = loads(args.data)
+          data = JSON.parse(args.data)
         } catch (error) {
-          if (error instanceof ValueError) throw new Usage(`--data is not JSON: ${error.message}`)
-          throw error
+          throw new Usage(`--data is not JSON: ${message(error)}`)
         }
-        if (!(data instanceof Map)) throw new Usage('--data must be a JSON object')
+        if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Usage('--data must be a JSON object')
       }
-      process.stdout.write(`${dumps(add(backlog, rest[0]!, rest[1]!, args.why, data))}\n`)
+      process.stdout.write(`${JSON.stringify(add(backlog, rest[0]!, rest[1]!, args.why, data as Record<string, unknown>))}\n`)
     } else if (command === 'list') {
       if (rest.length > 0) throw new Usage('list takes no arguments')
-      process.stdout.write(`${dumps(pending(backlog), 2)}\n`)
+      process.stdout.write(`${JSON.stringify(pending(backlog), null, 2)}\n`)
     } else if (command === 'done') {
       if (rest.length !== 1 || !/^[0-9]+$/.test(rest[0]!)) throw new Usage('done takes the <seq> of a queued call')
-      process.stdout.write(`${done(backlog, BigInt(rest[0]!), args.id).join('\n')}\n`)
+      process.stdout.write(`${done(backlog, Number(rest[0]), args.id).join('\n')}\n`)
+    } else if (command === undefined) {
+      throw new Usage('name a command: add, list, or done')
     } else {
-      throw new Usage(`unknown command ${repr(command)}`)
+      throw new Usage(`unknown command ${JSON.stringify(command)}`)
     }
   } catch (error) {
-    if (error instanceof Usage) {
-      process.stderr.write(`backlog_queue: ${error.message}\n`)
-      return 2
-    }
-    if (error instanceof Failure) {
-      process.stderr.write(`backlog_queue: ${error.message}\n`)
-      return 1
-    }
-    throw error
+    process.stderr.write(`backlog-queue: ${message(error)}\n`)
+    return error instanceof Usage ? 2 : 1
   }
   return 0
 }
 
 if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try {
-    process.exitCode = main(process.argv.slice(2))
-  } catch (error) {
-    // Where Python ends with a traceback, the port ends with its last line and the same exit code.
-    const python = error instanceof PyException ? error : isErrno(error) ? osException(error) : null
-    if (python === null) throw error
-    process.stderr.write(`${python}\n`)
-    process.exitCode = 1
-  }
+  process.exitCode = main(process.argv.slice(2))
 }

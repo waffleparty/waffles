@@ -383,6 +383,18 @@ describe('usage', () => {
     assert.ok(r.stderr.includes('--id goes with a raise'))
   })
 
+  test('a queue file written by an earlier version is read and replayed', () => {
+    const old = '[\n  {\n    "seq": 1700000000000,\n    "step": "note",\n    "item": "ITEM-1",\n    "data": {\n      "text": "caf\\u00e9"\n    },\n    "why": "no network",\n    "at": "2023-11-14T22:13:20Z"\n  }\n]\n'
+    writeFileSync(join(backlog, 'queue.json'), old)
+
+    const listed = JSON.parse(runScript(backlog, 'list').stdout) as Entry[]
+    const r = runScript(backlog, 'done', '1700000000000')
+
+    assert.deepEqual(listed.map((e) => [e.seq, e.item, e.data['text']]), [[1700000000000, 'ITEM-1', 'café']])
+    assert.equal(r.returncode, 0, r.stderr)
+    assert.ok(!existsSync(join(backlog, 'queue.json')))
+  })
+
   test('a queue file that does not parse exits 1', () => {
     for (const [text, reason] of [['{not json', 'cannot read'], ['[{"step": "note", "item": "ITEM-1"}]', 'does not hold a list']] as const) {
       writeFileSync(join(backlog, 'queue.json'), text)

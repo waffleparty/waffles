@@ -87,10 +87,13 @@ waffles/
 ├── .cursor-plugin/plugin.json   Cursor manifest
 ├── skills/<name>/SKILL.md       Agent Skills (https://agentskills.io/specification)
 ├── agents/                      Claude Code subagents
-├── hooks/                       Claude Code hooks: modes, plan outline, auto effort, checkpoint, dev servers
+├── core/                        The logic, with no platform imports: plan outline, modes, runs, checkpoint
+├── hooks/                       The Claude Code adapter: hooks, pane, footer, auto effort, dev servers
 │   ├── hooks.json               Names the module that registers the hooks
-│   └── *.test.ts(x)             Hook tests, run by `claude plugin test`
-├── scripts/                     Python scripts the skills and hooks call, with their tests (*_test.py)
+│   └── *.test.ts(x)             Its tests, run by `claude plugin test`
+├── adapters/node/               The core's host on plain Node.js
+├── adapters/opencode/           The OpenCode 2 adapter: server part and terminal UI part
+├── scripts/                     Node.js scripts the skills call, with their tests (*.spec.ts)
 │   └── bump-version.sh          Writes or checks the version in every manifest
 ├── types/                       Type declarations for the hooks
 ├── docs/                        User documentation

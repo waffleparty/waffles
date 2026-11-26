@@ -47,7 +47,7 @@ While a dev server runs from the project, the footer shows `⎔ 2`, the count of
 
 It finds the toolchain (GitHub Actions, GitLab CI, CircleCI, Buildkite, Azure Pipelines, Bitbucket Pipelines, Jenkins, CD platforms that report to the forge, and others), and maps the whole pipeline before it starts: the runs that exist and the ones that start later, such as a deploy that runs after CI. A run counts only if its commit and its trigger event match this context's work, so other people's runs on the same branch are left out.
 
-The map then goes to a background `waffles:ci-watcher` agent that runs `skills/watch-ci/watch.py`. The agent wakes the main agent only when it must act: a failure, an approval, a stall, or the end. Progress shows silently in the background-task panel, for example `CI 3/5 jobs · now "Run tests"`, and the session stays marked as busy while CI runs.
+The map then goes to a background `waffles:ci-watcher` agent that runs `skills/watch-ci/watch.ts`. The agent wakes the main agent only when it must act: a failure, an approval, a stall, or the end. Progress shows silently in the background-task panel, for example `CI 3/5 jobs · now "Run tests"`, and the session stays marked as busy while CI runs.
 
 - On success it reports and stops.
 - On a failure it reads the logs, reruns transient failures once, and fixes failures the change caused, without weakening CI. It pushes the fix only if the context already pushed to that branch, then watches the new run.

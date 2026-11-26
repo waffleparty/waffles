@@ -1,11 +1,11 @@
-// A lock between processes on 1 machine, kept in a lock file, for the scripts that the Python versions locked with
-// fcntl.flock.
+// A lock between processes on 1 machine, kept in a lock file: the queue of backlog-queue.ts and the test slots of
+// builders.ts.
 //
 // Node has no flock, and flock does not exist on Windows. Here the lock is a file that 1 process creates exclusively
 // (open with O_CREAT | O_EXCL, Node's 'wx'), which no other process can then create, and which holds the creator's
-// pid. Release deletes the file. flock's lock also ends when its holder dies, killed or not; here a lock whose pid no
-// longer runs is stale, and the next process that wants it deletes it and takes it. That gives the same guarantee as
-// flock while pids are not reused: 1 holder at a time, and a holder that died holds nothing. A caller that holds the
+// pid. Release deletes the file. A lock whose pid no longer runs is stale, and the next process that wants it deletes
+// it and takes it. While pids are not reused, that gives what flock gives: 1 holder at a time, and a holder that died,
+// killed or not, holds nothing. A caller that holds the
 // lock only for moments can also name an age past which a lock is stale even when its pid runs, against a pid that
 // the system gave to a new process.
 //
@@ -15,7 +15,7 @@
 import { closeSync, fstatSync, openSync, readFileSync, statSync, unlinkSync, writeSync } from 'node:fs'
 
 // The creator writes its pid right after it creates the file. A file with no pid for this long belongs to a process
-// that died between the 2 steps, or to a version that kept no pid in it (the Python test slots).
+// that died between the 2 steps, or to an earlier version of the test slots, which kept no pid in it.
 const NO_PID_MS = 10_000
 // A guard is held for a few file operations. One this old was left by a process that died while holding it.
 const GUARD_MS = 10_000
@@ -137,7 +137,7 @@ export function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-/** Takes the lock at path, waiting as long as another process holds it, as a blocking flock does. */
+/** Takes the lock at path, waiting as long as another process holds it. */
 export function lock(path: string, options: LockOptions = {}): Held {
   for (;;) {
     const held = tryLock(path, options)

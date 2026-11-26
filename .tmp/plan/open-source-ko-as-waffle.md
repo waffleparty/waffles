@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.11
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T18:04:54.201Z
+updated: 2026-11-26T18:13:44.861Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -71,7 +71,7 @@ updated: 2026-11-26T18:04:54.201Z
   - [x] 6.10 Add the Node.js host that the command adapter, the MCP server, and OpenCode share
   - [ ] 6.11 Trim the ported scripts to what the skills read, with kebab-case names and one type-check standard
     - [x] 6.11.1 Rename the scripts and the Node.js tests to kebab-case
-    - [ ] 6.11.2 Trim backlog-queue and builders, and remove the Python-compatibility module
-    - [ ] 6.11.3 Trim merge-queue, review-branch, and watch, under the one type check
+    - [x] 6.11.2 Trim backlog-queue and builders, and remove the Python-compatibility module
+    - [ ] 6.11.3 Trim merge-queue, review-branch, and watch, under the one type check <!-- agent=a34abbb1f0ba9b90b -->
   - [ ] 6.12 Review the OpenCode terminal UI with the person
   - [ ] 6.13 Review and fix the bugs carried over from the Python scripts

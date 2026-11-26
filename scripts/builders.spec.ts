@@ -26,7 +26,7 @@ function commit(cwd: string, name: string, text: string): void {
   sh(cwd, 'git', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `Add ${name}`)
 }
 
-/** Collects what main writes, as Python's tests pass an io.StringIO. */
+/** Collects what main writes. */
 class Capture implements Out {
   text = ''
   write(text: string, done?: () => void) {
