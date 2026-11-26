@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import type { Plugin } from '@opencode/plugin'
 
 import { adapterContext } from '../../core/backlog-adapter.ts'
+import { afterShell } from '../../core/checkpoint.ts'
 import { INITIAL, type Host, type Names, type SessionState } from '../../core/host.ts'
 import {
   ASSESS_PROMPT,
@@ -28,6 +29,8 @@ import { nodeHost } from '../node/host.ts'
  * The waffles plugin's server part for OpenCode 2: the plan outline tool, the modes and their commands,
  * the rules in the system prompt, and the skills. It runs in OpenCode's server process, which serves
  * every session, so each session gets its own host.
+ *
+ * A push runs the checkpoint.
  *
  * Not here yet: the plan outline's view and the footer (the TUI part), auto effort, the marking of a
  * step by its subagent, and the start of an unattended run.
@@ -245,6 +248,21 @@ const plugin: Plugin.Plugin = {
       event.message = message
     })
 
+    // After a shell command that pushed or opened a pull request, the plan outline goes into the pull
+    // request's description, and the model reads what the checkpoint did after the command's own output.
+    const shell = await ctx.tool.hook('execute.after', async event => {
+      if (event.tool !== 'shell' || event.status !== 'completed') return
+      const input = event.input as { command?: unknown; workdir?: unknown } | null
+      if (typeof input?.command !== 'string') return
+      const session = await sessionOf(event.sessionID).catch(() => null)
+      if (!session) return
+      // A checkpoint that fails leaves the command's result as it was.
+      const line = await afterShell(session.$, input.command, typeof input.workdir === 'string' ? input.workdir : undefined).catch(() => null)
+      if (line === null) return
+      const content: unknown = event.result.content
+      if (typeof content === 'string') event.result = { ...event.result, content: `${content}\n\n${line}` }
+    })
+
     // A turn's end, a session's removal, and the heartbeat that keeps each session's lock on its goal.
     const events = new AbortController()
     void (async () => {
@@ -272,7 +290,7 @@ const plugin: Plugin.Plugin = {
     return async () => {
       clearInterval(timer)
       events.abort()
-      await Promise.all([context.dispose(), prompt.dispose(), permission.dispose()].map(done => Promise.resolve(done).catch(() => undefined)))
+      await Promise.all([context.dispose(), prompt.dispose(), permission.dispose(), shell.dispose()].map(done => Promise.resolve(done).catch(() => undefined)))
     }
   },
 }

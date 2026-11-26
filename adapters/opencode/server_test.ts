@@ -102,7 +102,7 @@ test('setup registers the plan outline tool, the mode commands, the skills, and 
   assert.deepEqual(registered.tools.map(t => t.name), [NAMES.planTool])
   assert.deepEqual(registered.commands.map(c => c.name).sort(), ['backlog-entry', 'prod', 'rapid'])
   assert.ok(registered.skills.length >= 10)
-  assert.deepEqual(Object.keys(registered.hooks).sort(), ['permission.evaluate', 'session.context', 'session.prompt'])
+  assert.deepEqual(Object.keys(registered.hooks).sort(), ['permission.evaluate', 'session.context', 'session.prompt', 'tool.execute.after'])
   await cleanup()
 })
 
@@ -150,5 +150,22 @@ test('a permission request is left alone outside an unattended run', async () =>
   const event = { sessionID: 's1', action: 'edit', resources: ['a.ts'], effect: 'ask' as string, message: undefined as string | undefined }
   await registered.hooks['permission.evaluate']!(event as never)
   assert.equal(event.effect, 'ask')
+  await cleanup()
+})
+
+test('a shell command that is no push leaves its result alone', async () => {
+  const { registered, cleanup } = await fakeContext()
+  const event = { tool: 'shell', status: 'completed', sessionID: 's1', input: { command: 'ls -la' }, result: { content: 'files' } }
+  await registered.hooks['tool.execute.after']!(event as never)
+  assert.equal(event.result.content, 'files')
+  await cleanup()
+})
+
+test('after a push, the model reads what the checkpoint did', async () => {
+  const { registered, cleanup } = await fakeContext()
+  // Outside a git repository the checkpoint reports why it did nothing, which is still a line to read.
+  const event = { tool: 'shell', status: 'completed', sessionID: 's1', input: { command: 'git push' }, result: { content: 'pushed' } }
+  await registered.hooks['tool.execute.after']!(event as never)
+  assert.match(event.result.content, /^pushed\n\nwaffles checkpoint: /)
   await cleanup()
 })

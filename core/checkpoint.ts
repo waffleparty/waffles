@@ -425,3 +425,53 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
     return { exitCode: 1, stdout: '', stderr: `checkpoint: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n` }
   }
 }
+
+// --- After a shell command ---------------------------------------------------
+
+// A cheap first look at a shell command; the checkpoint reads the checkout properly. A `git push`
+// inside quoted text only costs a checkpoint that finds nothing.
+const PUSH = /\bgit\s+(?:-C\s+\S+\s+)?push\b/
+// Opening the pull request renders the checklist too: the first push found no pull request to update.
+const CREATE = /\bgh\s+pr\s+create\b/
+// A command that starts `cd <dir> &&`, or a `git -C <dir> push`, runs the push in that folder.
+const CD = /^\s*cd\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s*&&/
+const DASH_C = /\bgit\s+-C\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s+push\b/
+
+// All of a checkpoint's git and gh commands together: each one is given the time that is left.
+const CHECKPOINT_MS = 60_000
+
+/**
+ * The folder a shell command runs its push in: the one its leading `cd` or `git -C` names, else
+ * the shell's. `~` is the home folder. Null when that can't be told: a path that holds `$`, or `~` with no
+ * home folder known.
+ */
+export function folderOf(command: string, cwd: string, isPush: boolean, home: string | undefined): string | null {
+  const named = (isPush ? DASH_C.exec(command) : null) ?? CD.exec(command)
+  const dir = named?.[1]?.replace(/^(["'])(.*)\1$/, '$2')
+  if (!dir) return cwd
+  if (dir.includes('$')) return null
+  if (dir === '~' || dir.startsWith('~/')) return home ? `${home.replace(/\/+$/, '')}${dir.slice(1)}` : null
+  if (dir.startsWith('/')) return dir
+  return `${cwd.replace(/\/+$/, '')}/${dir}`
+}
+
+/** Whether a shell command, at a cheap look, pushes a branch or opens a pull request. */
+export const isPushLike = (command: string) => PUSH.test(command) || CREATE.test(command)
+
+/**
+ * A shell command that pushed or opened a pull request ended well: the checkpoint renders the plan
+ * outline into the pull request's description. Returns the line the model reads, or null with nothing
+ * to say: another kind of command, a folder that can't be told (a checkpoint of the wrong checkout could
+ * change another pull request), or a checkpoint that printed nothing. `cwd` is where the command ran.
+ */
+export async function afterShell($: Host, command: string, cwd?: string): Promise<string | null> {
+  if (!isPushLike(command)) return null
+  const home = await $.home().catch(() => undefined)
+  const folder = folderOf(command, cwd ?? (await $.session.cwd()), true, home)
+  if (folder === null) return null
+  const done = await checkpoint($, folder, { timeoutMs: CHECKPOINT_MS }).catch((error: unknown) => ({
+    stdout: `did not run: ${error instanceof Error ? error.message : String(error)}`,
+  }))
+  const line = done.stdout.trim()
+  return line ? `waffles checkpoint: ${line}` : null
+}

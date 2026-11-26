@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T17:18:38.826Z
+updated: 2026-11-26T17:19:43.186Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -56,7 +56,7 @@ updated: 2026-11-26T17:18:38.826Z
   - [ ] 6.6 Add an in-process adapter for OpenCode
     - [x] 6.6.1 Add the server part: the plan outline tool, the mode commands, the rules, and the skills
     - [ ] 6.6.2 Add the terminal UI part: the plan outline view and the footer
-    - [ ] 6.6.3 Run the checkpoint after a push on OpenCode
+    - [x] 6.6.3 Run the checkpoint after a push on OpenCode
     - [ ] 6.6.4 Start unattended runs on OpenCode and refuse their questions
     - [ ] 6.6.5 Pick the effort for each prompt on OpenCode
     - [ ] 6.6.6 Mark a step by its subagent on OpenCode
