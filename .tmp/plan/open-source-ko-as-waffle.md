@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T17:22:03.062Z
+updated: 2026-11-26T17:26:50.268Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -64,7 +64,7 @@ updated: 2026-11-26T17:22:03.062Z
   - [ ] 6.7 Add an Antigravity manifest
   - [ ] 6.8 Move the Codex manifest to a root plugin.json
   - [ ] 6.9 Port the Python scripts to TypeScript
-    - [ ] 6.9.1 Port backlog_queue.py and builders.py <!-- agent=a27da9eeec4ebe39a -->
+    - [x] 6.9.1 Port backlog_queue.py and builders.py
     - [ ] 6.9.2 Port merge_queue.py, review_branch.py, and watch.py <!-- agent=ab3a54263ad6c0d36 -->
     - [x] 6.9.3 Port checkpoint.py into the core
     - [ ] 6.9.4 Point the skills, agents, docs, and CI at the TypeScript scripts and remove the Python files
