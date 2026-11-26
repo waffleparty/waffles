@@ -147,13 +147,20 @@ merged there.
 
 3 limits decide how many builders run. Check them before each dispatch, also
 for an item the user picked in Q1. When one holds, start no builder for that
-item, leave it `new`, and say in 1 line which limit held and why:
+item, leave it `new`, and say in 1 line which limit held and why.
+
+The clones and the pull request limit go through the waffles builders tool
+(`builders`; each platform adds its own prefix to the name, such as
+`mcp__waffles__builders`). Where that tool is missing, run
+`node <skill-dir>/../../scripts/builders.ts` with the same op and its inputs
+as flags; each step below gives the command. The script prints the tool's
+answer as JSON, and exits 3 where the tool refuses and 1 where it fails.
 
 | Limit | What it guards | How it is counted |
 | --- | --- | --- |
-| At most 10 open pull requests per repo that wait for human review | The pile of work that waits for people | From GitHub, across every developer: `node <skill-dir>/../../scripts/builders.ts limits --repo <main>`. A pull request waits for review when it is marked ready and a review is requested; one that an agent merges itself has none requested. At 10 it refuses, and its reason lists them: start no builder in this repo. When it cannot count (exit code 1), start none either, and say why. |
+| At most 10 open pull requests per repo that wait for human review | The pile of work that waits for people | From GitHub, across every developer: the builders tool with `{"op": "limits", "repo": "<main>"}`, or where it is missing `node <skill-dir>/../../scripts/builders.ts limits --repo <main>`. A pull request waits for review when it is marked ready and a review is requested; one that an agent merges itself has none requested. At 10 it refuses (its reason starts `Refused:`), and the reason lists them: start no builder in this repo. When it cannot count (any other failure), start none either, and say why. |
 | One item at a time per component | Overlap in the code | An item holds its component from its claim until its pull request merges: `running`, `escalated`, `stale`, `active`, or `review`. Start no item whose component has another one, unless it depends on that one: it is then stacked on it, and the stack counts as 1. The component is the item's `component` through the adapter; a `.backlog/` file's is the repo, so one item at a time per repo. |
-| 3 builders running tests at once on this machine | The machine | Each builder runs its tests, linters, and type checks through `builders.ts test-slot -- <command>`, which waits for 1 of 3 slots, shared by every session. On a typical workstation, test runs at once stop adding throughput at about 3: past that, each one only slows the others. |
+| 3 builders running tests at once on this machine | The machine | Each builder runs its tests, linters, and type checks through the shell command `node <scripts>/builders.ts test-slot -- <command>` (`<scripts>` is `<skill-dir>/../../scripts`, as an absolute path), which waits for 1 of 3 slots, shared by every session. It stays a shell command, not a tool: it wraps the builder's own command and holds the slot for as long as that runs. On a typical workstation, test runs at once stop adding throughput at about 3: past that, each one only slows the others. |
 
 Within them, recommend up to 5 in Q1. One item may fan out into its own
 subagents (e.g. repetitive work split across files) in its builder's clone;
@@ -167,9 +174,11 @@ that still counts as one.
 2. **Base.** The default branch. Where `depends:` names an item that is not
    merged (status `review`), its `branch:` instead: the item is stacked on it,
    and its pull request's base is that branch.
-3. **Clone.** In the main checkout, run
+3. **Clone.** Call the builders tool with
+   `{"op": "clone", "root": "<scratchpad>/builders", "repo": "<main>", "item": "<item filename stem>", "branch": "<branch>"}`,
+   and `"base": "<base>"` for a stacked item; where the tool is missing, run
    `node <skill-dir>/../../scripts/builders.ts clone --root <scratchpad>/builders --repo <main> --item <item filename stem> --branch <branch> [--base <base>]`.
-   It prints the clone's `path` (under `<scratchpad>/builders/<owner>/<repo>/`, or `$WAFFLES_BUILDERS_ROOT` when it is set; `<scratchpad>` is this session's scratchpad directory, as an absolute path). It
+   It answers with the clone's `path` (under `<scratchpad>/builders/<owner>/<repo>/`, or `$WAFFLES_BUILDERS_ROOT` when it is set; `<scratchpad>` is this session's scratchpad directory, as an absolute path). A clone takes minutes for a large repo: a call that the platform ends before the answer can be made again, and a finished clone on its branch is reused. It
    refuses an existing clone of the item that is on another branch, and a base
    that is not on origin; say why in 1 line and leave the item `new`. Record
    `clone:` and `branch:` in the item's frontmatter.
@@ -199,8 +208,10 @@ that still counts as one.
 >    exit code 0, commit as usual; otherwise commit with `--no-gpg-sign`.
 > 2. Implement the Request, following the answers under `## Clarifications`.
 >    Run the repo's tests, linters, and type checks in your clone, each through
->    `node <scripts>/builders.ts test-slot -- <command>`, which waits
->    while 3 test runs already run on this machine.
+>    the shell command `node <scripts>/builders.ts test-slot -- <command>`,
+>    which waits while 3 test runs already run on this machine. It is a shell
+>    command, not a tool, since it wraps your command and holds its slot for as
+>    long as that runs.
 > 3. If the change has a dev server or stack, pick a free port, start it in
 >    your clone, and record the exact start command (including port and
 >    folder) in `dev:`. It may not outlive you, so the command must be enough
@@ -294,24 +305,30 @@ To look at several finished UI items at once, build 1 throwaway local branch
 in the main checkout that merges every pull request waiting for the user, and
 serve it with 1 dev server:
 
-1. `node <skill-dir>/../../scripts/review-branch.ts build --repo <main> --waiting`
-   (or `--pr <number>…` for the items the user named). It refuses a main
+1. Call the waffles review branch tool (`review_branch`; each platform adds
+   its own prefix to the name, such as `mcp__waffles__review_branch`) with
+   `{"op": "build", "repo": "<main>", "waiting": true}`, or
+   `{"op": "build", "repo": "<main>", "prs": [<number>, …]}` for the items the
+   user named. Where that tool is missing, run
+   `node <skill-dir>/../../scripts/review-branch.ts build --repo <main> --waiting`
+   (or `--pr <number>…`), which prints the same answer as JSON. It refuses a main
    checkout with changes to tracked files: say so, and offer the items one by
    one instead. It switches the checkout to the local branch `waffles-review`:
-   origin's default branch with each pull request merged into it. Its output
+   origin's default branch with each pull request merged into it. Its answer
    names each pull request that conflicted with the ones before it and was
-   left out: review those one by one.
+   left out (`conflicts`): review those one by one.
 2. Serve it with `/waffles:dev-server` in the main checkout: one server for all the
    items. Stop the builders' own servers for those items first, if you
    started them.
 3. Print one review links block: the server's URL joined with the `Pages:` of
    each item, under its title, and each pull request's link. Then ask per item,
    as for a single item: **Merge**, **Revise**, **Drop**. Revise is made in
-   the item's clone and pushed; then run `build` again, which rebuilds
+   the item's clone and pushed; then build again, which rebuilds
    `waffles-review` from the new heads, and the server reloads or restarts.
 4. Never push `waffles-review`, and never commit on it: it has no upstream, and it
    is rebuilt whenever a waiting pull request changes.
-5. When the review ends, run
+5. When the review ends, call the review branch tool with
+   `{"op": "done", "repo": "<main>"}`; where it is missing, run
    `node <skill-dir>/../../scripts/review-branch.ts done --repo <main>`.
    It switches the checkout back to the branch it was on and deletes
    `waffles-review`. Merge the items the user picked as below.
@@ -345,7 +362,9 @@ serve it with 1 dev server:
    `merged`. When the queue removed it, set `status: escalated`, write
    GitHub's reason under `## Progress`, and offer it in Q2: its fix is made in
    the clone, pushed, and added to the queue again.
-3. Remove the clone:
+3. Remove the clone: call the builders tool with
+   `{"op": "remove", "root": "<scratchpad>/builders", "path": "<clone>"}`;
+   where it is missing, run
    `node <skill-dir>/../../scripts/builders.ts remove --root <scratchpad>/builders --path <clone>`.
    It refuses a clone that holds work origin lacks; then say what it holds and
    keep the clone.

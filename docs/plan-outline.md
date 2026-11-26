@@ -101,7 +101,7 @@ A resumed conversation (`--continue`, `--resume`, or `/resume`) gets its active 
 
 ## The checklist in the pull request
 
-`scripts/checkpoint.ts` renders the plan outline into the description of the open pull request for the checked-out branch. The result is a Markdown task list between `<!-- waffles:plan-outline:start -->` and `<!-- waffles:plan-outline:end -->` under `## Plan outline`. The rest of the description stays as it is. Where it has no markers yet, the section replaces a `## Plan outline` section, or goes after the other sections, ahead of the attribution lines at the end. It needs `gh`, signed in. Run it in the checkout, where `<plugin root>` is the plugin's folder:
+The checkpoint renders the plan outline into the description of the open pull request for the checked-out branch. The result is a Markdown task list between `<!-- waffles:plan-outline:start -->` and `<!-- waffles:plan-outline:end -->` under `## Plan outline`. The rest of the description stays as it is. Where it has no markers yet, the section replaces a `## Plan outline` section, or goes after the other sections, ahead of the attribution lines at the end. It needs `gh`, signed in. The hooks run it after a push (below). To run it yourself, call the waffles checkpoint tool (`checkpoint`, with `{"pr": "<number>", "dryRun": true, "folder": "<checkout>"}`, each optional), or run the script in the checkout, where `<plugin root>` is the plugin's folder:
 
 ```sh
 node <plugin root>/scripts/checkpoint.ts [--pr <number>] [--dry-run]
@@ -113,7 +113,8 @@ node <plugin root>/scripts/checkpoint.ts [--pr <number>] [--dry-run]
 - A branch that is not pushed, or commits that are not pushed, put an "Ahead of the branch" line above the checklist.
 - A merged or closed pull request is left as it ended.
 - It never commits or pushes, and a second run with nothing changed changes nothing.
-- It exits 0 when the description is up to date or there is nothing to do, 1 when git or `gh` fails, and 2 for bad arguments. What it did goes to stdout, and why it failed goes to stderr.
+- The script exits 0 when the description is up to date or there is nothing to do, 1 when git or `gh` fails, and 2 for bad arguments. What it did goes to stdout, and why it failed goes to stderr. The tool answers with the same line, and refuses with the failure's.
+- A description that the platform passed on only in part (Claude Code passes on 4 MiB of a command's output) is a failure: the checkpoint never writes back a part.
 
 Checkpoints run after each `git push` and `gh pr create`, through the hooks below. A checkpoint at the end of a run or at the end of a session is not made: the push at a stop is what brings the checklist up to date.
 

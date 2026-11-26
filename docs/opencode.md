@@ -23,7 +23,7 @@ To use waffles in one project only, put the same entry in that project's `openco
 
 ### Why not `opencode plugin add`
 
-`opencode plugin add` with a Git spec (such as `github:waffleparty/waffles`) installs the plugin, and both parts load. But OpenCode installs a Git package under a `node_modules` folder (`~/.cache/opencode/npm/<name>/<time>/node_modules/waffles`), and Node.js refuses to run TypeScript files under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). The skills run `node <plugin>/scripts/*.ts` for builders, the merge queue, the review branch, and the backlog queue, so those steps fail in that install. A clone named in the config has no `node_modules` in its path, and the scripts run.
+`opencode plugin add` with a Git spec (such as `github:waffleparty/waffles`) installs the plugin, and both parts load. But OpenCode installs a Git package under a `node_modules` folder (`~/.cache/opencode/npm/<name>/<time>/node_modules/waffles`), and Node.js refuses to run TypeScript files under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). The tools (builders, the merge queue, the review branch, the backlog queue, and the checkpoint) run inside OpenCode's process and work in that install. What still runs `node <plugin>/...ts` from the shell fails there: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts state`), and the CI watcher of `@watch-ci` (`skills/watch-ci/watch.ts`). A clone named in the config has no `node_modules` in its path, and those scripts run.
 
 ## What works
 
@@ -32,7 +32,7 @@ To use waffles in one project only, put the same entry in that project's `openco
 | Skills | Every skill in `skills/` except `plan`, which opens Claude Code's pane. Name a skill in a prompt with `@<name>`, such as `@ask`. Skills marked "explicit" are not offered to the model. |
 | Modes | `/prod`, `/rapid`, and `/backlog-entry`. The model reads the current mode in a context block that OpenCode updates at the next step. |
 | Plan outline | The `waffles_plan` tool, the footer item, the session panel, and the pull request checklist after a push. |
-| Merge queue | The `waffles_merge_queue` tool: how a pull request merges, and where it stands in its base branch's merge queue. Subagents can call it. |
+| Tools | `waffles_merge_queue` (how a pull request merges, and where it stands in its base branch's merge queue), `waffles_checkpoint` (the plan outline into the pull request's description), `waffles_review_branch` (the local branch that merges the pull requests waiting for review), `waffles_backlog_queue` (the tracker writes held for replay), and `waffles_builders` (builders' clones and the open pull request limit). Subagents can call them. |
 | Unattended runs | `@non-interactive [task]` starts a run. See [Unattended runs](#unattended-runs). |
 | Auto effort | A level for each prompt you type, and `/auto-effort [on\|off]`. See [Auto effort](#auto-effort). |
 | Subagent steps | A subagent whose description starts with a step ID and a colon marks that step. See [Subagent steps](#subagent-steps). |
@@ -77,4 +77,4 @@ OpenCode's `subagent` tool always runs in the background. When the main session 
 | The dev servers footer item | Claude Code only. |
 | Effort in the footer | Not shown. `/auto-effort` says the state. |
 | A reply to `/prod`, `/rapid`, and `/backlog-entry` | Not shown. The footer shows the new mode. |
-| A plugin installed with `opencode plugin add` | The skills' scripts fail. Install from a clone, as above. |
+| A plugin installed with `opencode plugin add` | The tools work; the scripts that skills run from the shell fail (builders' test runs, the merge queue's wait, the CI watcher). Install from a clone, as above. |

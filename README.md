@@ -20,7 +20,7 @@ Skills follow the open Agent Skills format. The logic behind the hooks lives in 
 | --- | --- |
 | Claude Code, or OpenCode 2 | The hooks: modes, the plan outline, the checkpoint, unattended runs, and auto effort. The agents and the dev servers pane need Claude Code. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
-| Node.js 22.18 or later | The scripts in `scripts/` that skills run from the shell: builders, the merge queue, the review branch, the backlog queue, and the CI watcher. They use Node.js built-ins only and run with no build step. |
+| Node.js 22.18 or later, on the model's shell path | What skills still run from the shell: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts`), and the CI watcher of `/waffles:watch-ci`. Builders, the merge queue, the review branch, the backlog queue, and the checkpoint are tools; their scripts in `scripts/` are the fallback where a platform has no tools, and a person can run them by hand. The MCP server needs Node.js too. All use Node.js built-ins only and run with no build step. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
@@ -67,7 +67,7 @@ The agents load with the plugin and are available outside the skills that start 
 | --- | --- | --- |
 | Modes | `/prod`, `/rapid`, and `/backlog-entry`, and a statement of the current mode in every conversation. | [Modes](docs/modes.md) |
 | Plan outline | The `mcp__waffles__plan` tool, the pane, the footer item, and the pull request checklist. | [Plan outline](docs/plan-outline.md) |
-| Merge queue | The `mcp__waffles__merge_queue` tool: how a pull request merges, and where it stands in its base branch's merge queue. | [MCP server](docs/mcp.md#what-it-offers) |
+| Tools | `mcp__waffles__merge_queue` (how a pull request merges, and where it stands in its base branch's merge queue), `mcp__waffles__checkpoint` (the plan outline into the pull request), `mcp__waffles__review_branch` (one local branch with every pull request that waits for your review), `mcp__waffles__backlog_queue` (tracker writes held while the tracker cannot be reached), and `mcp__waffles__builders` (builders' clones and the open pull request limit). | [MCP server](docs/mcp.md#what-it-offers) |
 | Auto effort | A per-prompt effort pick, and the footer row. | [Modes](docs/modes.md#auto-effort) |
 | Checkpoint | After `git push` and `gh pr create`, the plan outline is rendered into the pull request. | [Plan outline](docs/plan-outline.md#the-checklist-in-the-pull-request) |
 | Dev servers | A footer item that lists the dev servers running from the project, and opens one in the browser. | [Skills](docs/skills.md#dev-server) |
@@ -101,7 +101,7 @@ waffles/
 ├── adapters/opencode/           The OpenCode 2 adapter: server part and terminal UI part
 ├── adapters/command/            The adapter for platforms whose hooks run a command per event, with a table per platform
 ├── adapters/mcp/                The MCP server that offers the plan outline tool and the core's tools
-├── scripts/                     Node.js scripts the skills call, with their tests (*.spec.ts)
+├── scripts/                     Command-line wrappers over the core's tools, test-slot, and their tests (*.spec.ts)
 │   └── bump-version.sh          Writes or checks the version in every manifest
 ├── types/                       Type declarations for the hooks
 ├── docs/                        User documentation
