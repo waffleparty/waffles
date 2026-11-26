@@ -20,7 +20,7 @@ import {
 import { endPlan, startPlan, submitPlan, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
 import { permissionAsked, questionAsked, questionDone, saveUnattended, startUnattended, submitUnattended } from '../../core/unattended.ts'
-import { forgetSession, pruneSessions } from '../node/host.ts'
+import { forgetSession, pruneSessions, sessionPath } from '../node/host.ts'
 
 /**
  * The events of a platform whose hook starts one process per event, in no platform's terms: each
@@ -29,9 +29,17 @@ import { forgetSession, pruneSessions } from '../node/host.ts'
 export type NeutralEvent =
   /** The session started, came back, was cleared, or was compacted; each gets the session's context again. */
   | { kind: 'start'; source: 'startup' | 'resume' | 'clear' | 'compact' }
-  | { kind: 'prompt'; text: string; isAgent: boolean }
-  /** Before a tool call; `isQuestion` when the tool asks the person a question. */
-  | { kind: 'tool'; isQuestion: boolean; isAgent: boolean }
+  /**
+   * The person's prompt. `repeats` where the platform sends it again before each model call of the
+   * prompt's turn: the prompt's work then runs for the first of them alone.
+   */
+  | { kind: 'prompt'; text: string; isAgent: boolean; repeats?: boolean }
+  /**
+   * Before a tool call; `isQuestion` when the tool asks the person a question. `mayAsk` where the
+   * platform asks no hook before it asks the person to approve a call, and can refuse only the calls
+   * that would ask: during a run, the answer then refuses the call that way.
+   */
+  | { kind: 'tool'; isQuestion: boolean; isAgent: boolean; mayAsk?: boolean }
   /** The platform is about to ask the person to approve a call. */
   | { kind: 'permission'; isQuestion: boolean; isAgent: boolean }
   /** After a tool call that succeeded; `shell` for a shell command, with the folder it ran in where the platform says. */
@@ -50,6 +58,8 @@ export type NeutralAnswer = {
   deny?: string
   /** The prompt was a waffles command the plugin ran in full; a platform that can't hand the model its context may stop the prompt there. */
   isCommand?: boolean
+  /** Why the call is refused if it would ask the person to approve it; the platform lets it run where it would not ask. */
+  denyAsk?: string
 }
 
 /** What a handler needs besides the host: where the session's values are kept, for pruning and forgetting them. */
@@ -112,7 +122,28 @@ async function prompt($: Host, text: string): Promise<NeutralAnswer> {
   return { context: [...context, ran(name, printed)], notice: printed, isCommand: true }
 }
 
-async function tool($: Host, isQuestion: boolean, isAgent: boolean): Promise<NeutralAnswer> {
+/**
+ * Whether a prompt the platform sends before each model call is a new one: its text differs from the
+ * last one's, which a file beside the session's values keeps. The same text sent twice in a row counts
+ * once, which costs less than running a prompt's work again in the middle of its turn.
+ */
+async function isNewPrompt({ $, sessionId, stateFolder }: Session, text: string): Promise<boolean> {
+  const path = sessionPath(stateFolder, sessionId).replace(/\.json$/, '.prompt.json')
+  // A file that is missing or doesn't parse names no prompt.
+  const last = await $.fs
+    .read(path)
+    .then(raw => (JSON.parse(raw) as { text?: unknown } | null)?.text)
+    .catch(() => undefined)
+  if (last === text) return false
+  await $.fs.write(path, JSON.stringify({ text }))
+  return true
+}
+
+async function tool($: Host, isQuestion: boolean, isAgent: boolean, mayAsk: boolean): Promise<NeutralAnswer> {
+  if (!isQuestion && mayAsk) {
+    const message = permissionAsked($, { isQuestion, isAgent })
+    return message === null ? { context: [] } : { context: [], denyAsk: message }
+  }
   if (!isQuestion) return { context: [] }
   const asked = await questionAsked($, isAgent)
   // The run's start question goes to the person. A hook can't close the dialog after a time, so it
@@ -152,9 +183,10 @@ export async function handle(session: Session, event: NeutralEvent, notes: reado
         return start(session, event.source)
       case 'prompt':
         // A subagent's prompt is its brief, not the person's: the modes describe the main conversation.
-        return event.isAgent ? { context: [] } : prompt($, event.text)
+        if (event.isAgent || (event.repeats && !(await isNewPrompt(session, event.text)))) return { context: [] }
+        return prompt($, event.text)
       case 'tool':
-        return tool($, event.isQuestion, event.isAgent)
+        return tool($, event.isQuestion, event.isAgent, event.mayAsk === true)
       case 'permission': {
         const message = permissionAsked($, { isQuestion: event.isQuestion, isAgent: event.isAgent })
         return message === null ? { context: [] } : { context: [], deny: message }
@@ -168,6 +200,9 @@ export async function handle(session: Session, event: NeutralEvent, notes: reado
         return end(session, event.isClear, event.isGone)
     }
   })()
-  if (event.kind !== 'end' || !event.isGone) await saveUnattended($)
+  // A refusal of a call that would ask isn't counted: the platform doesn't say whether the call asked,
+  // so the denial `permissionAsked` counted in this process is not saved.
+  const isUncounted = event.kind === 'tool' && event.mayAsk === true && !event.isQuestion
+  if ((event.kind !== 'end' || !event.isGone) && !isUncounted) await saveUnattended($)
   return { ...answer, context: [...notes, ...answer.context] }
 }

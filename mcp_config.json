@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "waffles": {
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/adapters/mcp/server.ts"],
+      "env": {
+        "WAFFLES_PLAN_TOOL": "mcp_waffles_waffles_plan",
+        "WAFFLES_ASK_TOOL": "ask_question"
+      },
+      "tools": {
+        "plan": {
+          "eager": true
+        }
+      }
+    }
+  }
+}

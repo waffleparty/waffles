@@ -10,8 +10,9 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | OpenCode 2 | Clone this repo and add its absolute path to `plugins` in `~/.config/opencode/opencode.jsonc`. See [OpenCode](docs/opencode.md). |
 | Codex | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/codex.md](docs/codex.md). |
 | Cursor | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/cursor.md](docs/cursor.md). For local use, put this repo at `~/.cursor/plugins/local/waffles` and reload the window. |
+| Antigravity | Not in a marketplace yet. `agy plugin install https://github.com/waffleparty/waffles`. Skills, the modes, unattended runs, the plan outline tool, and the checkpoint: see [docs/antigravity.md](docs/antigravity.md). |
 
-Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, the checkpoint, unattended runs, and auto effort; see [OpenCode](docs/opencode.md) for what differs. Codex and Cursor have the modes, the plan outline tool, and the checkpoint through hooks and an MCP server, with the limits their docs pages state. On other platforms only the skills load. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code or OpenCode.
+Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, the checkpoint, unattended runs, and auto effort; see [OpenCode](docs/opencode.md) for what differs. Codex, Cursor, and Antigravity have the modes, the plan outline tool, and the checkpoint through hooks and an MCP server, with the limits their docs pages state. On other platforms only the skills load. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code or OpenCode.
 
 ## Requirements
 
@@ -87,6 +88,7 @@ waffles/
 ├── .claude-plugin/plugin.json   Claude Code manifest
 ├── plugin.json                  Codex manifest, with mcp.json for its MCP server
 ├── .cursor-plugin/plugin.json   Cursor manifest
+├── .antigravity-plugin/plugin.json  Antigravity manifest, with hooks.json and mcp_config.json at the root
 ├── skills/<name>/SKILL.md       Agent Skills (https://agentskills.io/specification)
 ├── agents/                      Claude Code subagents
 ├── core/                        The logic, with no platform imports: plan outline, modes, runs, checkpoint

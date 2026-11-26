@@ -1,7 +1,9 @@
-import { promises as fs } from 'node:fs'
+import { promises as fs, realpathSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { nodeHost, sessionPath, stateFolder } from '../node/host.ts'
+import { antigravity } from './antigravity.ts'
 import { codex } from './codex.ts'
 import { cursor } from './cursor.ts'
 import { handle } from './neutral.ts'
@@ -12,7 +14,7 @@ import type { Platform } from './platform.ts'
 // answer. A hook must never stop the platform by failing, so any failure, and work that outlasts the
 // event's budget, ends with exit 0 and nothing printed; with `WAFFLES_DEBUG` set, the failure goes to stderr.
 
-const PLATFORMS: Record<string, Platform> = { codex, cursor }
+const PLATFORMS: Record<string, Platform> = { antigravity, codex, cursor }
 
 const debug = (message: string) => {
   if (process.env.WAFFLES_DEBUG) process.stderr.write(`waffles: ${message}\n`)
@@ -31,7 +33,7 @@ async function readStdin(): Promise<string> {
 const deferredPath = (folder: string, sessionId: string) => sessionPath(folder, sessionId).replace(/\.json$/, '.context.json')
 
 /** Adds blocks to the session's deferred context; a block already waiting isn't added twice. */
-async function defer(folder: string, sessionId: string, blocks: readonly string[]): Promise<void> {
+export async function defer(folder: string, sessionId: string, blocks: readonly string[]): Promise<void> {
   const path = deferredPath(folder, sessionId)
   const waiting = await readBlocks(path)
   const draft = `${path}.${process.pid}.${Date.now()}.tmp`
@@ -41,7 +43,7 @@ async function defer(folder: string, sessionId: string, blocks: readonly string[
 }
 
 /** The session's deferred context, taken: the file is renamed first, so two events never both take it. */
-async function takeDeferred(folder: string, sessionId: string): Promise<string[]> {
+export async function takeDeferred(folder: string, sessionId: string): Promise<string[]> {
   const path = deferredPath(folder, sessionId)
   const taken = `${path}.${process.pid}.taken`
   if (!(await fs.rename(path, taken).then(() => true, () => false))) return []
@@ -90,7 +92,7 @@ async function answer(platformName: string | undefined, eventName: string | unde
   if (defers && reply.context.length > 0) await defer(folder, where.sessionId, reply.context)
   // Deferred context goes first, at the first event since that reads any.
   const context = defers ? [] : hasContext && platform.defersContext ? [...(await takeDeferred(folder, where.sessionId)), ...reply.context] : reply.context
-  const output = platform.output(eventName, { ...reply, context })
+  const output = platform.output(eventName, { ...reply, context }, input as Record<string, unknown>)
   return output === null ? '' : JSON.stringify(output)
 }
 
@@ -117,13 +119,22 @@ async function main() {
   else process.exit(0)
 }
 
-process.on('uncaughtException', error => {
-  debug(`uncaught: ${describe(error)}`)
-  process.exit(0)
-})
-process.on('unhandledRejection', error => {
-  debug(`unhandled: ${describe(error)}`)
-  process.exit(0)
-})
-
-void main()
+// Run as a program, not imported by a test.
+const isMain = (() => {
+  try {
+    return process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+})()
+if (isMain) {
+  process.on('uncaughtException', error => {
+    debug(`uncaught: ${describe(error)}`)
+    process.exit(0)
+  })
+  process.on('unhandledRejection', error => {
+    debug(`unhandled: ${describe(error)}`)
+    process.exit(0)
+  })
+  void main()
+}

@@ -11,6 +11,10 @@
     {
       "path": ".cursor-plugin/plugin.json",
       "field": "version"
+    },
+    {
+      "path": ".antigravity-plugin/plugin.json",
+      "field": "version"
     }
   ]
 }

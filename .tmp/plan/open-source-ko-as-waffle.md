@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T20:47:13.448Z
+updated: 2026-11-26T20:53:52.104Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -56,10 +56,10 @@ updated: 2026-11-26T20:47:13.448Z
     - [x] 6.3.5 Move the modes and the unattended-run rules into the core
     - [x] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
   - [x] 6.4 Serve the plan outline tool from an MCP server
-  - [ ] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
+  - [x] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
     - [x] 6.5.1 Add the shared command adapter and the Codex hooks
     - [x] 6.5.2 Add the Cursor hooks
-    - [ ] 6.5.3 Add the Antigravity hooks <!-- agent=a3d734c503e8392fa -->
+    - [x] 6.5.3 Add the Antigravity hooks
   - [x] 6.6 Add an in-process adapter for OpenCode
     - [x] 6.6.1 Add the server part: the plan outline tool, the mode commands, the rules, and the skills
     - [x] 6.6.2 Add the terminal UI part: the plan outline view and the footer
@@ -69,7 +69,7 @@ updated: 2026-11-26T20:47:13.448Z
     - [x] 6.6.6 Mark a step by its subagent on OpenCode
     - [x] 6.6.7 Document how to install waffles on OpenCode
     - [-] 6.6.8 Test the panel's resize by drag and its key scrolling on the local machine
-  - [ ] 6.7 Add an Antigravity manifest
+  - [x] 6.7 Add an Antigravity manifest
   - [x] 6.8 Move the Codex manifest to a root plugin.json
   - [x] 6.9 Port the Python scripts to TypeScript
     - [x] 6.9.1 Port backlog_queue.py and builders.py

@@ -11,16 +11,17 @@ export type Platform = {
   session(input: Record<string, unknown>): { sessionId: string; cwd: string } | null
   /** The neutral event; null for an event, or an input, the adapter leaves alone. */
   event(name: string, input: Record<string, unknown>): NeutralEvent | null
-  /** The JSON the hook prints; null to print nothing, which lets the platform go on as it would. */
-  output(name: string, answer: NeutralAnswer): object | null
+  /** The JSON the hook prints; null to print nothing, which lets the platform go on as it would. `input` is the hook's input. */
+  output(name: string, answer: NeutralAnswer, input: Record<string, unknown>): object | null
   /** How long the event's work may take before the hook gives up and prints nothing, in ms. */
   budgetMs(name: string): number
   /** Whether the platform reads added context from the event's output, so a mode change's note reaches the model. */
   hasContext(name: string): boolean
   /**
    * Whether the context of an event the platform reads none from waits for the next event it reads
-   * some from, instead of being dropped. A mode change's note then reaches the model late; it still
-   * counts as refused at the event itself, so the core keeps pending rapid work pending.
+   * some from, instead of being dropped; that event's context starts with it. A mode change's note
+   * then reaches the model late; it still counts as refused at the event itself, so the core keeps
+   * pending rapid work pending.
    */
   defersContext?(name: string): boolean
 }
