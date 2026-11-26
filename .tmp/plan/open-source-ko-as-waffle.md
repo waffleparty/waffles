@@ -1,9 +1,9 @@
 ---
 goal: Open-source ko as waffle
 status: open
-current: 6.3
+current: 6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T17:00:04.512Z
+updated: 2026-11-26T17:02:18.878Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -44,7 +44,7 @@ updated: 2026-11-26T17:00:04.512Z
 - [ ] 6 Phase 2: move the hook logic into one vendor-neutral library behind per-platform adapters
   - [x] 6.1 Choose the language of the core library
   - [x] 6.2 Verify the OpenCode plugin API against its official docs
-  - [ ] 6.3 Move the hook logic into the core library
+  - [x] 6.3 Move the hook logic into the core library
     - [x] 6.3.1 Design the boundary between the core library and the adapters
     - [x] 6.3.2 Confirm that Claude Code's hook runtime loads imports with a .ts extension
     - [x] 6.3.3 Define the host interface and its store
@@ -61,3 +61,4 @@ updated: 2026-11-26T17:00:04.512Z
     - [ ] 6.9.2 Port merge_queue.py, review_branch.py, and watch.py <!-- agent=ab3a54263ad6c0d36 -->
     - [ ] 6.9.3 Port checkpoint.py into the core
     - [ ] 6.9.4 Point the skills, agents, docs, and CI at the TypeScript scripts and remove the Python files
+  - [x] 6.10 Add the Node.js host that the command adapter, the MCP server, and OpenCode share

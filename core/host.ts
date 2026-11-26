@@ -20,7 +20,7 @@ export type Host = {
   }
   process: {
     /** Runs a command to its end. Rejects when it can't start. */
-    run(argv: readonly string[], init?: { cwd?: string; timeoutMs?: number }): Promise<RunResult>
+    run(argv: readonly string[], init?: { cwd?: string; stdin?: string; timeoutMs?: number }): Promise<RunResult>
   }
   session: {
     id(): Promise<string>
