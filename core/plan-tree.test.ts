@@ -21,7 +21,7 @@ import {
   shownState,
   slug,
   type Goal,
-} from './plan-tree'
+} from './plan-tree.ts'
 
 const SPEC_EXAMPLE = `---
 goal: Ship OAuth login

@@ -4,7 +4,7 @@ import type { On } from 'claude-code'
 
 import { STALE_MS } from './plan-store'
 import { fakeDisk, inRepo } from './plan-testing'
-import { newGoal, parseGoal, serializeGoal } from './plan-tree'
+import { newGoal, parseGoal, serializeGoal } from '../core/plan-tree.ts'
 
 const TOOL = 'mcp__waffles__plan'
 const DESCRIPTION =

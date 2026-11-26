@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import { parseGoal, serializeGoal, PlanError, type Goal } from './plan-tree'
+import { parseGoal, serializeGoal, PlanError, type Goal } from '../core/plan-tree.ts'
 
 /** A session lock older than this (ms) no longer holds its goal. */
 export const STALE_MS = 120_000

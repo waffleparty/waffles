@@ -42,7 +42,7 @@ import {
   type Kind,
   type Result,
   type Step,
-} from './plan-tree'
+} from '../core/plan-tree.ts'
 import { ELSEWHERE, openAtStart, openUnlessClosed } from './plan-ui'
 
 export const TOOL = 'mcp__waffles__plan'

@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { claim, findPlanRoot, holder, listGoals, loadGoal, planRoot, recordActive, release, removeGoal, saveGoal, STALE_MS } from './plan-store'
 import { fakeStoreDisk } from './plan-testing'
-import { newGoal, serializeGoal, PlanError } from './plan-tree'
+import { newGoal, serializeGoal, PlanError } from '../core/plan-tree.ts'
 
 const NOW = Date.parse('2026-11-15T12:00:00Z')
 const lock = (session: string, ageMs: number) => JSON.stringify({ session, heartbeat: new Date(NOW - ageMs).toISOString() })

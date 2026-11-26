@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { fakeDisk } from './plan-testing'
-import { newGoal, serializeGoal } from './plan-tree'
+import { newGoal, serializeGoal } from '../core/plan-tree.ts'
 import { cut, paneClosed, width } from './plan-ui'
 
 const TOOL = 'mcp__waffles__plan'

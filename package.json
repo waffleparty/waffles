@@ -1,6 +1,7 @@
 {
   "name": "waffles",
   "private": true,
+  "type": "module",
   "description": "Release tooling for the waffles plugin. This file does not publish a package.",
   "license": "MIT",
   "engines": {

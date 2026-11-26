@@ -2,8 +2,8 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, On, PaneCloseInput, RenderInput } from 'claude-code'
 
 import type { PlanGoal, PlanStep } from '../types'
-import { MARKER, pathOf, SHOWN, shownState } from './plan-tree'
-import type { Shown } from './plan-tree'
+import { MARKER, pathOf, SHOWN, shownState } from '../core/plan-tree.ts'
+import type { Shown } from '../core/plan-tree.ts'
 
 export const PANE = 'plan-outline'
 const TOOL = 'mcp__waffles__plan'

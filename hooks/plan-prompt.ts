@@ -2,7 +2,7 @@ import type { EngineInterface } from 'claude-code'
 
 import { activeGoal, logFailure, openGoalLines } from './plan'
 import { findPlanRoot, goalName, listGoals } from './plan-store'
-import { renderTree } from './plan-tree'
+import { renderTree } from '../core/plan-tree.ts'
 
 // A system prompt section with the same bytes in every request, so the prompt cache holds; the tree
 // goes in the first message instead. It is there in a checkout with no .tmp/plan/ too: the rules say when
