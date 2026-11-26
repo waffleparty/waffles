@@ -12,8 +12,8 @@ description has no markers yet, the section takes the place of a
 attribution lines at the end.
 
 When .tmp/plan/assumed-for-you.md is there, the section ends with its list
-under "### Assumed for you": what the run reviewer approved and answered for
-the person during a run (the waffles design skill writes the file).
+under "### Assumed for you": the decisions an agent made in the person's
+place.
 
 The checklist says "Ahead of the branch" when the checkout holds changes that
 are not committed or commits that are not pushed. Once a commit has removed
@@ -37,7 +37,7 @@ START = "<!-- waffles:plan-outline:start -->"
 END = "<!-- waffles:plan-outline:end -->"
 HEADING = "## Plan outline"
 REMOVE_STEP = "remove the working files"
-# The run reviewer's record, beside the outline; rendered after the checklist, never read as a checklist.
+# The record of decisions made for the person, beside the outline; rendered after the checklist, never read as a checklist.
 ASSUMED = "assumed-for-you.md"
 ASSUMED_HEADING = "### Assumed for you"
 

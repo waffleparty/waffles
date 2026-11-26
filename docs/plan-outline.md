@@ -84,7 +84,7 @@ python3 -I <plugin root>/scripts/checkpoint.py [--pr <number>] [--dry-run]
 
 - It reads the goal files in `.tmp/plan/`. Where there are none, it reads a plain checklist file there. A plan document is not a checklist and stays out. Several goals each get a `###` heading.
 - A done step is ticked. A dropped step is ticked and struck through, and a step moved to the backlog is ticked and names its backlog file. Notes and kind markers are left out.
-- When `.tmp/plan/assumed-for-you.md` is there, the section ends with its list under `### Assumed for you` (see [Design](design.md)).
+- When `.tmp/plan/assumed-for-you.md` is there, the section ends with its list under `### Assumed for you`: a record of the decisions an agent made in your place.
 - Changes that are not committed, or commits that are not pushed, put an "Ahead of the branch" line above the checklist.
 - After the commit that removes `.tmp/`, the checklist is the outline from before that commit, with "Remove the working files" ticked. A merged or closed pull request is left as it ended.
 - It never commits or pushes, and a second run with nothing changed changes nothing.

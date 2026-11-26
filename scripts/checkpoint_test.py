@@ -68,21 +68,21 @@ BODY = textwrap.dedent(
     None"""
 )
 
-# The run reviewer's record, as the waffles design skill writes it.
+# The record of decisions made for the person.
 ASSUMED_FILE = textwrap.dedent(
     """\
     # Assumed for you
 
-    - **Spec, approved** by the run reviewer: every requirement row names its part; the spec check passed.
+    - **Spec, approved** for you: every part of the request has a section.
     - **Design question**: "Should a new member vote mid-round?" Answered: no, from the next round on.
-      Why: the brief says nothing; this keeps the tally fixed once a round starts.
+      Why: the request says nothing; this keeps the tally fixed once a round starts.
     """
 )
 
 ASSUMED_LIST = [
-    "- **Spec, approved** by the run reviewer: every requirement row names its part; the spec check passed.",
+    "- **Spec, approved** for you: every part of the request has a section.",
     '- **Design question**: "Should a new member vote mid-round?" Answered: no, from the next round on.',
-    "  Why: the brief says nothing; this keeps the tally fixed once a round starts.",
+    "  Why: the request says nothing; this keeps the tally fixed once a round starts.",
 ]
 
 CHECKLIST = [
@@ -250,7 +250,7 @@ class CheckpointTest(unittest.TestCase):
         self.assertEqual(body, f"{BODY}\n\n{section(*CHECKLIST[:3], '- [x] 3. Remove the working files')}")
         self.assertEqual(len(self.co.edits()), 1)
 
-    def test_a_run_reviewers_record_is_the_assumed_for_you_list_and_stays_after_the_working_files_go(self):
+    def test_the_record_of_decisions_is_the_assumed_for_you_list_and_stays_after_the_working_files_go(self):
         self.co.write(".tmp/plan/assumed-for-you.md", ASSUMED_FILE)
         self.co.git("add", ".tmp")
         self.co.git("commit", "-q", "-m", "Approve the spec")

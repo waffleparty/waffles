@@ -23,7 +23,6 @@ A `.backlog/` item file holds this frontmatter, then `## Request`, `## Clarifica
 status: new
 type: background | interactive
 kind: story | task | bug
-stop_at: surface | skeleton | solid, or empty
 title: <short imperative title>
 summary: <one line>
 depends: [<filename>, ...]
@@ -86,17 +85,15 @@ The line names a skill that implements waffles' 5 adapter steps:
 | `ship` | Move an item after a pull request event. |
 | `note` | Comment on an item, or flag that it waits for a person. |
 
-waffles names no tracker. The adapter maps the tracker's fields to waffles' item standard of 17 fields. `skills/backlog/adapter.md` holds the item standard, the states, and the contract of each step. With no adapter named, the skills work on `.backlog/` files.
+waffles names no tracker. The adapter maps the tracker's fields to waffles' item standard of 15 fields. `skills/backlog/adapter.md` holds the item standard, the states, and the contract of each step. With no adapter named, the skills work on `.backlog/` files.
 
 ## Initialization check
 
 **`/waffles:init-check`** checks what waffles needs in the session:
 
-1. superpowers at 7.0.2, the version waffles' spec and plan layer is written for. It says so when another version is installed.
-2. `gh` signed in.
-3. The adapter skill the repo names.
-4. The spec check skill the repo names (see [Design](design.md#the-spec-check)).
-5. The repo's own `initialization-check` skill, when there is one, for the repo's or team's own checks.
+1. `gh` signed in.
+2. The adapter skill the repo names.
+3. The repo's own `initialization-check` skill, when there is one, for the repo's or team's own checks.
 
 Each check reports pass, fail with the fix, or could not check. A failure never stops the session. The report ends with the waffles steps that fall back to `.backlog/`, and why. In a repo that names an adapter, the first message asks Claude to run the check before the first task.
 

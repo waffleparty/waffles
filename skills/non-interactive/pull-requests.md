@@ -46,9 +46,7 @@ last steps: Remove the working files ─► push ─► gh pr ready
   the working files" (`git rm -r .tmp` in its own commit), a push, and
   `gh pr ready`. The body says what changed and why, how it was verified, and
   the decisions a reviewer should know. The waffles hook renders the outline into
-  its `## Plan outline` section after each push and after `gh pr create`,
-  with the list "Assumed for you" from `.tmp/plan/assumed-for-you.md` when the
-  run reviewer approved a spec or a plan (see the `waffles:design` skill);
+  its `## Plan outline` section after each push and after `gh pr create`;
   where no hook did, update the section with
   `gh pr edit <number> --body-file <file>`. When a feature branch already has
   an open pull request, update that one. The whole feature branch merges,

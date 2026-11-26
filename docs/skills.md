@@ -1,6 +1,6 @@
 # Skills
 
-Skills that are not part of the backlog, design, or unattended-run workflows. Each runs as `/waffles:<name>`.
+Skills that are not part of the backlog or unattended-run workflows. Each runs as `/waffles:<name>`.
 
 ## Commit prep
 

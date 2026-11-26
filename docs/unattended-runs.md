@@ -12,7 +12,6 @@ The main thread runs at Extra high effort (see [Auto effort](modes.md#auto-effor
 | `waffles:implementer-hard` | Opus, high | Unknown bugs, multi-file refactors, risky areas. |
 | `waffles:reviewer` | Opus, high | A fresh-eyes review of the finished change (read-only). |
 | `waffles:decider` | The most capable model available, high | Hard decisions (read-only). |
-| `waffles:run-reviewer` | The most capable model available, high | Approving a spec or a plan in your place (read-only). |
 
 Code searches go to the built-in `Explore` agent on Haiku. The main thread makes small edits itself, since delegating those costs more. The agents load with the plugin and are also available outside this skill.
 

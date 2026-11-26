@@ -14,7 +14,6 @@ ITEM = """---
 status: new
 type: background
 kind: task
-stop_at:
 title: Fix the CORS header
 summary: The API refuses the preview origin
 depends: []

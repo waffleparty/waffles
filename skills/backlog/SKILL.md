@@ -55,7 +55,6 @@ kebab-case. Add `-2`, `-3`, … if the name is taken.
 status: new
 type: background | interactive
 kind: story | task | bug
-stop_at: surface | skeleton | solid, or empty
 title: <short imperative title>
 summary: <one line>
 depends: [<filename>, ...]
@@ -83,11 +82,9 @@ way to verify it. Anything needing a decision, a judgment call on design or UX,
 credentials, or authorization for something risky is `interactive`. When in
 doubt, `interactive` — `/waffles:backlog-review` can promote it later.
 
-`kind: story` when the item builds behavior that a requirement or a scenario
-states, and the text names it; `bug` when it fixes behavior that is wrong;
-otherwise `task`. `stop_at:` only for a story whose text names a stage
-(`surface`, `skeleton`, or `solid`); leave it empty otherwise. The item
-standard in `adapter.md` (in this skill's base directory) defines each field.
+`kind: story` when the item builds behavior that a person who uses the
+product sees; `bug` when it fixes behavior that is wrong; otherwise `task`.
+The item standard in `adapter.md` (in this skill's base directory) defines each field.
 
 ## Through the adapter
 
@@ -96,13 +93,13 @@ item, in the order of the split:
 
 1. Call `raise` with the item in the item standard: `title`, `kind`, `actor`
    (`background` is `agent`; `interactive` is `human`, or `assignee` when the
-   text says the item's owner must take part), `stop_at`, `request` (the user's
+   text says the item's owner must take part), `request` (the user's
    text, verbatim), and `blocked_by` (the IDs that `raise` returned for the
    items it depends on). `raise` looks for a duplicate in the tracker itself: when
    it adopts an existing item instead, say so in the report.
 2. When the user gives an existing item's ID instead of text, call `raise` with
-   that ID to adopt it, with the `actor` and `stop_at` the user names. Ask for
-   them when the user names none.
+   that ID to adopt it, with the `actor` the user names. Ask for
+   it when the user names none.
 3. When `raise` ends **unreachable**, fall back as `adapter.md` says: write the
    item as a `.backlog/` file (Duplicates and Writing items above), queue the
    raise with the file's name, and say in 1 line that waffles fell back, and why.

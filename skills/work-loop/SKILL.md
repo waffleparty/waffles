@@ -39,7 +39,6 @@ without frontmatter, normalize it:
 status: new
 type: background | interactive
 kind: story | task | bug
-stop_at: surface | skeleton | solid, or empty
 title: <short imperative title>
 summary: <one line>
 depends:
@@ -60,9 +59,8 @@ finished:
 ## Progress
 ```
 
-`kind:` and `stop_at:` are fields of waffles' item standard (see `adapter.md` in
-the `backlog` skill's base directory); a file without them is a `task` with no
-stage. `depends:` lists the item filenames it builds on. An item is blocked while
+`kind:` is a field of waffles' item standard (see `adapter.md` in
+the `backlog` skill's base directory); a file without it is a `task`. `depends:` lists the item filenames it builds on. An item is blocked while
 one of them is not built yet: its file exists and is not `review`. An item whose
 dependency is `review` (its pull request is ready but not merged) is stacked on
 that item's branch (see Background agents). `clone:`, `branch:`, and `pr:` are

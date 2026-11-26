@@ -1,6 +1,6 @@
 ---
 name: init-check
-description: Check that a session has what waffles needs — the superpowers plugin at the version waffles' layer was written for, gh signed in, the backlog adapter skill the repo names, and its spec check skill — then run the repo's own check list when it has one, and say which waffles steps fall back to .backlog/ files and why. Use at the start of a session in a repo whose AGENTS.md or CLAUDE.md names a backlog adapter (the first message says so), and when asked to check that waffles' tools are set up.
+description: Check that a session has what waffles needs — gh signed in, and the backlog adapter skill the repo names — then run the repo's own check list when it has one, and say which waffles steps fall back to .backlog/ files and why. Use at the start of a session in a repo whose AGENTS.md or CLAUDE.md names a backlog adapter (the first message says so), and when asked to check that waffles' tools are set up.
 ---
 
 # Initialization check
@@ -19,26 +19,7 @@ Run every check, in the order below. Each check reports exactly 1 result:
 A failure never stops the session. Report it, and go on with the task. The
 check changes nothing: it reads, and names a fix for the person to run.
 
-## 1. superpowers
-
-waffles' spec and plan layer is written for superpowers **7.0.2**. Run
-`claude plugin list --json` and find the entries whose `id` starts with
-`superpowers@`.
-
-- **pass**: an entry is `enabled` at version `7.0.2`.
-- **fail**, when no entry is there or none is enabled: superpowers is not
-  installed in this session. Fix: `claude plugin install superpowers@claude-plugins-official`,
-  then start a new session.
-- **fail**, when the enabled entry has another version: say "superpowers
-  `<version>` is installed; waffles' layer was written for 7.0.2". An update can
-  move an approval point or a next-step sentence that waffles' layer answers. Fix:
-  check that layer against the new version, then update the version in this
-  check; or install 7.0.2.
-- **could not check** when `claude` is not on the `PATH`.
-- **Affects**: the design and plan stages, which waffles layers over superpowers.
-  The backlog steps do not depend on it.
-
-## 2. gh
+## 1. gh
 
 Run `gh auth status`.
 
@@ -50,13 +31,13 @@ Run `gh auth status`.
 - **Affects**: pushing, the checklist in the pull request, and opening and
   merging pull requests; `ship` has no pull request URL to give.
 
-## 3. The backlog adapter
+## 2. The backlog adapter
 
 Find the adapter that the repo names, as `adapter.md` in the `backlog` skill's
 base directory says (a `Backlog adapter:` line in `AGENTS.md` or `CLAUDE.md`).
 
 - **pass**, with "this repo names no adapter; the backlog is `.backlog/`",
-  when there is no such line. Skip check 5.
+  when there is no such line. Skip check 3.
 - **pass**: the skill it names is in this session's list of skills.
 - **fail**, when the skill is not in the list: say "the adapter skill `<name>`
   is not installed". Fix: install the plugin or the project skill that
@@ -65,26 +46,14 @@ base directory says (a `Backlog adapter:` line in `AGENTS.md` or `CLAUDE.md`).
 - **Affects**: every adapter step. While it fails, `pull`, `raise`, `claim`,
   `ship`, and `note` all fall back to `.backlog/` files.
 
-## 4. The spec check
-
-Find the spec check that the repo names, as the `design` skill says (a
-`Spec check:` line in `AGENTS.md` or `CLAUDE.md`).
-
-- **pass**, with "this repo names no spec check", when there is no such line.
-- **pass**: the skill it names is in this session's list of skills.
-- **fail**, when the skill is not in the list: say "the spec check skill
-  `<name>` is not installed". Fix: as for the adapter in check 3.
-- **Affects**: the approval of a spec and of a plan in the `design` skill.
-  While it fails, the approver reads each document with no findings.
-
-## 5. The repo's own list
+## 3. The repo's own list
 
 When the session's list of skills holds a skill named `initialization-check`
 (the repo's, not this one), run it, and take its results as they are: its
 checks, results, fixes, and what each affects. When there is none, report
 **pass** with "this repo has no check list of its own".
 
-**could not check** when check 3 failed: the repo's own list usually tests what its
+**could not check** when check 2 failed: the repo's own list usually tests what its
 adapter needs, and without the adapter it tells nothing.
 
 ## Report
@@ -95,20 +64,18 @@ failure with its fix, then the steps that fall back:
 ```markdown
 | Check                    | Result | Detail                                            |
 |--------------------------|--------|---------------------------------------------------|
-| 1. superpowers           | fail   | 7.1.0 is installed; waffles' layer was written for 7.0.2 |
-| 2. gh                    | pass   | signed in as octocat                              |
-| 3. Backlog adapter       | pass   | `tracker-adapter`, named in AGENTS.md             |
-| 4. Spec check            | pass   | `team-spec-check`, named in AGENTS.md             |
-| 5. Repo's own list       | …      | the rows of the repo's own check                  |
+| 1. gh                    | fail   | no account is signed in                           |
+| 2. Backlog adapter       | pass   | `tracker-adapter`, named in AGENTS.md             |
+| 3. Repo's own list       | …      | the rows of the repo's own check                  |
 
-- superpowers 7.1.0 is installed. Fix: check waffles' layer against 7.1.0, or install 7.0.2.
+- No account is signed in to gh. Fix: `gh auth login`.
 
 Falls back to .backlog/: none.
 ```
 
 The last line names each waffles step that will fall back to `.backlog/` files, and
 why. A step falls back only when it cannot reach the tracker: all 5 steps when
-check 3 fails, or when one of the repo's own checks fails that its list says affects
+check 2 fails, or when one of the repo's own checks fails that its list says affects
 every adapter step (such as the connection to the tracker). One of those checks
 that fails on 1 field or 1 feature does not make a step fall back: name the
 steps it affects, and what they will lack, on its own line. Write

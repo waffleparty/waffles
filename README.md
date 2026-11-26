@@ -18,9 +18,8 @@ Skills follow the open Agent Skills format. The hooks (modes, plan outline, auto
 | --- | --- |
 | Claude Code | The hooks and the agents. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
-| `python3` | The scripts in `scripts/`: the checkpoint, builders, the merge queue, the review branch, the backlog queue, the outline from a plan, and the CI watcher. They use the standard library only. |
+| `python3` | The scripts in `scripts/`: the checkpoint, builders, the merge queue, the review branch, the backlog queue, and the CI watcher. They use the standard library only. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
-| The [superpowers](https://github.com/obra/superpowers) plugin, version 7.0.2 | `/waffles:design`, and unattended runs, which design items that need it. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
 Run `/waffles:init-check` to check the session for these.
@@ -34,7 +33,6 @@ Run a skill as `/waffles:<name>`. Claude also runs some of them on its own when 
 | `/waffles:backlog <text>` | Split text into backlog items, or adopt a tracker item by ID. |
 | `/waffles:backlog-review` | Groom items that are not ready by asking you questions one at a time. Explicit. |
 | `/waffles:work-loop` | Build the backlog: background items to builders, the rest with you. Explicit. |
-| `/waffles:design <item>` | Design and plan an item with superpowers before building it. |
 | `/waffles:non-interactive [task]` | Finish a task while you are away, through pull requests. Explicit. |
 | `/waffles:commit-prep` | Get pending changes ready to commit and hand you a paste-ready commit command. Explicit. |
 | `/waffles:dev-server [app]` | Start the project's dev server as a background task. |
@@ -60,7 +58,6 @@ The agents load with the plugin and are available outside the skills that start 
 | `waffles:implementer-hard` | Opus, high | Build a piece that needs judgment: unknown bugs, multi-file refactors, risky areas. |
 | `waffles:reviewer` | Opus, high | Review finished work with fresh eyes. Read-only. |
 | `waffles:decider` | Not set, high | Make one hard decision on someone's behalf. Read-only. Started with the most capable model available. |
-| `waffles:run-reviewer` | Not set, high | Approve a spec or a plan in your place during a run. Read-only. Started with the most capable model available. |
 
 ## Hooks
 
@@ -76,7 +73,6 @@ The agents load with the plugin and are available outside the skills that start 
 ## Documentation
 
 - [Backlog](docs/backlog.md): the backlog, grooming, the work loop, the adapter, the initialization check, and the tracker fallback.
-- [Design](docs/design.md): designing and planning an item with superpowers.
 - [Modes](docs/modes.md): production, rapid, and backlog mode, mode statements, and auto effort.
 - [Plan outline](docs/plan-outline.md): the tree of goals and steps, the pane, and the pull request checklist.
 - [Unattended runs](docs/unattended-runs.md): what a run does, what stays with you, and the permissions you grant it.

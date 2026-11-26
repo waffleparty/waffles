@@ -152,9 +152,8 @@ make it: delegating costs a brief and a round trip. Delegate the reading and
 the building.
 
 Route everything else by this table. The `waffles:*` agent types carry their
-own model and effort, so pass neither, except to `waffles:decider` and
-`waffles:run-reviewer`: they name no model, so pass each `model` as `deciding.md`
-and the `waffles:design` skill say. If they aren't in the Agent tool's list
+own model and effort, so pass neither, except to `waffles:decider`: it names
+no model, so pass its `model` as `deciding.md` says. If they aren't in the Agent tool's list
 (a cloud session loads this skill but not its plugin), use the fallback.
 
 | Task | Agent type | Fallback |
@@ -165,7 +164,6 @@ and the `waffles:design` skill say. If they aren't in the Agent tool's list
 | Build a piece that needs judgment: an unknown cause, a multi-file refactor, or anything touching auth, security, migrations, money, or concurrency | `waffles:implementer-hard` | `general-purpose`, opus, high |
 | Review finished work | `waffles:reviewer` | `general-purpose`, opus, high |
 | Make a hard decision | `waffles:decider`, with `model` the most capable in the Agent tool's options (see `deciding.md`) | see `deciding.md` |
-| Approve a spec or a plan in the user's place | `waffles:run-reviewer`, with `model` the most capable in the Agent tool's options (see the `waffles:design` skill) | see the `waffles:design` skill |
 
 If a spawn fails because its model isn't available, retry with `model: "opus"`,
 then with `model` unset. Once a model has failed, don't try it again this run.
@@ -177,10 +175,6 @@ Before you split the task and launch the first builder, read `pieces.md`: how
 to order the pieces, give each builder its clone, branch, and pull request,
 and stack the pieces that depend on others. Read it again after each merge if
 it is no longer in context.
-
-An item that needs design (an epic, or a story its epic's spec does not cover)
-goes through the `waffles:design` skill first: the run reviewer answers its stops
-for the user, and the approved plan's tasks become the steps you split.
 
 ## Deciding
 

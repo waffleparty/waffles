@@ -1,8 +1,7 @@
 # The backlog adapter
 
 waffles knows no issue tracker. Its 3 backlog skills (`backlog`, `backlog-review`,
-`work-loop`), its initialization check (`init-check`), its design skill
-(`design`), and its run skill (`non-interactive`) work on **items** in waffles' item standard below. A repo that
+`work-loop`), its initialization check (`init-check`), and its run skill (`non-interactive`) work on **items** in waffles' item standard below. A repo that
 keeps its backlog in a tracker names an **adapter**: a skill that implements
 5 steps over that tracker and maps the tracker's fields to the item standard.
 waffles calls the steps; the adapter does the reads and writes. A repo that names no
@@ -41,7 +40,7 @@ config file of its own, and a person who reads the file sees the choice.
 
 ## The item standard
 
-An item is waffles' unit of work: one item, one branch, one pull request. These 17
+An item is waffles' unit of work: one item, one branch, one pull request. These 15
 fields are what waffles needs to know about an item. An adapter maps each to the
 tracker; the third column is the same field in a `.backlog/` file.
 
@@ -49,19 +48,17 @@ tracker; the third column is the same field in a `.backlog/` file.
 | --- | --- | --- |
 | `id` | The stable name of the item, given by the tracker | The file name |
 | `title` | A short imperative name | `title:` |
-| `kind` | `story` (it builds behavior that a requirement or a scenario states), `task` (required work that changes no observable behavior), or `bug` | `kind:` |
+| `kind` | `story` (it builds behavior that a person who uses the product sees), `task` (required work that changes no observable behavior), or `bug` | `kind:` |
 | `state` | `not ready`, `ready`, `in work`, `in review`, `waiting for deploy`, or `done` | `status:` with `groomed:` (see States) |
 | `actor` | Who can do the work: `agent` (an agent alone), `human` (an agent paired with a person), or `assignee` (an agent paired with the item's owner). Exactly 1. | `type:` — `background` is `agent`; `interactive` is `human` or `assignee` |
 | `request` | What is asked, in the words of the person who asked | Section `## Request`, verbatim |
 | `answers` | Questions and answers from grooming, and notes | Section `## Clarifications` |
-| `requirements` | The IDs of the requirements the item builds | None |
-| `stop_at` | Where the agent stops building a story: `surface`, `skeleton`, or `solid` | `stop_at:` |
 | `blocked_by` | The items that must be done first | `depends:` |
 | `parent` | The larger item this one is part of, such as an epic | None |
 | `owner` | The person responsible for the work | None: the person who uses the repo |
 | `due` | The date that orders the list of ready items | None: files keep their own order |
 | `component` | Where in the codebase the work is | The repo that holds the file |
-| `files` | The spec and the plan document | Files in `.backlog/<slug>/` |
+| `files` | The documents that belong to the item, such as a spec | Files in `.backlog/<slug>/` |
 | `work` | The branch and the pull request | `branch:` and `pr:`, and section `## Progress` |
 | `needs_person` | The item stopped and waits for a person, with the reason | `status: escalated`, and the question in `## Progress` |
 
@@ -120,10 +117,9 @@ Lists the items that can be built now, or the items that still need grooming.
 Creates an item for new work, or adopts an item that exists.
 
 - **Input, to create:** an item with no `id`: `title`, `kind`, `actor`,
-  `request`, and where they are known `stop_at`, `requirements`, `blocked_by`,
+  `request`, and where they are known `blocked_by`,
   `parent`, `component`, and `files`.
-- **Input, to adopt:** an `id`, and the `actor` and `stop_at` that the request
-  names.
+- **Input, to adopt:** an `id`, and the `actor` that the request names.
 - **Output:** the item's `id`. When an item that is not `done` already covers
   the same work, `raise` adopts that item and returns its `id`.
 - **State:** a new item is `not ready`. `raise` never creates an item in
@@ -174,8 +170,8 @@ Moves an item after an event on its pull request.
 Adds an answer or a note to an item, or marks that it waits for a person.
 
 - **Input:** the `id`, the text, optionally `needs_person`: `set` or
-  `clear`, and optionally `files`: the paths of files to attach, such as the
-  approved spec (the `design` skill attaches it).
+  `clear`, and optionally `files`: the paths of files to attach, such as a
+  spec.
 - **Output:** the item, and for each file in `files` whether it is attached.
 - **State:** adds the text to `answers`. With `set`, `needs_person` is set, and
   the text says what the item waits for and what the person must decide or do.
