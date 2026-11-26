@@ -63,10 +63,10 @@ class BuildersTest(unittest.TestCase):
         return result
 
     def test_two_builders_in_one_repo_never_touch_the_same_checkout(self):
-        a = self.clone("PM-1", "feat/PM-1")
-        b = self.clone("PM-2", "feat/PM-2-other")
-        self.assertEqual(a["path"], os.path.join(self.root, "acme", "widget", "PM-1"))
-        self.assertEqual(b["path"], os.path.join(self.root, "acme", "widget", "PM-2"))
+        a = self.clone("ITEM-1", "feat/ITEM-1")
+        b = self.clone("ITEM-2", "feat/ITEM-2-other")
+        self.assertEqual(a["path"], os.path.join(self.root, "acme", "widget", "ITEM-1"))
+        self.assertEqual(b["path"], os.path.join(self.root, "acme", "widget", "ITEM-2"))
         checkouts = {self.main, a["path"], b["path"]}
         git_dirs = {sh(p, "git", "rev-parse", "--absolute-git-dir") for p in checkouts}
         self.assertEqual(len(checkouts), 3)
@@ -76,8 +76,8 @@ class BuildersTest(unittest.TestCase):
             self.assertTrue(os.path.isdir(os.path.join(path, ".git", "objects")))
             self.assertFalse(os.path.exists(os.path.join(path, ".git", "objects", "info", "alternates")))
             self.assertEqual(sh(path, "git", "remote", "get-url", "origin"), self.origin)
-        self.assertEqual(sh(a["path"], "git", "branch", "--show-current"), "feat/PM-1")
-        self.assertEqual(sh(b["path"], "git", "branch", "--show-current"), "feat/PM-2-other")
+        self.assertEqual(sh(a["path"], "git", "branch", "--show-current"), "feat/ITEM-1")
+        self.assertEqual(sh(b["path"], "git", "branch", "--show-current"), "feat/ITEM-2-other")
         # Work in one clone shows in neither the other clone nor the main checkout.
         commit(a["path"], "a.txt", "a\n")
         with open(os.path.join(b["path"], "b.txt"), "w") as f:
@@ -89,40 +89,40 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(sh(a["path"], "git", "status", "--porcelain"), "")
 
     def test_an_item_that_depends_on_an_unmerged_one_stacks_on_its_branch(self):
-        a = self.clone("PM-1", "feat/PM-1")
+        a = self.clone("ITEM-1", "feat/ITEM-1")
         commit(a["path"], "a.txt", "a\n")
-        sh(a["path"], "git", "push", "-q", "-u", "origin", "feat/PM-1")
-        b = self.clone("PM-2", "feat/PM-2", "--base", "feat/PM-1")
-        self.assertEqual(b["base"], "feat/PM-1")
+        sh(a["path"], "git", "push", "-q", "-u", "origin", "feat/ITEM-1")
+        b = self.clone("ITEM-2", "feat/ITEM-2", "--base", "feat/ITEM-1")
+        self.assertEqual(b["base"], "feat/ITEM-1")
         self.assertTrue(os.path.isfile(os.path.join(b["path"], "a.txt")))
         # The branch has no upstream yet: its first push sets it.
         self.assertEqual(subprocess.run(["git", "-C", b["path"], "rev-parse", "--abbrev-ref", "@{upstream}"], capture_output=True).returncode, 128)
 
     def test_a_base_that_is_not_pushed_is_refused_and_leaves_no_clone(self):
-        code, text = self.run_script("clone", "--repo", self.main, "--item", "PM-3", "--branch", "feat/PM-3", "--base", "feat/PM-9")
+        code, text = self.run_script("clone", "--repo", self.main, "--item", "ITEM-3", "--branch", "feat/ITEM-3", "--base", "feat/ITEM-9")
         self.assertEqual(code, 3)
-        self.assertIn("origin has no branch feat/PM-9", text)
-        self.assertFalse(os.path.exists(os.path.join(self.root, "acme", "widget", "PM-3")))
+        self.assertIn("origin has no branch feat/ITEM-9", text)
+        self.assertFalse(os.path.exists(os.path.join(self.root, "acme", "widget", "ITEM-3")))
 
     def test_a_branch_on_origin_is_checked_out_as_it_is(self):
-        a = self.clone("PM-1", "feat/PM-1")
+        a = self.clone("ITEM-1", "feat/ITEM-1")
         commit(a["path"], "a.txt", "a\n")
-        sh(a["path"], "git", "push", "-q", "-u", "origin", "feat/PM-1")
+        sh(a["path"], "git", "push", "-q", "-u", "origin", "feat/ITEM-1")
         self.assertEqual(self.run_script("remove", "--path", a["path"])[0], 0)
-        again = self.clone("PM-1", "feat/PM-1")
+        again = self.clone("ITEM-1", "feat/ITEM-1")
         self.assertFalse(again["reused"])
         self.assertTrue(os.path.isfile(os.path.join(again["path"], "a.txt")))
 
     def test_the_clone_of_an_item_is_reused_on_its_branch_and_refused_on_another(self):
-        first = self.clone("PM-1", "feat/PM-1")
-        again = self.clone("PM-1", "feat/PM-1")
+        first = self.clone("ITEM-1", "feat/ITEM-1")
+        again = self.clone("ITEM-1", "feat/ITEM-1")
         self.assertEqual((again["path"], again["reused"], again["base"]), (first["path"], True, "main"))
-        code, text = self.run_script("clone", "--repo", self.main, "--item", "PM-1", "--branch", "feat/PM-1-new")
+        code, text = self.run_script("clone", "--repo", self.main, "--item", "ITEM-1", "--branch", "feat/ITEM-1-new")
         self.assertEqual(code, 3)
-        self.assertIn("on branch feat/PM-1, not feat/PM-1-new", text)
+        self.assertIn("on branch feat/ITEM-1, not feat/ITEM-1-new", text)
 
     def test_remove_keeps_a_clone_with_work_that_origin_lacks(self):
-        a = self.clone("PM-1", "feat/PM-1")
+        a = self.clone("ITEM-1", "feat/ITEM-1")
         with open(os.path.join(a["path"], "a.txt"), "w") as f:
             f.write("a\n")
         code, text = self.run_script("remove", "--path", a["path"])
@@ -132,7 +132,7 @@ class BuildersTest(unittest.TestCase):
         code, text = self.run_script("remove", "--path", a["path"])
         self.assertEqual(code, 3)
         self.assertIn("commits that origin lacks", text)
-        sh(a["path"], "git", "push", "-q", "-u", "origin", "feat/PM-1")
+        sh(a["path"], "git", "push", "-q", "-u", "origin", "feat/ITEM-1")
         with open(os.path.join(a["path"], "a.txt"), "w") as f:
             f.write("stashed\n")
         sh(a["path"], "git", "stash", "-q")
@@ -145,7 +145,7 @@ class BuildersTest(unittest.TestCase):
         code, text = self.run_script("remove", "--path", a["path"])
         self.assertEqual(code, 3)
         self.assertIn("Add d.txt", text)
-        sh(a["path"], "git", "switch", "-q", "feat/PM-1")
+        sh(a["path"], "git", "switch", "-q", "feat/ITEM-1")
         self.assertEqual(self.run_script("remove", "--path", a["path"])[0], 0)
         self.assertFalse(os.path.exists(os.path.join(self.root, "acme")))
 
@@ -153,10 +153,10 @@ class BuildersTest(unittest.TestCase):
         os.environ.pop("WAFFLES_BUILDERS_ROOT", None)
         other = os.path.join(os.path.dirname(self.root), "scratch")
         out = io.StringIO()
-        self.assertEqual(builders.main(["clone", "--root", other, "--repo", self.main, "--item", "PM-9", "--branch", "feat/PM-9"], out=out), 0)
-        self.assertEqual(json.loads(out.getvalue())["path"], os.path.join(os.path.realpath(other), "acme", "widget", "PM-9"))
+        self.assertEqual(builders.main(["clone", "--root", other, "--repo", self.main, "--item", "ITEM-9", "--branch", "feat/ITEM-9"], out=out), 0)
+        self.assertEqual(json.loads(out.getvalue())["path"], os.path.join(os.path.realpath(other), "acme", "widget", "ITEM-9"))
         out = io.StringIO()
-        self.assertEqual(builders.main(["clone", "--repo", self.main, "--item", "PM-8", "--branch", "feat/PM-8"], out=out), 3)
+        self.assertEqual(builders.main(["clone", "--repo", self.main, "--item", "ITEM-8", "--branch", "feat/ITEM-8"], out=out), 3)
         self.assertIn("--root", out.getvalue())
 
     def test_remove_refuses_a_folder_outside_the_builders_root(self):

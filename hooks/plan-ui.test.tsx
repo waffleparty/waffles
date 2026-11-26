@@ -916,14 +916,14 @@ updated: ${ISO}
 - [ ] 1 Survey the queue
 - [ ] 2 Fix the PRDs
   - [ ] 2.1 Merge the 2 PRD fixes <!-- agent=agent-1 -->
-  - [r] 2.2 Archive ACME-91
+  - [r] 2.2 Archive ITEM-91
   - [ ] 2.3 Close the epic
 `)
   await call($, { op: 'goal', switch: 'ship-prds' })
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toEqual(['Ship the PRDs', '▶ 1 Survey the queue', '▶ 2 Fix the PRDs', '  ▶ 2.1 Merge the 2 PRD fixes', '  ◐ 2.2 Archive ACME-91', '  ○ 2.3 Close the epic'])
+  expect(rows).toEqual(['Ship the PRDs', '▶ 1 Survey the queue', '▶ 2 Fix the PRDs', '  ▶ 2.1 Merge the 2 PRD fixes', '  ◐ 2.2 Archive ITEM-91', '  ○ 2.3 Close the epic'])
   const style = (text: string) => {
     const props = texts.find(t => t.text === text)?.props ?? {}
     return [props.color, props.bold]
@@ -931,7 +931,7 @@ updated: ${ISO}
   expect(style(' 1 Survey the queue')).toEqual(['cyan', undefined])
   expect(style(' 2 Fix the PRDs')).toEqual([undefined, true])
   expect(style(' 2.1 Merge the 2 PRD fixes')).toEqual(['magenta', undefined])
-  expect(style(' 2.2 Archive ACME-91')).toEqual(['yellow', undefined])
+  expect(style(' 2.2 Archive ITEM-91')).toEqual(['yellow', undefined])
   expect(texts.filter(t => t.text === '▶').map(t => [t.props.color, t.props.bold])).toEqual([['cyan', true], [undefined, true], ['magenta', true]])
   expect(style('◐')).toEqual(['yellow', true])
 })

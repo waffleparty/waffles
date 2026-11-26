@@ -50,7 +50,7 @@ class ReviewBranchTest(unittest.TestCase):
         sh(self.main, "git", "remote", "set-head", "origin", "main")
         # 3 UI pull requests that touch separate files, and 1 that conflicts with #1.
         for n, (name, text) in {1: ("app.txt", "header\nbody, version 1\n"), 2: ("page2.txt", "2\n"), 3: ("page3.txt", "3\n"), 4: ("app.txt", "header\nbody, version 4\n")}.items():
-            sh(self.main, "git", "switch", "-q", "-c", f"feat/PM-{n}", "main")
+            sh(self.main, "git", "switch", "-q", "-c", f"feat/ITEM-{n}", "main")
             self.commit(name, text)
             sh(self.main, "git", "push", "-q", "origin", f"HEAD:refs/pull/{n}/head")
         sh(self.main, "git", "switch", "-q", "main")

@@ -57,7 +57,7 @@ class FakeAdapter:
         if step == "raise":
             with open(os.path.join(backlog, item), encoding="utf-8") as f:
                 text = f.read()
-            key = f"AD-{len(self.issues) + 1}"
+            key = f"ITEM-{len(self.issues) + 1}"
             self.issues[key] = {"text": text, "actor": data.get("actor"), "state": "not ready", "notes": []}
             return key
         issue = self.issues.get(item)
@@ -149,29 +149,29 @@ class QueueTest(unittest.TestCase):
         self.assertEqual(self.waffles.said, [f"fell back: raise {name}: no network", f"fell back: note {name}: no network"])
 
         self.adapter.online = True
-        self.adapter.issues["AD-100"] = {"text": "", "actor": "agent", "state": "ready", "notes": []}
-        self.assertEqual(self.waffles.call("claim", "AD-100"), "AD-100")
+        self.adapter.issues["ITEM-100"] = {"text": "", "actor": "agent", "state": "ready", "notes": []}
+        self.assertEqual(self.waffles.call("claim", "ITEM-100"), "ITEM-100")
 
-        self.assertEqual(self.adapter.calls, [("raise", name), ("note", "AD-2"), ("claim", "AD-100")])
-        self.assertEqual(self.adapter.issues["AD-2"]["text"], ITEM)
-        self.assertEqual(self.adapter.issues["AD-2"]["actor"], "agent")
-        self.assertEqual(self.adapter.issues["AD-2"]["notes"], ["Started the spec"])
+        self.assertEqual(self.adapter.calls, [("raise", name), ("note", "ITEM-2"), ("claim", "ITEM-100")])
+        self.assertEqual(self.adapter.issues["ITEM-2"]["text"], ITEM)
+        self.assertEqual(self.adapter.issues["ITEM-2"]["actor"], "agent")
+        self.assertEqual(self.adapter.issues["ITEM-2"]["notes"], ["Started the spec"])
         self.assertFalse(os.path.exists(os.path.join(self.backlog, name)))
         self.assertFalse(os.path.exists(os.path.join(self.backlog, "queue.json")))
-        self.assertIn(f"{name} is AD-2 in the tracker", self.waffles.said[2])
+        self.assertIn(f"{name} is ITEM-2 in the tracker", self.waffles.said[2])
 
     def test_a_call_made_while_the_queue_waits_goes_after_it_in_order(self):
-        self.waffles.call("note", "AD-7", {"text": "first"})
-        self.waffles.call("note", "AD-7", {"text": "second"})
+        self.waffles.call("note", "ITEM-7", {"text": "first"})
+        self.waffles.call("note", "ITEM-7", {"text": "second"})
 
         seqs = [e["seq"] for e in self.waffles.queued()]
         self.assertLess(seqs[0], seqs[1])
         self.assertEqual([e["data"]["text"] for e in self.waffles.queued()], ["first", "second"])
 
     def test_the_replay_stops_at_the_first_unreachable_call_and_keeps_the_rest(self):
-        self.adapter.issues["AD-7"] = {"text": "", "actor": "agent", "state": "ready", "notes": []}
-        self.waffles.call("note", "AD-7", {"text": "first"})
-        self.waffles.call("note", "AD-7", {"text": "second"})
+        self.adapter.issues["ITEM-7"] = {"text": "", "actor": "agent", "state": "ready", "notes": []}
+        self.waffles.call("note", "ITEM-7", {"text": "first"})
+        self.waffles.call("note", "ITEM-7", {"text": "second"})
         self.adapter.online = True
         original = self.adapter.call
 
@@ -180,21 +180,21 @@ class QueueTest(unittest.TestCase):
             return original(step, item, data, backlog)
 
         self.adapter.call = once_then_down
-        self.waffles.call("note", "AD-7", {"text": "third"})
+        self.waffles.call("note", "ITEM-7", {"text": "third"})
 
-        self.assertEqual(self.adapter.issues["AD-7"]["notes"], ["first"])
+        self.assertEqual(self.adapter.issues["ITEM-7"]["notes"], ["first"])
         self.assertEqual([(e["data"]["text"], e["why"]) for e in self.waffles.queued()], [("second", "no network"), ("third", "expired credentials")])
 
     def test_a_refused_call_in_the_replay_is_reported_and_not_queued_again(self):
-        self.waffles.call("claim", "AD-9")
+        self.waffles.call("claim", "ITEM-9")
         self.adapter.online = True
-        self.adapter.issues["AD-9"] = {"text": "", "actor": "agent", "state": "in work", "notes": []}
+        self.adapter.issues["ITEM-9"] = {"text": "", "actor": "agent", "state": "in work", "notes": []}
 
-        self.waffles.call("note", "AD-9", {"text": "hi"})
+        self.waffles.call("note", "ITEM-9", {"text": "hi"})
 
         self.assertEqual(self.waffles.queued(), [])
-        self.assertIn("refused: claim AD-9: AD-9 is in work, not ready", self.waffles.said)
-        self.assertEqual(self.adapter.issues["AD-9"]["notes"], ["hi"])
+        self.assertIn("refused: claim ITEM-9: ITEM-9 is in work, not ready", self.waffles.said)
+        self.assertEqual(self.adapter.issues["ITEM-9"]["notes"], ["hi"])
 
     def test_the_folder_of_a_raised_item_stays_with_a_note(self):
         name = self.write_item()
@@ -202,7 +202,7 @@ class QueueTest(unittest.TestCase):
         self.waffles.call("raise", name, {"actor": "human"})
         self.adapter.online = True
 
-        self.waffles.call("note", "AD-1", {"text": "x"})
+        self.waffles.call("note", "ITEM-1", {"text": "x"})
 
         self.assertTrue(os.path.isdir(os.path.join(self.backlog, "fix-cors")))
         self.assertTrue(any("Kept " in line and "fix-cors/" in line for line in self.waffles.said))
@@ -211,15 +211,15 @@ class QueueTest(unittest.TestCase):
         name = self.write_item()
         self.waffles.call("raise", name, {"actor": "agent"})
         self.waffles.call("note", name, {"text": "x"})
-        self.waffles.call("note", "AD-50", {"text": "other"})
+        self.waffles.call("note", "ITEM-50", {"text": "other"})
         self.adapter.online = True
-        self.adapter.issues["AD-50"] = {"text": "", "actor": "agent", "state": "ready", "notes": []}
+        self.adapter.issues["ITEM-50"] = {"text": "", "actor": "agent", "state": "ready", "notes": []}
         self.adapter.call = lambda step, item, data, backlog: (_ for _ in ()).throw(Refused("no project")) if step == "raise" else FakeAdapter.call(self.adapter, step, item, data, backlog)
 
-        self.waffles.call("note", "AD-50", {"text": "now"})
+        self.waffles.call("note", "ITEM-50", {"text": "now"})
 
         self.assertEqual(self.waffles.queued(), [])
-        self.assertEqual(self.adapter.issues["AD-50"]["notes"], ["other", "now"])
+        self.assertEqual(self.adapter.issues["ITEM-50"]["notes"], ["other", "now"])
         self.assertTrue(any(f"note {name}, since {name} was not raised" in line for line in self.waffles.said))
         self.assertTrue(os.path.isfile(os.path.join(self.backlog, name)))
 
@@ -236,19 +236,19 @@ class QueueTest(unittest.TestCase):
         self.waffles.call("raise", name, {"actor": "agent"})
         self.adapter.online = True
 
-        self.waffles.call("note", "AD-1", {"text": "x"})
+        self.waffles.call("note", "ITEM-1", {"text": "x"})
 
         self.assertFalse(os.path.exists(path))
-        with open(os.path.join(self.backlog, "AD-1.md"), encoding="utf-8") as f:
+        with open(os.path.join(self.backlog, "ITEM-1.md"), encoding="utf-8") as f:
             record = f.read()
-        self.assertTrue(record.startswith("---\nid: AD-1\nstatus: running\n"))
+        self.assertTrue(record.startswith("---\nid: ITEM-1\nstatus: running\n"))
         with open(later, encoding="utf-8") as f:
-            self.assertIn("depends: [AD-1, other.md]", f.read())
+            self.assertIn("depends: [ITEM-1, other.md]", f.read())
 
     def test_a_seq_is_never_used_twice_so_a_stale_done_removes_nothing(self):
-        first = json.loads(self.waffles.run("add", "note", "AD-1", "--why", "no network", "--data", "{}").stdout)["seq"]
+        first = json.loads(self.waffles.run("add", "note", "ITEM-1", "--why", "no network", "--data", "{}").stdout)["seq"]
         self.assertEqual(self.waffles.run("done", str(first)).returncode, 0)
-        second = json.loads(self.waffles.run("add", "note", "AD-1", "--why", "no network", "--data", "{}").stdout)["seq"]
+        second = json.loads(self.waffles.run("add", "note", "ITEM-1", "--why", "no network", "--data", "{}").stdout)["seq"]
 
         r = self.waffles.run("done", str(first))
 
@@ -260,8 +260,8 @@ class QueueTest(unittest.TestCase):
     def test_the_queue_is_kept_out_of_git(self):
         subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
 
-        self.waffles.call("note", "AD-1", {"text": "x"})
-        self.waffles.call("note", "AD-1", {"text": "y"})
+        self.waffles.call("note", "ITEM-1", {"text": "x"})
+        self.waffles.call("note", "ITEM-1", {"text": "y"})
 
         with open(os.path.join(self.tmp.name, ".git", "info", "exclude"), encoding="utf-8") as f:
             lines = f.read().splitlines()
@@ -276,8 +276,8 @@ class QueueTest(unittest.TestCase):
         with open(exclude, "w", encoding="utf-8") as f:
             f.write("*.log")
 
-        self.waffles.call("note", "AD-1", {"text": "x"})
-        self.waffles.call("note", "AD-1", {"text": "y"})
+        self.waffles.call("note", "ITEM-1", {"text": "x"})
+        self.waffles.call("note", "ITEM-1", {"text": "y"})
 
         with open(exclude, encoding="utf-8") as f:
             self.assertEqual(f.read(), "*.log\n/.backlog/queue.json\n/.backlog/.queue-*\n")
@@ -290,12 +290,12 @@ class QueueTest(unittest.TestCase):
         os.chmod(later, 0o444)
         seq = json.loads(self.waffles.run("add", "raise", name, "--why", "no network").stdout)["seq"]
 
-        r = self.waffles.run("done", str(seq), "--id", "AD-3")
+        r = self.waffles.run("done", str(seq), "--id", "ITEM-3")
         os.chmod(later, 0o644)
 
         self.assertEqual(r.returncode, 1)
-        self.assertIn(f"{name} is AD-3 in the tracker, and the queue no longer holds its raise", r.stderr)
-        self.assertIn("check the tracker for a duplicate of AD-3", r.stderr)
+        self.assertIn(f"{name} is ITEM-3 in the tracker, and the queue no longer holds its raise", r.stderr)
+        self.assertIn("check the tracker for a duplicate of ITEM-3", r.stderr)
         self.assertEqual(self.waffles.queued(), [])
 
     def test_list_with_no_backlog_folder_is_empty_and_makes_none(self):
@@ -319,12 +319,12 @@ class UsageTest(unittest.TestCase):
 
     def test_bad_arguments_exit_2_with_the_reason(self):
         cases = [
-            (("add", "pull", "AD-1", "--why", "x"), "not a step that writes"),
-            (("add", "raise", "AD-1", "--why", "x"), "a raise names the .backlog/ file"),
-            (("add", "note", "AD-1"), "--why must say why"),
-            (("add", "note", "../AD-1", "--why", "x"), "not an item ID"),
-            (("add", "note", "AD-1", "--why", "x", "--data", "[1]"), "--data must be a JSON object"),
-            (("add", "note", "AD-1", "--why", "x", "--data", "{"), "--data is not JSON"),
+            (("add", "pull", "ITEM-1", "--why", "x"), "not a step that writes"),
+            (("add", "raise", "ITEM-1", "--why", "x"), "a raise names the .backlog/ file"),
+            (("add", "note", "ITEM-1"), "--why must say why"),
+            (("add", "note", "../ITEM-1", "--why", "x"), "not an item ID"),
+            (("add", "note", "ITEM-1", "--why", "x", "--data", "[1]"), "--data must be a JSON object"),
+            (("add", "note", "ITEM-1", "--why", "x", "--data", "{"), "--data is not JSON"),
             (("done", "4"), "no queued call 4"),
             (("done", "²"), "done takes the <seq>"),
             (("list", "extra"), "list takes no arguments"),
@@ -342,15 +342,15 @@ class UsageTest(unittest.TestCase):
         self.assertIn("no item file", r.stderr)
 
     def test_an_id_goes_with_a_raise_only(self):
-        added = json.loads(self.run_script("add", "note", "AD-1", "--why", "no network", "--data", '{"text": "x"}').stdout)
+        added = json.loads(self.run_script("add", "note", "ITEM-1", "--why", "no network", "--data", '{"text": "x"}').stdout)
 
-        r = self.run_script("done", str(added["seq"]), "--id", "AD-2")
+        r = self.run_script("done", str(added["seq"]), "--id", "ITEM-2")
 
         self.assertEqual(r.returncode, 2)
         self.assertIn("--id goes with a raise", r.stderr)
 
     def test_a_queue_file_that_does_not_parse_exits_1(self):
-        for text, reason in (("{not json", "cannot read"), ('[{"step": "note", "item": "AD-1"}]', "does not hold a list")):
+        for text, reason in (("{not json", "cannot read"), ('[{"step": "note", "item": "ITEM-1"}]', "does not hold a list")):
             with open(os.path.join(self.backlog, "queue.json"), "w") as f:
                 f.write(text)
 

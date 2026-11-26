@@ -99,7 +99,7 @@ folders), or macOS settings rather than inventing one, and say which one you mod
 - One term per concept across the whole UI; title case for proper names.
 - Never imply behaviour the product doesn't have.
 - Plain, positive empty states ("No recent activity").
-- Feeds read as events: "Priya approved CASE-5063".
+- Feeds read as events: "Alex approved ITEM-12".
 
 ## Habits to strip from every "after" state
 

@@ -118,11 +118,11 @@ class OutlineFromPlan(unittest.TestCase):
 
     def test_a_plan_with_no_title_takes_the_specs_then_the_given_one(self):
         plan = "### Task 1: Count lines\n"
-        spec = "# Line count flag design\n\n- Issue: ARCH-58\n"
+        spec = "# Line count flag design\n\n- Issue: ITEM-58\n"
 
         self.assertEqual(json.loads(run(plan, spec=spec)[1])["title"], "Line count flag design")
-        self.assertEqual(json.loads(run(plan, "--title", "ARCH-58: Count lines", spec="No heading\n")[1])["title"], "ARCH-58: Count lines")
-        self.assertEqual(json.loads(run(plan, "--title", "ARCH-58: Count lines")[1])["title"], "ARCH-58: Count lines")
+        self.assertEqual(json.loads(run(plan, "--title", "ITEM-58: Count lines", spec="No heading\n")[1])["title"], "ITEM-58: Count lines")
+        self.assertEqual(json.loads(run(plan, "--title", "ITEM-58: Count lines")[1])["title"], "ITEM-58: Count lines")
         self.assertIsNone(json.loads(run(plan)[1])["title"])
         # The plan's own title comes first.
         self.assertEqual(json.loads(run("# Count Implementation Plan\n\n" + plan, "--title", "x", spec=spec)[1])["title"], "Count")
