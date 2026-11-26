@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T20:45:23.577Z
+updated: 2026-11-26T20:47:13.448Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -58,7 +58,7 @@ updated: 2026-11-26T20:45:23.577Z
   - [x] 6.4 Serve the plan outline tool from an MCP server
   - [ ] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
     - [x] 6.5.1 Add the shared command adapter and the Codex hooks
-    - [ ] 6.5.2 Add the Cursor hooks <!-- agent=a6ed64af2175c4845 -->
+    - [x] 6.5.2 Add the Cursor hooks
     - [ ] 6.5.3 Add the Antigravity hooks <!-- agent=a3d734c503e8392fa -->
   - [x] 6.6 Add an in-process adapter for OpenCode
     - [x] 6.6.1 Add the server part: the plan outline tool, the mode commands, the rules, and the skills

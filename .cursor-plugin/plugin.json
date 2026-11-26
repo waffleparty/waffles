@@ -15,5 +15,7 @@
     "agents",
     "workflow"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "hooks": "./adapters/command/cursor-hooks.json",
+  "mcpServers": "./adapters/command/cursor-mcp.json"
 }

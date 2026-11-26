@@ -17,4 +17,10 @@ export type Platform = {
   budgetMs(name: string): number
   /** Whether the platform reads added context from the event's output, so a mode change's note reaches the model. */
   hasContext(name: string): boolean
+  /**
+   * Whether the context of an event the platform reads none from waits for the next event it reads
+   * some from, instead of being dropped. A mode change's note then reaches the model late; it still
+   * counts as refused at the event itself, so the core keeps pending rapid work pending.
+   */
+  defersContext?(name: string): boolean
 }

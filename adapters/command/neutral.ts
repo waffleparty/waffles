@@ -48,6 +48,8 @@ export type NeutralAnswer = {
   notice?: string
   /** Why the call is refused; the platform refuses it. */
   deny?: string
+  /** The prompt was a waffles command the plugin ran in full; a platform that can't hand the model its context may stop the prompt there. */
+  isCommand?: boolean
 }
 
 /** What a handler needs besides the host: where the session's values are kept, for pruning and forgetting them. */
@@ -104,10 +106,10 @@ async function prompt($: Host, text: string): Promise<NeutralAnswer> {
   if (name === PROD_COMMAND) {
     const { text: printed, isHandover } = await runProd($)
     // The assessment starts in this turn: the prompt that would start it goes with the command.
-    return { context: [...context, ran(name, printed), ...(isHandover ? [ASSESS_PROMPT] : [])], notice: printed }
+    return { context: [...context, ran(name, printed), ...(isHandover ? [ASSESS_PROMPT] : [])], notice: printed, isCommand: true }
   }
   const printed = name === RAPID_COMMAND ? await runRapid($) : await runBacklog($)
-  return { context: [...context, ran(name, printed)], notice: printed }
+  return { context: [...context, ran(name, printed)], notice: printed, isCommand: true }
 }
 
 async function tool($: Host, isQuestion: boolean, isAgent: boolean): Promise<NeutralAnswer> {
