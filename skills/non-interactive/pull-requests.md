@@ -71,7 +71,8 @@ last steps: Remove the working files ─► push ─► gh pr ready
   required), which `mode` reports as `approved`. The run pushes as the user,
   so the user cannot approve its pull requests; a teammate can.
   - Without a valid approval, GitHub refuses to add it, also for an admin.
-    Merge it past the queue with the command `mode` gives,
+    Where the user allows `--admin` (below), merge it past the queue with the
+    command `mode` gives,
     `gh pr merge <number> --<method> --admin` with the queue's merge method
     (see `--admin` below), and go on as After a merge says.
   - With one, run `gh pr merge <number>`, with no merge method and no
@@ -92,12 +93,17 @@ last steps: Remove the working files ─► push ─► gh pr ready
       queue again.
     - Still `queued` or `waiting` after 2 hours: leave the merge to the
       user, with the state as the reason.
-- **`--admin`.** Adding it to bypass branch protection (required reviews,
-  required signatures, required checks, or any other rule) is authorized
-  whenever you judge it useful. Merge with the merge method the repo or its
+- **`--admin`.** It merges past branch protection (a required review or
+  required signatures), so the user decides whether a run may use it, with
+  an auto mode rule of their own that names it. Add it only after a plain
+  merge was refused by such a rule, and only when the pull request's checks
+  pass: never to get past a failing check. When auto mode blocks the
+  command, the user has not allowed it. Then leave the pull request open and
+  leave the merge to the user, with the rule's name as the reason, and look
+  for no other way to merge it. Merge with the merge method the repo or its
   merge queue requires. Never change branch protection settings. When
-  `--admin` is refused too, the rules bind admins: leave the pull request
-  open and leave the merge to the user, with the rule's name as the reason.
+  GitHub refuses `--admin` too, the rules bind admins: leave the merge to
+  the user the same way.
 - **The production check.** Before you merge, push a tag, or publish a
   release, read what that action starts: the repo's workflows and its
   documentation. Stop only when they say that the action deploys to production

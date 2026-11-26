@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 2.8
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T05:42:08.391Z
+updated: 2026-11-26T05:42:44.130Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -30,7 +30,7 @@ updated: 2026-11-26T05:42:08.391Z
     - [x] 2.8.9 ⤷ Name WaffleParty as the author in the manifests
     - [x] 2.8.10 ⤷ Remove the merge guard that refuses gh pr merge
     - [x] 2.8.11 ⤷ Remove the design layer
-    - [ ] 2.8.12 ⤷ Stop authorizing --admin merges by default
+    - [x] 2.8.12 ⤷ Stop authorizing --admin merges by default
     - [ ] 2.8.13 ⤷ Neutralize the sample text and the company names
 - [ ] 3 Remove the working files
 - [ ] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead)
