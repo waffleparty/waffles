@@ -58,16 +58,19 @@ export default Plugin.define({
         })
         return (
           <Show when={input.name === PANEL}>
-            <box flexDirection="column" paddingLeft={1} paddingRight={1}>
+            <box flexDirection="column" paddingLeft={1} paddingRight={1} flexGrow={1} minHeight={0}>
               <text fg={muted()}>Plan outline</text>
               <Show when={rows().length > 0} fallback={<text fg={muted()}>No active goal.</text>}>
-                <For each={rows()}>
-                  {(row) => (
-                    <text>
-                      <For each={row}>{(piece) => <span style={styleOf(piece)}>{piece.text}</span>}</For>
-                    </text>
-                  )}
-                </For>
+                {/* A goal can hold more steps than the terminal has rows: the rows scroll with the mouse wheel, and with the keys while the panel has the focus. */}
+                <scrollbox flexGrow={1} minHeight={0} focused={input.focused}>
+                  <For each={rows()}>
+                    {(row) => (
+                      <text wrapMode="none">
+                        <For each={row}>{(piece) => <span style={styleOf(piece)}>{piece.text}</span>}</For>
+                      </text>
+                    )}
+                  </For>
+                </scrollbox>
               </Show>
             </box>
           </Show>
