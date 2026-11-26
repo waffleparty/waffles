@@ -1,9 +1,9 @@
 ---
 goal: Open-source ko as waffle
 status: open
-current: 6
+current: 6.14.2
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T21:38:41.530Z
+updated: 2026-11-26T22:27:08.082Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -90,6 +90,9 @@ updated: 2026-11-26T21:38:41.530Z
   - [ ] 6.14 Widen the MCP server into a general front for the core
     - [x] 6.14.1 Refactor the server into registries for tools, prompts, and resources, with the mode commands
     - [ ] 6.14.2 Offer the scripts as tools
+      - [x] 6.14.2.1 Define a tool once in the core and register it in-process and over MCP, with the merge queue as the first
+      - [ ] 6.14.2.2 Move builders, the review branch, the backlog queue, and the checkpoint to tools
+      - [ ] 6.14.2.3 Point the skills at the tools
     - [ ] 6.14.3 Let hook events reach the core through the server
     - [ ] 6.14.4 Look into a plan outline view through MCP Apps
   - [x] 6.15 Clean up after the parallel adapter work
