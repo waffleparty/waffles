@@ -300,6 +300,25 @@ describe('limits', () => {
     assert.ok(out.includes('- #10 Item 10: https://github.com/example/widget/pull/10'))
   })
 
+  test('the reason lists what gh gave of each pull request, and leaves out what it did not', async () => {
+    const list: Partial<ReturnType<typeof pr>>[] = Array.from({ length: 10 }, (_, i) => pr(i + 1))
+    delete list[0]!.number
+    delete list[1]!.title
+    delete list[2]!.url
+    for (const key of ['number', 'title', 'url'] as const) delete list[3]![key]
+    prs(list as ReturnType<typeof pr>[])
+    const [code, out] = await limits()
+    assert.equal(code, 3)
+    assert.doesNotMatch(out, /undefined/)
+    const lines = out.split('\n').filter((line) => line.startsWith('- '))
+    assert.deepEqual(lines.slice(0, 4).sort(), [
+      '- #2: https://github.com/example/widget/pull/2',
+      '- #3 Item 3',
+      '- Item 1: https://github.com/example/widget/pull/1',
+      '- a pull request that gh gave no number, title, or URL for',
+    ])
+  })
+
   test('drafts, and pull requests with no review requested, do not count', async () => {
     prs([...Array.from({ length: 9 }, (_, i) => pr(i + 1)), pr(20, true), pr(21, false, false)])
     const [code, out] = await limits()

@@ -202,7 +202,7 @@ function remove(rootFolder: string, path: string): { path: string; removed: true
   return { path, removed: true }
 }
 
-type PullRequest = { number: number; title: string; url: string; isDraft?: boolean; reviewRequests?: unknown[] }
+type PullRequest = { number?: number; title?: string; url?: string; isDraft?: boolean; reviewRequests?: unknown[] }
 
 /** The open pull requests that wait for human review: ready, with a review requested. */
 function waitingForReview(repo: string): PullRequest[] {
@@ -220,17 +220,23 @@ function waitingForReview(repo: string): PullRequest[] {
   return (prs as PullRequest[]).filter((pr) => !pr.isDraft && (pr.reviewRequests?.length ?? 0) > 0)
 }
 
+/** A line of the refusal for 1 pull request: what gh gave of its number, title, and URL. */
+function listLine(pr: PullRequest): string {
+  const name = [typeof pr.number === 'number' ? `#${pr.number}` : '', pr.title || ''].filter(Boolean).join(' ')
+  return `- ${[name, pr.url || ''].filter(Boolean).join(': ') || 'a pull request that gh gave no number, title, or URL for'}`
+}
+
 function limits(repo: string, cap: number): { waiting: number; cap: number; numbers: number[] } {
   const main = realpath(git(repo, 'rev-parse', '--show-toplevel'))
-  const waiting = waitingForReview(main).sort((a, b) => a.number - b.number)
+  const waiting = waitingForReview(main).sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
   if (waiting.length >= cap) {
-    const listed = waiting.map((pr) => `- #${pr.number} ${pr.title}: ${pr.url}`).join('\n')
+    const listed = waiting.map(listLine).join('\n')
     throw new Refused(
       `${waiting.length} open pull requests in ${basename(main)} wait for human review (ready, with a review ` +
         `requested), and the cap is ${cap}. Start no builder in this repo until one of them is reviewed:\n${listed}`,
     )
   }
-  return { waiting: waiting.length, cap, numbers: waiting.map((pr) => pr.number) }
+  return { waiting: waiting.length, cap, numbers: waiting.flatMap((pr) => (typeof pr.number === 'number' ? [pr.number] : [])) }
 }
 
 function slotsDir(): string {
