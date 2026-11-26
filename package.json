@@ -14,7 +14,7 @@
   "scripts": {
     "release": "semantic-release",
     "version:check": "scripts/bump-version.sh --check",
-    "typecheck": "tsc -p . && tsc -p tsconfig.ported.json",
+    "typecheck": "tsc -p .",
     "test:node": "node --test \"adapters/**/*.spec.ts\" \"core/**/*.spec.ts\" \"scripts/**/*.spec.ts\" \"skills/**/*.spec.ts\""
   },
   "devDependencies": {

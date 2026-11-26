@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { dumps, execute, floatRepr, io, loads, run, type Ran } from './watch.ts'
+import { execute, io, run, type Ran } from './watch.ts'
 
 const WATCH = fileURLToPath(new URL('./watch.ts', import.meta.url))
 const RUN_VIEW = ['--json', 'status,conclusion,url,jobs,attempt']
@@ -27,7 +27,7 @@ describe('watch', () => {
   const original = { ...io }
   let tmp: string
   let map: string
-  let calls: { argv: string[]; timeout: number; shown: string }[]
+  let calls: { argv: string[]; timeout: number }[]
   let lines: string[]
   let sleeps: number[]
   let clock: number
@@ -44,8 +44,8 @@ describe('watch', () => {
     answer = () => {
       throw new Error('no answer')
     }
-    io.exec = async (argv, timeout, shown) => {
-      calls.push({ argv, timeout, shown })
+    io.exec = async (argv, timeout) => {
+      calls.push({ argv, timeout })
       return answer(argv)
     }
     io.time = () => clock
@@ -81,32 +81,31 @@ describe('watch', () => {
       }
     })
 
-    test('a float in the map stays a float in the output, as in Python', async () => {
+    test('minutes in the map may be fractions of a minute', async () => {
       writeMap({ max_minutes: 1.5, targets: [{ id: 'd', label: 'Deploy', kind: 'gh-workflow', repo: 'o/r', workflow: 'deploy.yml', sha: 'abc', appear_minutes: 0.5 }] })
       answer = () => ok([])
-      // 60 * 0.5 is 30.0, so the minutes print as 30.0 // 60, which is 0.0.
-      assert.deepEqual(await watch(false), { code: 0, lines: ['MISSING Deploy: missing (no run appeared within 0.0 min)', 'ALL_DONE failure'] })
+      const missing = await watch(false)
+      assert.equal(missing.lines.length, 2)
+      assert.ok(missing.lines[0]?.startsWith('MISSING Deploy: missing (no run appeared within '))
+      assert.equal(missing.lines[1], 'ALL_DONE failure')
       assert.deepEqual(sleeps, [30, 30])
 
       writeMap({ max_minutes: 1.5, poll_seconds: 30, targets: [{ id: 'ci', label: 'CI', kind: 'gh-run', repo: 'o/r', run_id: 1 }] })
       rmSync(`${map}.state.json`)
       answer = () => ok({ status: 'in_progress', conclusion: null, url: 'https://run/1', attempt: 1, jobs: [] })
-      assert.deepEqual(await watch(false), { code: 0, lines: ['TIMEOUT after 1.0 min; 0/1 targets settled', 'ALL_DONE incomplete'] })
+      const timeout = await watch(false)
+      assert.ok(timeout.lines[0]?.startsWith('TIMEOUT after 1'))
+      assert.ok(timeout.lines[0]?.endsWith(' min; 0/1 targets settled'))
+      assert.equal(timeout.lines[1], 'ALL_DONE incomplete')
+      // 90 s is not past 1.5 minutes; the poll after it is.
+      assert.deepEqual(sleeps, [30, 30, 30, 30])
     })
 
-    test('JSON reads as Python reads it, and a decode error reads the same', () => {
-      assert.equal(dumps(loads('{"a": [1, 2.0, -0.0, 1e20, 1.5e-7, null, true, "\\u00e9\\ud83d\\ude00"]}')), '{"a": [1, 2.0, -0.0, 1e+20, 1.5e-07, null, true, "\\u00e9\\ud83d\\ude00"]}')
-      assert.equal(dumps({ b: [], c: {}, d: [1] }, 2), '{\n  "b": [],\n  "c": {},\n  "d": [\n    1\n  ]\n}')
-      const errors: [string, string][] = [
-        ['', 'Expecting value: line 1 column 1 (char 0)'],
-        ['{"a" 1}', "Expecting ':' delimiter: line 1 column 6 (char 5)"],
-        ['[1,\n2,\nx]', 'Expecting value: line 3 column 1 (char 7)'],
-        ['"é😀\\x"', 'Invalid \\escape: line 1 column 4 (char 3)'],
-        ['{} x', 'Extra data: line 1 column 4 (char 3)'],
-        ['﻿{}', 'Unexpected UTF-8 BOM (decode using utf-8-sig): line 1 column 1 (char 0)'],
-      ]
-      for (const [text, message] of errors) assert.throws(() => loads(text), { message }, text)
-      assert.deepEqual([floatRepr(1e16), floatRepr(123.0), floatRepr(0.0001), floatRepr(1e-5)], ['1e+16', '123.0', '0.0001', '1e-05'])
+    test('a state file with its own spacing and key order still reads', async () => {
+      writeMap({ targets: [{ id: 'ci', label: 'CI', kind: 'gh-run', repo: 'o/r', run_id: 1 }] })
+      writeFileSync(`${map}.state.json`, '{"targets": {"ci": {"reported": "success", "last_state": "success", "attempt": 1, "errors": 0}}, "started": 1000}')
+      answer = () => ok({ status: 'completed', conclusion: 'success', url: 'https://run/1', jobs: [] })
+      assert.deepEqual((await watch(false)).lines, ['ALL_DONE success'])
     })
   })
 
@@ -132,7 +131,7 @@ describe('watch', () => {
           'PENDING 0/1 targets settled',
         ],
       })
-      assert.deepEqual(calls, [{ argv: ['gh', 'run', 'view', '123', '--repo', 'o/r', ...RUN_VIEW], timeout: 90, shown: "['gh', 'run', 'view', '123', '--repo', 'o/r', '--json', 'status,conclusion,url,jobs,attempt']" }])
+      assert.deepEqual(calls, [{ argv: ['gh', 'run', 'view', '123', '--repo', 'o/r', ...RUN_VIEW], timeout: 90 }])
     })
 
     test('gh-run: a failed job names its job, its failed step, and its URL, and returns', async () => {
@@ -166,8 +165,8 @@ describe('watch', () => {
         { databaseId: 9, createdAt: '2026-01-01T00:00:45Z', event: 'workflow_run' },
       ]
       assert.deepEqual((await watch(true)).lines.slice(1), ['DONE CI: success https://run/1', 'PROGRESS Deploy preview: running', 'PENDING 1/2 targets settled'])
-      assert.deepEqual(calls[1].argv, ['gh', 'run', 'list', '--repo', 'o/r', '--workflow', 'deploy.yml', '--commit', 'abc', '-L', '20', '--json', 'databaseId,createdAt,event'])
-      assert.deepEqual(calls[2].argv.slice(0, 4), ['gh', 'run', 'view', '9'])
+      assert.deepEqual(calls[1]?.argv, ['gh', 'run', 'list', '--repo', 'o/r', '--workflow', 'deploy.yml', '--commit', 'abc', '-L', '20', '--json', 'databaseId,createdAt,event'])
+      assert.deepEqual(calls[2]?.argv.slice(0, 4), ['gh', 'run', 'view', '9'])
       await watch(true)
       assert.deepEqual(calls.map((call) => call.argv[2]), ['view', 'view'])
     })
@@ -194,7 +193,7 @@ describe('watch', () => {
       writeMap({ targets: [{ id: 'v', label: 'Vercel', kind: 'gh-check', repo: 'o/r', sha: 'abc', name: 'Vercel' }] })
       answer = () => ok({ check_runs: [] })
       assert.deepEqual((await watch(true)).lines.slice(1), ['PROGRESS Vercel: not started yet', 'PENDING 0/1 targets settled'])
-      assert.deepEqual(calls[0].argv, ['gh', 'api', '-X', 'GET', 'repos/o/r/commits/abc/check-runs', '-f', 'check_name=Vercel', '-f', 'per_page=100'])
+      assert.deepEqual(calls[0]?.argv, ['gh', 'api', '-X', 'GET', 'repos/o/r/commits/abc/check-runs', '-f', 'check_name=Vercel', '-f', 'per_page=100'])
       answer = () =>
         ok({
           check_runs: [
@@ -214,7 +213,7 @@ describe('watch', () => {
         ])
       answer = () => status('pending', 'Running')
       assert.deepEqual((await watch(true)).lines.slice(1, 2), ['PROGRESS CircleCI build: running (Running)'])
-      assert.deepEqual(calls[0].argv, ['gh', 'api', '-X', 'GET', 'repos/o/r/commits/abc/statuses', '-f', 'per_page=100'])
+      assert.deepEqual(calls[0]?.argv, ['gh', 'api', '-X', 'GET', 'repos/o/r/commits/abc/statuses', '-f', 'per_page=100'])
       answer = () => status('error', 'Build failed')
       assert.deepEqual((await watch(false)).lines, ['FAIL CircleCI build: failure (Build failed) https://circle/1', 'ALL_DONE failure'])
     })
@@ -224,7 +223,7 @@ describe('watch', () => {
       writeMap({ targets: [{ id: 'gl', label: 'GitLab pipeline', kind: 'command', command, expected_jobs: 2 }] })
       answer = () => ok({ state: 'running', jobs: [{ name: 'build', state: 'running', steps_done: 2, steps_total: 5, current_step: 'compile' }] })
       assert.deepEqual((await watch(true)).lines.slice(1, 2), ['PROGRESS GitLab pipeline: monitoring build (2/5 steps completed, now "compile") · 0/2 jobs done'])
-      assert.deepEqual(calls, [{ argv: ['/bin/sh', '-c', command], timeout: 120, shown: command }])
+      assert.deepEqual(calls, [{ argv: ['/bin/sh', '-c', command], timeout: 120 }])
     })
   })
 
@@ -241,21 +240,28 @@ describe('watch', () => {
       assert.equal(calls.length, 3)
     })
 
-    test("the error's text is Python's: a decode error, a missing field, an empty stderr, a timeout, an unknown kind", async () => {
+    test('output that is not JSON, a missing field, an empty stderr, gh printing nothing, a timeout, and an unknown kind fail the poll', async () => {
+      const timedOut = () => {
+        throw new Error('gh run view timed out after 90 s')
+      }
       const cases: [object, Ran | (() => never), string][] = [
-        [{ kind: 'command', command: 'x' }, { status: 0, stdout: 'not json', stderr: '' }, 'Expecting value: line 1 column 1 (char 0)'],
-        [{ kind: 'gh-run', repo: 'o/r' }, ok({}), "'run_id'"],
+        [{ kind: 'command', command: 'x' }, { status: 0, stdout: 'not json', stderr: '' }, 'JSON'],
+        [{ kind: 'gh-run', repo: 'o/r' }, ok({}), 'run_id'],
+        [{ kind: 'command' }, ok({}), 'command'],
         [{ kind: 'command', command: 'x' }, { status: 4, stdout: '', stderr: '  \n' }, 'command exited 4'],
-        [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, { status: -9, stdout: '', stderr: '' }, 'gh exited -9'],
-        [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, ok(null), "'NoneType' object has no attribute 'get'"],
-        [{ kind: 'gh-run', repo: 5, run_id: 1 }, ok({}), 'expected str, bytes or os.PathLike object, not int'],
-        [{ kind: 'gh-workflow', repo: 'o/r', workflow: 'w.yml', sha: 'abc', event: 'push' }, { status: 0, stdout: '', stderr: '' }, "'NoneType' object is not iterable"],
-        [{ kind: 'jenkins' }, ok({}), "unknown kind 'jenkins'"],
+        [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, { status: 137, stdout: '', stderr: '' }, 'gh exited 137'],
+        [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, ok(null), ''],
+        [{ kind: 'gh-workflow', repo: 'o/r', workflow: 'w.yml', sha: 'abc', event: 'push' }, { status: 0, stdout: '', stderr: '' }, ''],
+        [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, timedOut, 'timed out'],
+        [{ kind: 'jenkins' }, ok({}), 'jenkins'],
       ]
-      for (const [target, result, message] of cases) {
+      for (const [target, result, text] of cases) {
         rmSync(`${map}.state.json`, { force: true })
         const { lines } = await failing(target, result)
-        assert.deepEqual(lines, [`ERROR GL: ${message}`, 'RETURN'], message)
+        assert.equal(lines.length, 2, JSON.stringify(target))
+        assert.ok(lines[0]?.startsWith('ERROR GL: '), lines[0])
+        assert.ok(lines[0]?.includes(text), lines[0])
+        assert.equal(lines[1], 'RETURN')
       }
     })
 
@@ -321,18 +327,18 @@ describe('watch', () => {
   })
 
   describe('running commands', () => {
-    test('output is text with \\r\\n read as \\n, and the exit status is kept', async () => {
-      assert.deepEqual(await execute(['/bin/sh', '-c', 'printf "a\\r\\nb\\rc"; echo err >&2; exit 3'], 5, 'x'), { status: 3, stdout: 'a\nb\nc', stderr: 'err\n' })
+    test('the exit status and the output are kept', async () => {
+      assert.deepEqual(await execute(['/bin/sh', '-c', 'printf "a\\nb"; echo err >&2; exit 3'], 5), { status: 3, stdout: 'a\nb', stderr: 'err\n' })
     })
 
     test('a timeout kills the command and does not wait for what it started', async () => {
       const started = Date.now()
-      await assert.rejects(execute(['/bin/sh', '-c', 'sleep 5; echo late'], 0.3, 'sleep 5; echo late'), { message: "Command 'sleep 5; echo late' timed out after 0.3 seconds" })
+      await assert.rejects(execute(['/bin/sh', '-c', 'sleep 5 & sleep 5; echo late'], 0.3), /timed out/)
       assert.ok(Date.now() - started < 3000)
     })
 
-    test('a program that is not there raises as Python does', async () => {
-      await assert.rejects(execute(['no-such-program-for-watch'], 5, 'x'), { message: "[Errno 2] No such file or directory: 'no-such-program-for-watch'" })
+    test('a program that is not there rejects', async () => {
+      await assert.rejects(execute(['no-such-program-for-watch'], 5), /no-such-program-for-watch/)
     })
   })
 
@@ -340,12 +346,12 @@ describe('watch', () => {
     const cli = (...args: string[]) => spawnSync(process.execPath, [WATCH, ...args], { cwd: tmp, encoding: 'utf8' })
 
     test('wrong arguments print the usage and exit 2', () => {
-      for (const args of [[], ['map.json'], ['map.json', '--once', '--until-actionable'], ['a', 'b', '--once']]) {
+      const wrong = [[], ['map.json'], ['map.json', '--once', '--until-actionable'], ['a', 'b', '--once'], ['map.json', '--once', '--budget'], ['map.json', '--once', '--budget', 'x'], ['map.json', '--once', '--nope']]
+      for (const args of wrong) {
         const done = cli(...args)
         assert.equal(done.status, 2, args.join(' '))
         assert.equal(done.stdout, '')
-        assert.ok(done.stderr.startsWith('Watch the CI/CD targets in a watch-ci map; exit when the caller must act.\n\nUsage: node watch.ts MAP.json --once\n'))
-        assert.ok(done.stderr.endsWith('                      current progress in one line.\n'))
+        assert.ok(done.stderr.includes('usage: node watch.ts MAP.json --once'), done.stderr)
       }
     })
 

@@ -18,13 +18,13 @@ if (args[0] !== 'pr' || args[1] !== 'list' || !args.includes('review-requested:@
 console.log(process.env.GH_STUB_PRS)
 `
 
-function sh(cwd: string, ...args: string[]): string {
-  const done = spawnSync(args[0], args.slice(1), { cwd, encoding: 'utf8' })
-  if (done.status !== 0) throw new Error(`${args.join(' ')} failed: ${done.stderr}`)
+function sh(cwd: string, command: string, ...args: string[]): string {
+  const done = spawnSync(command, args, { cwd, encoding: 'utf8' })
+  if (done.status !== 0) throw new Error(`${command} ${args.join(' ')} failed: ${done.stderr}`)
   return done.stdout.trim()
 }
 
-describe('review_branch', () => {
+describe('review-branch', () => {
   let tmp: string
   let origin: string
   let app: string
@@ -36,11 +36,12 @@ describe('review_branch', () => {
     sh(app, 'git', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `Change ${name}`)
   }
 
-  // The parsed JSON when the script printed it, else its text.
+  // The parsed JSON when the script printed it, else its message.
   const runScript = (...args: string[]): [number, any] => {
     let text = ''
-    const code = main(args, { write: (s: string) => (text += s) })
-    return [code, code === 0 ? JSON.parse(text) : text]
+    let error = ''
+    const code = main(args, { write: (s: string) => (text += s) }, { write: (s: string) => (error += s) })
+    return [code, code === 0 ? JSON.parse(text) : error]
   }
 
   beforeEach(() => {
@@ -85,7 +86,7 @@ describe('review_branch', () => {
     assert.equal(code, 0, result)
     assert.deepEqual([result.merged, result.conflicts, result.from], [[1, 2, 3], [], 'feat/mine'])
     assert.equal(sh(app, 'git', 'branch', '--show-current'), 'waffles-review')
-    for (const [name, text] of [['app.txt', 'header\nbody, version 1\n'], ['page2.txt', '2\n'], ['page3.txt', '3\n']]) {
+    for (const [name, text] of [['app.txt', 'header\nbody, version 1\n'], ['page2.txt', '2\n'], ['page3.txt', '3\n']] as const) {
       assert.equal(readFileSync(join(app, name), 'utf8'), text)
     }
     assert.equal(spawnSync('git', ['-C', app, 'rev-parse', '--abbrev-ref', 'waffles-review@{upstream}']).status, 128)
@@ -115,6 +116,26 @@ describe('review_branch', () => {
     process.env.GH_STUB_PRS = JSON.stringify([{ number: 3, isDraft: false }, { number: 2, isDraft: false }, { number: 9, isDraft: true }])
     const [code, result] = runScript('build', '--repo', app, '--waiting')
     assert.deepEqual([code, result.merged], [0, [2, 3]])
+  })
+
+  test('the review file records the branch to go back to, and done reads it', () => {
+    runScript('build', '--repo', app, '--pr', '1', '4')
+    const path = join(app, '.git', 'waffles', 'review.json')
+    assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), { branch: 'waffles-review', from: 'feat/mine', base: 'origin/main', merged: [1], conflicts: [4] })
+    // A file that an earlier version wrote, with its own spacing, still reads.
+    writeFileSync(path, '{"branch": "waffles-review", "from": "main", "base": "origin/main", "merged": [1], "conflicts": [4]}')
+    assert.deepEqual(runScript('done', '--repo', app), [0, { branch: 'main', deleted: 'waffles-review' }])
+    assert.equal(sh(app, 'git', 'branch', '--show-current'), 'main')
+    assert.ok(!existsSync(path))
+  })
+
+  test('wrong arguments exit 2 and change nothing', () => {
+    for (const args of [[], ['build'], ['build', '--repo', app], ['build', '--repo', app, '--pr', '1', '--waiting'], ['build', '--repo', app, '--pr', 'x'], ['done'], ['done', '--repo', app, '--pr', '1'], ['merge', '--repo', app]]) {
+      const [code, text] = runScript(...args)
+      assert.equal(code, 2, args.join(' '))
+      assert.ok(text.includes('usage:'), args.join(' '))
+    }
+    assert.equal(sh(app, 'git', 'branch', '--show-current'), 'feat/mine')
   })
 
   test('changes to tracked files are refused', () => {

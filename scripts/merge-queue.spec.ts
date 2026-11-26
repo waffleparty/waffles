@@ -50,7 +50,7 @@ function pr({ merged = false, queued = null, auto = false, last = null, closed =
 
 const REMOVED = { __typename: 'RemovedFromMergeQueueEvent', createdAt: '2026-11-23T05:00:00Z', reason: 'The merge commit failed the required check test' }
 
-describe('merge_queue', () => {
+describe('merge-queue', () => {
   let tmp: string
   let statePath: string
   let saved: Record<string, string | undefined>
@@ -77,11 +77,12 @@ describe('merge_queue', () => {
 
   const write = (state: object) => writeFileSync(statePath, JSON.stringify(state))
 
-  // The parsed JSON when the script printed it, else its text.
+  // The parsed JSON when the script printed it, else its message.
   const runScript = (...args: string[]): [number, any] => {
     let text = ''
-    const code = main(args, { write: (s: string) => (text += s) })
-    return [code, code === 0 ? JSON.parse(text) : text]
+    let error = ''
+    const code = main(args, { write: (s: string) => (text += s) }, { write: (s: string) => (error += s) })
+    return [code, code === 0 ? JSON.parse(text) : error]
   }
 
   const calls = (): string[][] => readFileSync(`${statePath}.calls`, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
@@ -92,8 +93,8 @@ describe('merge_queue', () => {
     assert.equal(code, 0)
     // No merge method and no --auto: the queue's own method applies, and the repo may not allow auto-merge.
     assert.deepEqual([result.queue, result.approved, result.command], [true, true, 'gh pr merge 12'])
-    const [view, rules] = calls()
-    assert.ok(view[view.indexOf('--json') + 1].includes('reviewDecision'))
+    const [view = [], rules] = calls()
+    assert.ok(view[view.indexOf('--json') + 1]?.includes('reviewDecision'))
     assert.deepEqual(rules, ['api', 'repos/o/r/rules/branches/release%2F1.0'])
     // No review required: GitHub adds it too.
     write({ rules: [{ type: 'merge_queue', parameters: { merge_method: 'SQUASH' } }], review: '' })
@@ -132,6 +133,22 @@ describe('merge_queue', () => {
     const [code, text] = runScript('mode', '12')
     assert.equal(code, 1)
     assert.ok(text.includes('HTTP 502'))
+  })
+
+  test('wrong arguments exit 2 without calling gh, and --help exits 0', () => {
+    for (const args of [[], ['merge', '12'], ['mode'], ['mode', '12', '13'], ['mode', '12', '--repo'], ['state', '12', '--nope']]) {
+      const [code, text] = runScript(...args)
+      assert.equal(code, 2, args.join(' '))
+      assert.ok(text.includes('usage:'), args.join(' '))
+    }
+    assert.throws(() => calls())
+    assert.equal(main(['--help'], { write: () => {} }), 0)
+  })
+
+  test('--repo goes to gh pr view as -R', () => {
+    write({ rules: [] })
+    assert.equal(runScript('mode', '12', '--repo', 'o/r')[0], 0)
+    assert.deepEqual(calls()[0]?.slice(0, 5), ['pr', 'view', '12', '-R', 'o/r'])
   })
 
   test("a pull request the queue removed is removed, with GitHub's reason", () => {

@@ -23,12 +23,6 @@
   "exclude": [
     "**/*.test.ts",
     "node_modules",
-    ".claude",
-    "scripts/merge-queue.ts",
-    "scripts/merge-queue.spec.ts",
-    "scripts/review-branch.ts",
-    "scripts/review-branch.spec.ts",
-    "skills/watch-ci/watch.ts",
-    "skills/watch-ci/watch.spec.ts"
+    ".claude"
   ]
 }
