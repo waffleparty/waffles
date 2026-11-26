@@ -98,7 +98,8 @@ when another one finishes.
 ### Map file
 
 Write it to `$(git rev-parse --git-dir)/watch-ci/<short-sha>.json` (create the
-directory). List targets in dependency order: upstream before downstream.
+directory). List targets in dependency order: upstream before downstream. Give
+each target its own `id`: the watcher refuses a map where 2 targets share one.
 
 ```json
 {
@@ -154,7 +155,9 @@ time and prints its state.
 - Ends with `ALL_DONE`: everything already finished. Don't start a watcher. Report
   (step 6), and fix if anything failed.
 - Ends with `PENDING`: start the watcher (step 5). If the snapshot already shows
-  a `FAIL`, start on that failure (step 6) at the same time.
+  a `FAIL`, start on that failure (step 6) at the same time. The snapshot
+  writes no state, so the watcher reports that `FAIL` again: it is the same
+  failure, not a new one.
 
 ## 5. Watch
 
@@ -191,8 +194,10 @@ is the event lines since it started, then `RETURN` or `ALL_DONE <result>`:
 
 After `RETURN`, start the watcher again with the same brief if targets are still
 in flight. The watcher keeps its state in `<map>.state.json`, so it never
-repeats an event. If the user asks for status while it runs, run
-`watch.ts <map> --once`.
+repeats an event, except `ERROR`: a new watcher prints it again at its first
+poll of that target that still fails. If the user asks for status while it
+runs, run `watch.ts <map> --once`. It changes no state, so the watcher still
+reports every event.
 
 ## 6. Act
 

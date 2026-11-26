@@ -7,7 +7,8 @@
 // what to watch, it only polls the targets the map names. State is kept in
 // MAP.state.json, so a restarted watcher never repeats an event.
 //
-// --once polls every target a single time, prints each one's current state, and exits.
+// --once polls every target a single time, prints each one's current state, and exits. It reads the state file and
+// never writes it, so a watcher that runs at the same time still prints every event.
 //
 // --until-actionable polls until something changes that the caller must see, then
 // exits. Its last line is one of:
@@ -18,12 +19,14 @@
 //                       current progress in one line.
 //
 // A poll fails when gh or the command exits non-zero, runs past its timeout (90 s for gh, 120 s for a command), or
-// prints what is not JSON, or when the target lacks a field its kind needs. 3 failed polls of a target in a row print
-// ERROR with the last one's error. A map that is missing or has no targets prints ERROR and exits 2. Wrong arguments
+// prints what is not JSON, when a command prints no state, or when the target lacks a field its kind needs. 3 failed
+// polls of a target in a row print ERROR with the last one's error, once in each run of the script while they go on
+// failing. A map that is missing, has no targets, or has 2 targets with 1 id prints ERROR and exits 2. Wrong arguments
 // print the usage and exit 2. Any other error ends the script with exit code 1. SIGTERM ends it at once.
 
 import { spawn } from 'node:child_process'
-import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { constants } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -60,7 +63,7 @@ type Target = {
   name?: string
   context?: string
   command?: string | string[]
-  after?: Id[]
+  after?: Id | Id[]
   needs_success?: unknown
   expected_jobs?: number
   appear_minutes?: number
@@ -188,7 +191,9 @@ async function pollCommand(t: Target): Promise<Result> {
   const argv: Argv = windows ? [process.env.ComSpec || join(process.env.SystemRoot ?? '', 'System32', 'cmd.exe'), '/c', `"${words.join(' ')}"`] : ['/bin/sh', '-c', ...words]
   const proc = await io.exec(argv, 120, windows)
   if (proc.status !== 0) throw new Error(lastLine(proc.stderr) ?? `command exited ${proc.status}`)
-  return JSON.parse(proc.stdout)
+  const result = JSON.parse(proc.stdout)
+  if (typeof result?.state !== 'string') throw new Error('the command printed no "state"')
+  return result
 }
 
 async function poll(t: Target, st: TargetState): Promise<Result> {
@@ -207,8 +212,8 @@ async function poll(t: Target, st: TargetState): Promise<Result> {
 
 /** Decide what a target that hasn't appeared yet means. */
 function resolveAbsent(t: Target, st: TargetState, states: Map<Id, string>, now: number, m: WatchMap, labels: Map<Id, string>): Partial<Result> {
-  // A string `after` reads as its characters.
-  const deps: Id[] = Array.from(t.after || [])
+  // One id may stand alone, without a list around it.
+  const deps: Id[] = Array.isArray(t.after) ? t.after : t.after === undefined ? [] : [t.after]
   const appear = 60 * (t.appear_minutes ?? m.appear_minutes ?? 10)
   const label = (d: Id) => labels.get(d) ?? d
   let since: number
@@ -300,10 +305,16 @@ function load(path: string): unknown {
   }
 }
 
+// A temporary file of its own, renamed over the state file: a reader sees the old state or the new one, never a part,
+// and 2 writers never write into the same temporary file.
 function save(path: string, data: State): void {
-  const tmp = `${path}.tmp`
-  writeFileSync(tmp, JSON.stringify(data, null, 2))
-  renameSync(tmp, path)
+  const tmp = `${path}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`
+  try {
+    writeFileSync(tmp, JSON.stringify(data, null, 2), { flag: 'wx' })
+    renameSync(tmp, path)
+  } finally {
+    rmSync(tmp, { force: true })
+  }
 }
 
 function isMap(m: unknown): m is WatchMap {
@@ -320,20 +331,29 @@ export async function run(mapPath: string, once: boolean, budget: number): Promi
   const state = (load(statePath) ?? { started: io.time(), targets: {} }) as State
   const targets = m.targets
   const labels = new Map<Id, string>()
+  // By the id as the state file keys it: 1 and "1" share a record there.
+  const ids = new Set<string>()
   for (const t of targets) {
     if (t?.id === undefined) throw new Error(`a target in ${mapPath} has no id`)
+    if (ids.has(String(t.id))) {
+      io.emit(`ERROR map ${mapPath} has more than 1 target with the id ${JSON.stringify(String(t.id))}`)
+      return 2
+    }
+    ids.add(String(t.id))
     labels.set(t.id, String(t.label ?? t.id))
   }
   const pollS = m.poll_seconds ?? 30
   const stallS = 60 * (m.stall_minutes ?? 30)
   const maxS = 60 * (m.max_minutes ?? 180)
   const began = io.time()
+  // The targets whose streak of failed polls this run has printed ERROR for: the count lives on in the state file, so
+  // a later run, perhaps after a fix, prints ERROR again at its first poll that still fails.
+  const erred = new Set<string>()
 
   if (once) io.emit(`SNAPSHOT ${targets.length} targets for ${m.context ?? 'this change'}: ${[...labels.values()].join(', ')}`)
 
   for (;;) {
     const now = io.time()
-    // By target id: targets that share an id share one entry, as they share one record in the state file.
     const states = new Map<Id, string>()
     const summary: string[] = []
     let actionable = false
@@ -346,18 +366,19 @@ export async function run(mapPath: string, once: boolean, budget: number): Promi
       try {
         r = await poll(t, st)
         st.errors = 0
+        erred.delete(String(t.id))
       } catch (error) {
         // one bad poll must not kill the watch
         st.errors = (st.errors ?? 0) + 1
-        if (st.errors === ERROR_STREAK) {
+        if (st.errors >= ERROR_STREAK && !erred.has(String(t.id))) {
           io.emit(`ERROR ${label}: ${error instanceof Error ? error.message : String(error)}`)
+          erred.add(String(t.id))
           actionable = true
         }
         states.set(t.id, st.last_state ?? 'queued')
         summary.push(`${label} poll failing`)
         continue
       }
-      if (typeof r?.state !== 'string') throw new Error(`the poll of ${label} gave no state`)
       if (r.state === 'absent') r = { ...r, ...resolveAbsent(t, st, states, now, m, labels) }
       const s = r.state
       states.set(t.id, s)
@@ -386,9 +407,7 @@ export async function run(mapPath: string, once: boolean, budget: number): Promi
       if (s === 'queued') {
         const since = (st.queued_since ??= now)
         if (now - since > stallS && !st.stalled) {
-          // A url that is there but null prints as null.
-          const url = r.url === undefined ? '' : String(r.url)
-          io.emit(`STALLED ${label}: queued for ${Math.floor((now - since) / 60)} min ${url}`.trimEnd())
+          io.emit(`STALLED ${label}: queued for ${Math.floor((now - since) / 60)} min${r.url ? ` ${r.url}` : ''}`)
           st.stalled = true
           actionable = true
         }
@@ -404,7 +423,8 @@ export async function run(mapPath: string, once: boolean, budget: number): Promi
       if (once) io.emit(`PROGRESS ${describe(label, r, t.expected_jobs)}`)
     }
 
-    save(statePath, state)
+    // A snapshot leaves the state to the watcher: what it marks as reported, a watcher would never print.
+    if (!once) save(statePath, state)
     const settled = [...states.values()].filter(isSettled).length
     const total = targets.length
     if (settled === total) {

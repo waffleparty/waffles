@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
@@ -81,6 +81,14 @@ describe('watch', () => {
       }
     })
 
+    test('targets that share an id print ERROR and exit 2, since they would share one record', async () => {
+      writeMap({ targets: [{ id: 'ci', label: 'CI', kind: 'gh-run', repo: 'o/r', run_id: 1 }, { id: 'ci', label: 'CI again', kind: 'gh-run', repo: 'o/r', run_id: 2 }] })
+      assert.deepEqual(await watch(true), { code: 2, lines: [`ERROR map ${map} has more than 1 target with the id "ci"`] })
+      writeMap({ targets: [{ id: 1, kind: 'gh-run', repo: 'o/r', run_id: 1 }, { id: '1', kind: 'gh-run', repo: 'o/r', run_id: 2 }] })
+      assert.deepEqual(await watch(false), { code: 2, lines: [`ERROR map ${map} has more than 1 target with the id "1"`] })
+      assert.deepEqual(calls, [])
+    })
+
     test('minutes in the map may be fractions of a minute', async () => {
       writeMap({ max_minutes: 1.5, targets: [{ id: 'd', label: 'Deploy', kind: 'gh-workflow', repo: 'o/r', workflow: 'deploy.yml', sha: 'abc', appear_minutes: 0.5 }] })
       answer = () => ok([])
@@ -99,6 +107,15 @@ describe('watch', () => {
       assert.equal(timeout.lines[1], 'ALL_DONE incomplete')
       // 90 s is not past 1.5 minutes; the poll after it is.
       assert.deepEqual(sleeps, [30, 30, 30, 30])
+    })
+
+    test('a write of the state file leaves the temporary file of another writer alone', async () => {
+      writeMap({ targets: [{ id: 'ci', label: 'CI', kind: 'gh-run', repo: 'o/r', run_id: 1 }] })
+      writeFileSync(`${map}.state.json.tmp`, 'another writer')
+      answer = () => ok({ status: 'completed', conclusion: 'success', url: 'https://run/1', jobs: [] })
+      assert.deepEqual((await watch(false)).lines, ['DONE CI: success https://run/1', 'ALL_DONE success'])
+      assert.equal(readFileSync(`${map}.state.json.tmp`, 'utf8'), 'another writer')
+      assert.deepEqual(readdirSync(tmp).sort(), ['abc1234.json', 'abc1234.json.state.json', 'abc1234.json.state.json.tmp'])
     })
 
     test('a state file with its own spacing and key order still reads', async () => {
@@ -167,8 +184,24 @@ describe('watch', () => {
       assert.deepEqual((await watch(true)).lines.slice(1), ['DONE CI: success https://run/1', 'PROGRESS Deploy preview: running', 'PENDING 1/2 targets settled'])
       assert.deepEqual(calls[1]?.argv, ['gh', 'run', 'list', '--repo', 'o/r', '--workflow', 'deploy.yml', '--commit', 'abc', '-L', '20', '--json', 'databaseId,createdAt,event'])
       assert.deepEqual(calls[2]?.argv.slice(0, 4), ['gh', 'run', 'view', '9'])
-      await watch(true)
+      // A watcher keeps the run it found; a snapshot writes no state, so it finds the run again.
+      await watch(false)
+      assert.deepEqual(calls.map((call) => call.argv[2]), ['view', 'list', 'view'])
+      await watch(false, 0)
       assert.deepEqual(calls.map((call) => call.argv[2]), ['view', 'view'])
+    })
+
+    test('gh-workflow: after may name its upstream as 1 string', async () => {
+      writeMap({
+        targets: [
+          { id: 'ci', label: 'CI', kind: 'gh-run', repo: 'o/r', run_id: 1 },
+          { id: 'deploy', label: 'Deploy', kind: 'gh-workflow', repo: 'o/r', workflow: 'deploy.yml', sha: 'abc', after: 'ci' },
+        ],
+      })
+      answer = (argv) => (argv[2] === 'list' ? ok([]) : ok({ status: 'in_progress', conclusion: null, url: 'https://run/1', jobs: [] }))
+      assert.deepEqual((await watch(true)).lines.slice(1, 3), ['PROGRESS CI: running', 'PROGRESS Deploy: starts after CI'])
+      answer = (argv) => (argv[2] === 'list' ? ok([]) : ok({ status: 'completed', conclusion: 'failure', url: 'https://run/1', jobs: [] }))
+      assert.deepEqual((await watch(false)).lines, ['FAIL CI: failure https://run/1', 'SKIPPED Deploy: CI did not succeed', 'ALL_DONE failure'])
     })
 
     test('gh-workflow: an upstream that failed skips it, and one that never appears goes missing', async () => {
@@ -248,6 +281,8 @@ describe('watch', () => {
         [{ kind: 'command', command: 'x' }, { status: 0, stdout: 'not json', stderr: '' }, 'JSON'],
         [{ kind: 'gh-run', repo: 'o/r' }, ok({}), 'run_id'],
         [{ kind: 'command' }, ok({}), 'command'],
+        [{ kind: 'command', command: 'x' }, ok({ url: 'https://ci/1' }), 'state'],
+        [{ kind: 'command', command: 'x' }, ok(null), 'state'],
         [{ kind: 'command', command: 'x' }, { status: 4, stdout: '', stderr: '  \n' }, 'command exited 4'],
         [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, { status: 137, stdout: '', stderr: '' }, 'gh exited 137'],
         [{ kind: 'gh-run', repo: 'o/r', run_id: 1 }, ok(null), ''],
@@ -263,6 +298,20 @@ describe('watch', () => {
         assert.ok(lines[0]?.includes(text), lines[0])
         assert.equal(lines[1], 'RETURN')
       }
+    })
+
+    test('a new run prints ERROR again at its first poll that still fails', async () => {
+      writeMap({ targets: [{ id: 't', label: 'GL', kind: 'command', command: 'x' }] })
+      answer = () => ({ status: 1, stdout: '', stderr: 'down' })
+      assert.deepEqual((await watch(false)).lines, ['ERROR GL: down', 'RETURN'])
+      assert.equal(calls.length, 3)
+      assert.deepEqual((await watch(false)).lines, ['ERROR GL: down', 'RETURN'])
+      assert.equal(calls.length, 1)
+      // A streak cut short by the budget goes on in the next run: 2 failed polls, then 1 more.
+      rmSync(`${map}.state.json`)
+      assert.deepEqual((await watch(false, 30)).lines, ['CONTINUE GL poll failing'])
+      assert.deepEqual((await watch(false)).lines, ['ERROR GL: down', 'RETURN'])
+      assert.equal(calls.length, 1)
     })
 
     test('a poll that succeeds resets the count', async () => {
@@ -311,10 +360,31 @@ describe('watch', () => {
       assert.deepEqual((await watch(false, 60)).lines, ['CONTINUE CI queued'])
     })
 
+    test('STALLED leaves out a url that is null', async () => {
+      writeMap({ stall_minutes: 1, targets: [{ id: 'ci', label: 'CI', kind: 'command', command: 'x' }] })
+      answer = () => ok({ state: 'queued', url: null })
+      assert.deepEqual((await watch(false)).lines, ['STALLED CI: queued for 1 min', 'RETURN'])
+    })
+
     test('a job that waits for approval prints WAITING, and the result is waiting', async () => {
       writeMap({ targets: [{ id: 'd', label: 'Deploy', kind: 'gh-run', repo: 'o/r', run_id: 5 }] })
       answer = () => ok({ status: 'waiting', url: 'https://run/5', jobs: [job('build', 'completed', 'success'), job('deploy', 'waiting', null)] })
       assert.deepEqual((await watch(false)).lines, ['WAITING Deploy: job deploy waiting for approval https://run/5', 'ALL_DONE waiting'])
+    })
+
+    test('a snapshot while a watcher runs takes no event from it', async () => {
+      writeMap({ targets: [{ id: 'a', label: 'A', kind: 'gh-run', repo: 'o/r', run_id: 1 }, { id: 'b', label: 'B', kind: 'gh-run', repo: 'o/r', run_id: 2 }] })
+      let a = 'in_progress'
+      answer = (argv) =>
+        argv[3] === '1'
+          ? ok({ status: a, conclusion: a === 'completed' ? 'failure' : null, url: 'https://run/1', jobs: [] })
+          : ok({ status: 'in_progress', conclusion: null, url: 'https://run/2', jobs: [] })
+      assert.deepEqual((await watch(false, 30)).lines, ['CONTINUE A running · B running'])
+      const saved = readFileSync(`${map}.state.json`, 'utf8')
+      a = 'completed'
+      assert.deepEqual((await watch(true)).lines.slice(1), ['FAIL A: failure https://run/1', 'PROGRESS B: running', 'PENDING 1/2 targets settled'])
+      assert.equal(readFileSync(`${map}.state.json`, 'utf8'), saved)
+      assert.deepEqual((await watch(false)).lines, ['FAIL A: failure https://run/1', 'RETURN'])
     })
 
     test('the state file keeps the per-target records between runs', async () => {
