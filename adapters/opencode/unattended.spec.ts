@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { CLOSED, NO_ANSWER, permissionAsked, submitUnattended } from '../../core/unattended.ts'
+import { closed, noAnswer, permissionAsked, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
 import { NAMES } from './server.ts'
 import { guardQuestion } from './unattended.ts'
@@ -60,7 +60,7 @@ test("the run's start question takes the answer given in time", async () => {
 test("the run's start question ends unanswered after its wait, and leaves the screen", async () => {
   const $ = await hostIn(true)
   const tool = questionTool()
-  await assert.rejects(guardQuestion(tool.execute, async () => ({ $, isChild: false }), 20)(null, context()), new RegExp(`^Error: ${NO_ANSWER.slice(0, 30)}`))
+  await assert.rejects(guardQuestion(tool.execute, async () => ({ $, isChild: false }), 20)(null, context()), new RegExp(`^Error: ${noAnswer(NAMES).slice(0, 30)}`))
   // The question's own signal aborted, which is what takes OpenCode's question off the screen.
   assert.equal(tool.calls[0]?.aborted, true)
   // The start question is no longer on the screen: a permission request is denied again.
@@ -73,7 +73,7 @@ test("a dismissed start question tells the model what to do, rather than ending 
   const asked = guardQuestion(tool.execute, async () => ({ $, isChild: false }), 1000)(null, context())
   await shown(tool)
   tool.dismiss()
-  await assert.rejects(asked, new RegExp(`^Error: ${CLOSED.slice(0, 30)}`))
+  await assert.rejects(asked, new RegExp(`^Error: ${closed(NAMES).slice(0, 30)}`))
 })
 
 test('a session the plugin cannot read leaves the question alone', async () => {

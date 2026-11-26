@@ -122,6 +122,10 @@ export const NAMES: Names = {
   planTool: 'mcp__waffles__plan',
   ask: 'AskUserQuestion',
   planMode: "Claude Code's plan mode",
+  // A plugin's skill is `/<plugin>:<skill>` in the prompt and `<plugin>:<skill>` in the Skill tool.
+  skill: name => `waffles:${name}`,
+  runCommand: '/waffles:non-interactive',
+  command: name => `/${name}`,
 }
 
 /** The core's host on Claude Code: each call goes to `$`. */

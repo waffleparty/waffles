@@ -1,13 +1,13 @@
-import { memoryOf, type Host, type Prompt } from './host.ts'
+import { memoryOf, runName, skillName, type Host, type Names, type Prompt } from './host.ts'
 
-// A /waffles:non-interactive run lasts from its command until the person types a prompt.
+// A run of the non-interactive skill lasts from its command until the person types a prompt.
 const RUN_COMMAND = /(^|:)non-interactive$/
 // Auto mode pauses after 3 classifier blocks in a row and prompts for every write until one
 // is approved. If a deny doesn't lift that, every write is denied: past this many in a row
 // the run is stuck, so it wraps up instead.
 const STUCK_DENIALS = 5
 
-const AWAY = "Denied: The user is away during a /waffles:non-interactive run and can't approve this. Sending the same action again gets the same answer."
+const away = (names: Names) => `Denied: The user is away during a ${runName(names)} and can't approve this. Sending the same action again gets the same answer.`
 const MAIN_NEXT = "Reach the goal another way if there is one. If there is none, leave the step to the user in the plan outline, with the exact command or step and this denial's text as the reason, and carry on with the rest of the work."
 const AGENT_NEXT = 'Reach the goal another way if there is one. If there is none, report it in your result, with the exact command or step, and carry on with the rest of your piece.'
 const MAIN_STUCK = `${STUCK_DENIALS} permission requests in a row have been denied, so work that needs approval can't go on. Start nothing new: leave what's blocked to the user in the plan outline, and finish as the skill's Finishing section says.`
@@ -20,11 +20,15 @@ const START_WINDOW_MS = 300_000
 /** How long the run's start question waits for the person. */
 export const START_ANSWER_MS = 60_000
 /** The answer to a start question nobody answered in time. */
-export const NO_ANSWER = `No answer in ${START_ANSWER_MS / 1000} seconds. The user has stepped away. Take what the waffles:non-interactive skill says for no answer, and ask nothing else during this run.`
+export const noAnswer = (names: Names) =>
+  `No answer in ${START_ANSWER_MS / 1000} seconds. The user has stepped away. Take what the ${skillName(names, 'non-interactive')} skill says for no answer, and ask nothing else during this run.`
 /** The answer to a start question closed without an answer. */
-export const CLOSED = 'The question was closed without an answer. Take what the waffles:non-interactive skill says for no answer, and ask nothing else during this run.'
-const MAIN_QUESTION = "Denied: The user is away during a /waffles:non-interactive run and can't answer. A run asks 1 question, at its start. Make the decision yourself, note it on its step in the plan outline if it is worth checking, and keep going."
-const AGENT_QUESTION = "Denied: The user is away during a /waffles:non-interactive run and can't answer. Report the question in your result, and carry on with the rest of your piece."
+export const closed = (names: Names) =>
+  `The question was closed without an answer. Take what the ${skillName(names, 'non-interactive')} skill says for no answer, and ask nothing else during this run.`
+const mainQuestion = (names: Names) =>
+  `Denied: The user is away during a ${runName(names)} and can't answer. A run asks 1 question, at its start. Make the decision yourself, note it on its step in the plan outline if it is worth checking, and keep going.`
+const agentQuestion = (names: Names) =>
+  `Denied: The user is away during a ${runName(names)} and can't answer. Report the question in your result, and carry on with the rest of your piece.`
 
 // The run is in the session's values (`run`, `runDenials`, `runStartedAt`, `runAsking`), so every
 // process that serves the session reads the same run. One process keeps, for one session, the calls
@@ -93,14 +97,14 @@ export async function permissionAsked(
     if (isQuestion && !isAgent && (await $.state.get('runAsking'))) return null
     const denials = (await $.state.get('runDenials')) + 1
     if (isCounted) await $.state.set('runDenials', denials)
-    return denials >= STUCK_DENIALS ? (isAgent ? AGENT_STUCK : MAIN_STUCK) : `${AWAY} ${isAgent ? AGENT_NEXT : MAIN_NEXT}`
+    return denials >= STUCK_DENIALS ? (isAgent ? AGENT_STUCK : MAIN_STUCK) : `${away($.names)} ${isAgent ? AGENT_NEXT : MAIN_NEXT}`
   })
 }
 
 /**
  * The model asks the person a question. Outside a run it goes through (`pass`). During one, the run's
  * start question goes to the person (`ask`): the adapter shows it for START_ANSWER_MS, answers
- * NO_ANSWER or CLOSED when nobody does, and calls `questionDone` after. Every other question is
+ * `noAnswer` or `closed` when nobody does, and calls `questionDone` after. Every other question is
  * refused at once (`deny`), so none waits all night.
  */
 export async function questionAsked($: Host, isAgent: boolean): Promise<{ pass: true } | { ask: true } | { deny: string }> {
@@ -108,7 +112,7 @@ export async function questionAsked($: Host, isAgent: boolean): Promise<{ pass: 
   // fails, can't both use it.
   const taken = await serial($, async (): Promise<{ pass: true } | { deny: string } | { at: number | null }> => {
     if (!(await $.state.get('run'))) return { pass: true }
-    if (isAgent) return { deny: AGENT_QUESTION }
+    if (isAgent) return { deny: agentQuestion($.names) }
     const at = await $.state.get('runStartedAt')
     if (at !== null) await $.state.set('runStartedAt', null)
     return { at }
@@ -116,7 +120,7 @@ export async function questionAsked($: Host, isAgent: boolean): Promise<{ pass: 
   if (!('at' in taken)) return taken
   const { at } = taken
   const isStart = at !== null && (await $.clock.now()) - at <= START_WINDOW_MS
-  if (!isStart) return { deny: MAIN_QUESTION }
+  if (!isStart) return { deny: mainQuestion($.names) }
   await serial($, () => $.state.set('runAsking', true))
   return { ask: true }
 }
@@ -128,7 +132,7 @@ export async function questionDone($: Host): Promise<void> {
 
 /** The check of a question failed. It must not leave a dialog open all night: during a run, the refusal's text; else null. */
 export async function questionFailed($: Host): Promise<string | null> {
-  return (await $.state.get('run')) ? MAIN_QUESTION : null
+  return (await $.state.get('run')) ? mainQuestion($.names) : null
 }
 
 /** The platform checked a tool call that isn't read-only, by its ID. */

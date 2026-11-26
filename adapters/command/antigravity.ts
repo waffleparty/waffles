@@ -18,6 +18,11 @@ export const NAMES: Names = {
   planTool: `mcp_${SERVER}_plan`,
   ask: 'ask_question',
   planMode: "Antigravity's plan mode",
+  // The plugin's skills are `waffles:<skill>`, and a prompt that starts with the run's skill starts a run.
+  skill: name => `waffles:${name}`,
+  runCommand: '/waffles:non-interactive',
+  // The hook runs a prompt that is exactly a mode command.
+  command: name => `/${name}`,
 }
 
 /** The shell tool's name in hook input. */

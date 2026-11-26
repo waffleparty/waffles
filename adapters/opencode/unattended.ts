@@ -1,5 +1,5 @@
 import type { Host } from '../../core/host.ts'
-import { CLOSED, NO_ANSWER, questionAsked, questionDone, questionFailed, START_ANSWER_MS } from '../../core/unattended.ts'
+import { closed, noAnswer, questionAsked, questionDone, questionFailed, START_ANSWER_MS } from '../../core/unattended.ts'
 
 /** OpenCode's built-in tool the model asks the person a question with. */
 export const QUESTION_TOOL = 'question'
@@ -47,9 +47,9 @@ export function guardQuestion<C extends Context, R>(
       const answer = await Promise.race([original(input, { ...context, signal: stop.signal }).catch(() => 'closed' as const), timeout])
       if (answer === 'timeout') {
         stop.abort()
-        throw new Error(NO_ANSWER)
+        throw new Error(noAnswer(session.$.names))
       }
-      if (answer === 'closed') throw new Error(CLOSED)
+      if (answer === 'closed') throw new Error(closed(session.$.names))
       return answer
     } finally {
       clearTimeout(timer)

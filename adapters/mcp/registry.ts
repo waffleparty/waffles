@@ -132,15 +132,20 @@ export function seenAsOf(env: NodeJS.ProcessEnv, tools: readonly Tool[]): (tool:
 
 /**
  * The names the core's text uses. Where the client has no tool to ask the person a question with, the
- * default ask reads as plain words and the model asks in the chat.
+ * default ask reads as plain words and the model asks in the chat. A skill goes by its folder name
+ * after `WAFFLES_SKILL_PREFIX`, and a run by `WAFFLES_RUN_COMMAND`, unset where the client's form is not
+ * known. The mode commands are this server's prompts, which the instructions name as `/prod`.
  */
 function namesOf(env: NodeJS.ProcessEnv, seenAs: (tool: string) => string): Names {
+  const prefix = env.WAFFLES_SKILL_PREFIX ?? ''
   return {
     assistant: 'The agent',
     product: 'the MCP client',
     planTool: seenAs('plan'),
     ask: env.WAFFLES_ASK_TOOL || 'a multiple-choice question',
     planMode: null,
+    skill: name => `${prefix}${name}`,
+    ...(env.WAFFLES_RUN_COMMAND ? { runCommand: env.WAFFLES_RUN_COMMAND } : {}),
   }
 }
 

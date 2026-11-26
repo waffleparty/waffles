@@ -74,7 +74,7 @@ test('the mode tool reads and sets the mode, and refuses a mode it lacks', LIMIT
   assert.equal(text(await s.request('tools/call', { name: 'mode', arguments: {} })), 'waffles mode: production')
   const set = await s.request('tools/call', { name: 'mode', arguments: { set: 'backlog' } })
   assert.equal(set.result.isError, false)
-  assert.match(text(set), /^waffles mode: backlog\. Each typed prompt goes verbatim to the waffles:backlog skill/)
+  assert.match(text(set), /^waffles mode: backlog\. Each typed prompt goes verbatim to the backlog skill/)
   assert.equal(text(await s.request('tools/call', { name: 'mode', arguments: {} })), 'waffles mode: backlog')
   // Setting the mode in force changes nothing and states it.
   assert.equal(text(await s.request('tools/call', { name: 'mode', arguments: { set: 'backlog' } })), 'waffles mode: backlog')

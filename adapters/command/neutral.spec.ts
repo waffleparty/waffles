@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { ASSESS_PROMPT, MODES_TEXT } from '../../core/modes.ts'
+import { ASSESS_PROMPT, modesText } from '../../core/modes.ts'
 import { planRules } from '../../core/plan-prompt.ts'
 import { nodeHost, sessionPath } from '../node/host.ts'
 import { handle, modeCommandOf, promptOf, type NeutralEvent } from './neutral.ts'
@@ -40,7 +40,7 @@ const reader = (where: { state: string; cwd: string }, sessionId = 's1') => node
 test('the session start adds the rules, the mode, and no plan outline block outside a plan outline', async () => {
   const where = await temp()
   const { context } = await event(where, { kind: 'start', source: 'startup' })
-  assert.deepEqual(context, [MODES_TEXT, planRules(NAMES), 'waffles mode: production'])
+  assert.deepEqual(context, [modesText(NAMES), planRules(NAMES), 'waffles mode: production'])
 })
 
 test('a mode command changes the mode, and the next process starts in it', async () => {

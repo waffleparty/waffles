@@ -5,6 +5,7 @@
       "args": ["${CURSOR_PLUGIN_ROOT}/adapters/mcp/server.ts"],
       "env": {
         "WAFFLES_PLAN_TOOL": "waffles MCP server's plan",
+        "WAFFLES_RUN_COMMAND": "/non-interactive",
         "WAFFLES_HOOKS": "1"
       }
     }

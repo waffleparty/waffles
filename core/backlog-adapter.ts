@@ -1,4 +1,4 @@
-import type { Host } from './host.ts'
+import { skillName, type Host } from './host.ts'
 
 // The line a repo names its backlog adapter with, in its AGENTS.md or, with none, its CLAUDE.md:
 // `Backlog adapter: <skill>`, the name with or without backticks. skills/backlog/adapter.md defines it.
@@ -27,5 +27,5 @@ export async function namedAdapter($: Host): Promise<{ skill: string; file: stri
 export async function adapterContext($: Host): Promise<string> {
   const named = await namedAdapter($).catch(() => null)
   if (!named) return ''
-  return `backlog adapter: this repo names \`${named.skill}\` in ${named.file}. Before the first task in this conversation, run the waffles:init-check skill, unless it already ran in this conversation. Its failures never stop the work.`
+  return `backlog adapter: this repo names \`${named.skill}\` in ${named.file}. Before the first task in this conversation, run the ${skillName($.names, 'init-check')} skill, unless it already ran in this conversation. Its failures never stop the work.`
 }

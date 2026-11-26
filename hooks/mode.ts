@@ -3,13 +3,13 @@ import type { EngineInterface, On, PromptSubmitInput, SessionEndInput, SessionMe
 import {
   ASSESS_PROMPT,
   clearMode,
-  COMMANDS,
+  commandsOf,
   COMPACT_INSTRUCTIONS,
   completeMode as complete,
   interactionMode as interaction,
   isModeNote,
   modeContext as context,
-  MODES_TEXT,
+  modesText,
   runBacklog,
   runProd,
   runRapid,
@@ -18,7 +18,7 @@ import {
   wafflesMode as waffles,
 } from '../core/modes.ts'
 import type { InteractionMode, WafflesMode } from '../types'
-import { hostOf } from './host'
+import { hostOf, NAMES } from './host'
 import { promptOf } from './unattended'
 
 // The engine lists a module's commands from its source, so their names are written here; core/modes.ts
@@ -27,12 +27,12 @@ const BACKLOG_COMMAND = 'backlog-entry'
 const PROD_COMMAND = 'prod'
 const RAPID_COMMAND = 'rapid'
 
-const described = (name: string) => COMMANDS.find(c => c.name === name)?.description ?? ''
+const described = (name: string) => commandsOf(NAMES).find(c => c.name === name)?.description ?? ''
 
 /** The modes' definitions as a system prompt section: the same bytes in every request, so the prompt cache holds. */
-export const MODES_SECTION = { id: 'waffles:modes', scope: 'session', text: MODES_TEXT } as const
+export const MODES_SECTION = { id: 'waffles:modes', scope: 'session', text: modesText(NAMES) } as const
 
-const isNote = (m: SessionMessage) => m.role === 'user' && !m.toolResults?.length && isModeNote(m.text)
+const isNote = (m: SessionMessage) => m.role === 'user' && !m.toolResults?.length && isModeNote(NAMES, m.text)
 
 /** The interaction mode, for the footer under the prompt. */
 export async function interactionMode($: EngineInterface): Promise<InteractionMode> {

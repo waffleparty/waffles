@@ -6,6 +6,9 @@
       "command": "node",
       "args": ["${PLUGIN_ROOT}/adapters/mcp/server.ts"],
       "env": {
+        "WAFFLES_ASK_TOOL": "request_user_input",
+        "WAFFLES_SKILL_PREFIX": "waffles:",
+        "WAFFLES_RUN_COMMAND": "/waffles:non-interactive",
         "WAFFLES_HOOKS": "1"
       }
     }

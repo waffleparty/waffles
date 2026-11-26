@@ -2,9 +2,9 @@ import type { Host, InteractionMode } from '../../core/host.ts'
 import {
   ASSESS_PROMPT,
   BACKLOG_COMMAND,
-  COMMANDS,
+  commandsOf,
   modeContext,
-  MODES_TEXT,
+  modesText,
   PROD_COMMAND,
   RAPID_COMMAND,
   runBacklog,
@@ -79,7 +79,8 @@ const MODE_TOOL: Tool = {
 export const modesModule: Module = {
   name: 'modes',
   tools: [MODE_TOOL],
-  prompts: COMMANDS.map(({ name, description }) => ({
+  // The prompts are named as the instructions name them, with a slash.
+  prompts: commandsOf({}).map(({ name, description }) => ({
     name,
     description,
     get: async session => {
@@ -89,8 +90,8 @@ export const modesModule: Module = {
   })),
   // Where the platform's hooks run, they send the mode statement with the first message, so the
   // instructions don't say that none comes.
-  instructions: ({ seenAs, hasHooks }) =>
-    `${MODES_TEXT}
+  instructions: ({ names, seenAs, hasHooks }) =>
+    `${modesText(names)}
 
 On this client the /${PROD_COMMAND}, /${RAPID_COMMAND} and /${BACKLOG_COMMAND} commands are prompts of the waffles MCP server, ${
       hasHooks ? 'and the' : 'and no mode statement comes with the first message: the'

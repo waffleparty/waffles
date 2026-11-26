@@ -10,10 +10,10 @@ import { lowestLevel } from '../../core/effort.ts'
 import { INITIAL, type AgentInfo, type Host, type Names, type SessionState } from '../../core/host.ts'
 import {
   ASSESS_PROMPT,
-  COMMANDS,
+  commandsOf,
   completeMode,
   modeContext,
-  MODES_TEXT,
+  modesText,
   runBacklog,
   runProd,
   runRapid,
@@ -61,6 +61,10 @@ export const NAMES: Names = {
   planTool: 'waffles_plan',
   ask: 'question',
   planMode: "OpenCode's plan agent",
+  // A skill goes by its folder name, and a prompt names one with `@<name>`.
+  skill: name => name,
+  runCommand: '@non-interactive',
+  command: name => `/${name}`,
 }
 
 // The session's metadata key that holds the values a session must get back when it is reopened.
@@ -348,7 +352,7 @@ const plugin: Plugin.Plugin = {
           await notify(sessionID, await effort.command(session.$, prompt.text))
         },
       })
-      for (const { name, description } of COMMANDS) {
+      for (const { name, description } of commandsOf(NAMES)) {
         editor.add({
           name,
           description,
@@ -364,10 +368,11 @@ const plugin: Plugin.Plugin = {
     })
 
     // The rules go last in the system prompt, with the same bytes in every request, so the prompt cache holds.
+    const modes = modesText(NAMES)
     const rules = planRules(NAMES)
     // The main session's turn runs at the level auto effort chose for it; a subagent runs at its own variant.
     const context = await ctx.session.hook('context', async event => {
-      event.system.push({ type: 'text', text: MODES_TEXT }, { type: 'text', text: rules })
+      event.system.push({ type: 'text', text: modes }, { type: 'text', text: rules })
       const session = await sessionOf(event.sessionID).catch(() => null)
       if (!session || session.isChild) return
       const options = await effort.request(session.$, event.sessionID, event.model).catch(() => null)

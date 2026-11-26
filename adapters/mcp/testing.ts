@@ -22,7 +22,7 @@ export const META = {
 export const LIMIT = { timeout: 20_000 }
 
 // The variables a test may set; any other test's value is never inherited from the shell.
-const OURS = ['WAFFLES_SESSION_ID', 'WAFFLES_PLAN_TOOL', 'WAFFLES_ASK_TOOL', 'WAFFLES_TOOL_PREFIX', 'WAFFLES_MCP_MODULES', 'WAFFLES_DEBUG']
+const OURS = ['WAFFLES_SESSION_ID', 'WAFFLES_PLAN_TOOL', 'WAFFLES_ASK_TOOL', 'WAFFLES_SKILL_PREFIX', 'WAFFLES_RUN_COMMAND', 'WAFFLES_TOOL_PREFIX', 'WAFFLES_MCP_MODULES', 'WAFFLES_DEBUG']
 
 // A test that fails part way leaves its server running: `stopAll` stops each, so the run ends.
 const children = new Set<ReturnType<typeof spawn>>()

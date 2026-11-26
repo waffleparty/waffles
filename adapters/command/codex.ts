@@ -13,6 +13,11 @@ export const NAMES: Names = {
   planTool: 'mcp__waffles__plan',
   ask: 'request_user_input',
   planMode: "Codex's Plan mode",
+  // The plugin's skills are `waffles:<skill>`, and a prompt that starts with the run's skill starts a run.
+  skill: name => `waffles:${name}`,
+  runCommand: '/waffles:non-interactive',
+  // The hook runs a prompt that is exactly a mode command.
+  command: name => `/${name}`,
 }
 
 /** The shell tool's name in hook input. */

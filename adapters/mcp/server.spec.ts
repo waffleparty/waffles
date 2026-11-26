@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
 
-import { COMMANDS } from '../../core/modes.ts'
+import { commandsOf } from '../../core/modes.ts'
 import { PLAN_TOOL } from '../../core/plan.ts'
 import { CURRENT, folders, LIMIT, META, PREVIOUS, server, stopAll, text, type Message } from './testing.ts'
 
@@ -199,7 +199,7 @@ test('the mode commands are prompts on both revisions', LIMIT, async () => {
   const s = server(work, state)
   await s.initialize()
   const legacy = await s.request('prompts/list')
-  assert.deepEqual(legacy.result, { prompts: COMMANDS.map(({ name, description }) => ({ name, description })) })
+  assert.deepEqual(legacy.result, { prompts: commandsOf({}).map(({ name, description }) => ({ name, description })) })
   const got = await s.request('prompts/get', { name: 'backlog-entry' })
   assert.match(got.result.description, /^Backlog mode: on\./)
   assert.equal(got.result.messages.length, 1)

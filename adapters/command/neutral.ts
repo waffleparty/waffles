@@ -7,7 +7,7 @@ import {
   clearMode,
   completeMode,
   modeContext,
-  MODES_TEXT,
+  modesText,
   PROD_COMMAND,
   RAPID_COMMAND,
   runBacklog,
@@ -97,7 +97,7 @@ async function start({ $, sessionId, stateFolder }: Session, source: Extract<Neu
   await startPlan($).catch(error => $.log(`the plan outline did not start: ${String(error)}`))
   // These platforms have no system prompt section a plugin writes, so the rules come first in the
   // session's context, then the blocks of the first message.
-  const blocks = [MODES_TEXT, planRules($.names), await modeContext($), await planContext($).catch(() => ''), await adapterContext($)]
+  const blocks = [modesText($.names), planRules($.names), await modeContext($), await planContext($).catch(() => ''), await adapterContext($)]
   return { context: blocks.filter(Boolean) }
 }
 

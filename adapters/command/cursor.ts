@@ -16,6 +16,11 @@ export const NAMES: Names = {
   // can follow with that tool or in the chat.
   ask: 'a multiple-choice question',
   planMode: "Cursor's Plan mode",
+  // Cursor runs a plugin's skill as `/<skill>`.
+  skill: name => name,
+  runCommand: '/non-interactive',
+  // The hook runs a prompt that is exactly a mode command.
+  command: name => `/${name}`,
 }
 
 /** The shell tool's name in hook input. */

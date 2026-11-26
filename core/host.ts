@@ -96,7 +96,29 @@ export type Names = {
   ask: string
   /** The platform's own feature named "plan mode", which the plan outline is not; null where it has none. */
   planMode: string | null
+  /**
+   * A skill of the plugin as the platform names it, from the skill's folder name: `waffles:backlog` on
+   * Claude Code. Unset, the text names it by its folder name alone, which is true anywhere.
+   */
+  skill?: (name: string) => string
+  /**
+   * What the person types to start an unattended run: `/waffles:non-interactive` on Claude Code. Unset
+   * where the platform's form is not known: the text then names the run by its skill.
+   */
+  runCommand?: string
+  /** A mode command as the person types it, from its name: `/prod`. Unset, a slash and the name. */
+  command?: (name: string) => string
 }
+
+/** A skill of the plugin by name, as the model reads it in "the … skill". */
+export const skillName = (names: Names, skill: string) => names.skill?.(skill) ?? skill
+
+/** A mode command as the person types it. */
+export const commandName = (names: Pick<Names, 'command'>, command: string) => names.command?.(command) ?? `/${command}`
+
+/** An unattended run, without its article: by the command that starts it where the platform's form is known, else by its skill. */
+export const runName = (names: Names) =>
+  names.runCommand === undefined ? `run of the ${skillName(names, 'non-interactive')} skill` : `${names.runCommand} run`
 
 /** The variables the core reads. Claude Code lists the ones a module reads from its source, so each has its name here. */
 export type EnvName = 'WAFFLES_BUILDERS_ROOT'

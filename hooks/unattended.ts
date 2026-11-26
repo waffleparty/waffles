@@ -2,10 +2,10 @@ import type { EngineInterface, On, PromptSubmitInput, Timer } from 'claude-code'
 
 import type { Prompt } from '../core/host.ts'
 import {
-  CLOSED,
+  closed,
   isRunCommand,
   isRunning as running,
-  NO_ANSWER,
+  noAnswer,
   permissionAsked,
   questionAsked,
   questionDone,
@@ -15,7 +15,7 @@ import {
   writeChecked,
   writeEnded,
 } from '../core/unattended.ts'
-import { hostOf } from './host'
+import { hostOf, NAMES } from './host'
 
 // The tool Claude asks the person a question with.
 const QUESTION = 'AskUserQuestion'
@@ -68,8 +68,8 @@ export function registerUnattended(on: On) {
     try {
       // Settling here while the dialog is open ends the dispatch beneath, and with it the dialog.
       const answer = await Promise.race([next(e).catch(() => 'closed' as const), timeout])
-      if (answer === 'timeout') return { deny: NO_ANSWER }
-      if (answer === 'closed') return { deny: CLOSED }
+      if (answer === 'timeout') return { deny: noAnswer(NAMES) }
+      if (answer === 'closed') return { deny: closed(NAMES) }
       return answer
     } finally {
       timer?.cancel()

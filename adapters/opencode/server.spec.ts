@@ -6,7 +6,7 @@ import { test } from 'node:test'
 
 import type { Entry } from '../../core/backlog-queue.ts'
 import { MERGE_QUEUE_TOOL } from '../../core/merge-queue.ts'
-import { MODES_TEXT } from '../../core/modes.ts'
+import { modesText } from '../../core/modes.ts'
 import { SUBAGENT } from '../../core/plan.ts'
 import { TOOLS } from '../../core/tools.ts'
 import plugin, { NAMES, pluginRoot, readSkills, sessionState, skillHeader } from './server.ts'
@@ -182,7 +182,7 @@ test('every model request gets the modes and the plan outline rules, with the na
   const event = { system: [] as { type: string; text: string }[] }
   await registered.hooks['session.context']!(event as never)
   assert.equal(event.system.length, 2)
-  assert.equal(event.system[0]?.text, MODES_TEXT)
+  assert.equal(event.system[0]?.text, modesText(NAMES))
   assert.match(event.system[1]?.text ?? '', /Change it only with the waffles_plan tool/)
   assert.match(event.system[1]?.text ?? '', /ask the person with question before you add it/)
   await cleanup()
