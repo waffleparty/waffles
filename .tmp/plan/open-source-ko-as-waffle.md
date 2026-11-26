@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T20:41:13.597Z
+updated: 2026-11-26T20:45:23.577Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -39,7 +39,7 @@ updated: 2026-11-26T20:41:13.597Z
   - [ ] 2.13 Make the builder limits and the remote name configurable
   - [x] 2.14 ? Verify which hook features other agent platforms offer
 - [ ] 3 Remove the working files
-- [ ] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead)
+- [ ] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead) <!-- agent=a4c6d9f150fcd181e -->
   - [x] 4.1 ? Decide where the plan outline is stored
   - [ ] 4.2 Keep the plan outline's files in the git folder, outside the working tree
   - [ ] 4.3 Mirror the plan outline to a git ref at each push, and restore from it on another machine
@@ -88,7 +88,7 @@ updated: 2026-11-26T20:41:13.597Z
     - [x] 6.13.3 Fix the checkpoint's failures after it wrote the description
     - [x] 6.13.4 Fix the item files with CRLF line ends and the pull requests with missing fields
   - [ ] 6.14 Widen the MCP server into a general front for the core
-    - [ ] 6.14.1 Refactor the server into registries for tools, prompts, and resources, with the mode commands <!-- agent=a7b5074e7a2ee6f0d -->
+    - [x] 6.14.1 Refactor the server into registries for tools, prompts, and resources, with the mode commands
     - [ ] 6.14.2 Offer the scripts as tools
     - [ ] 6.14.3 Let hook events reach the core through the server
     - [ ] 6.14.4 Look into a plan outline view through MCP Apps
