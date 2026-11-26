@@ -7,7 +7,8 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Agent | Command |
 | --- | --- |
 | Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
-| Codex | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. |
+| Codex | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/codex.md](docs/codex.md). |
+| OpenCode 2 | Name this repo in `plugins` in `opencode.jsonc`. Modes, the plan outline with its panel, and the checkpoint. |
 | Cursor | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
 
 Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, and the checkpoint. On other platforms only the skills load. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code for now.
@@ -83,7 +84,7 @@ The agents load with the plugin and are available outside the skills that start 
 ```text
 waffles/
 ├── .claude-plugin/plugin.json   Claude Code manifest
-├── .codex-plugin/plugin.json    Codex manifest
+├── plugin.json                  Codex manifest, with mcp.json for its MCP server
 ├── .cursor-plugin/plugin.json   Cursor manifest
 ├── skills/<name>/SKILL.md       Agent Skills (https://agentskills.io/specification)
 ├── agents/                      Claude Code subagents
@@ -93,6 +94,8 @@ waffles/
 │   └── *.test.ts(x)             Its tests, run by `claude plugin test`
 ├── adapters/node/               The core's host on plain Node.js
 ├── adapters/opencode/           The OpenCode 2 adapter: server part and terminal UI part
+├── adapters/command/            The adapter for platforms whose hooks run a command per event, with Codex's table
+├── adapters/mcp/                The MCP server that offers the plan outline tool
 ├── scripts/                     Node.js scripts the skills call, with their tests (*.spec.ts)
 │   └── bump-version.sh          Writes or checks the version in every manifest
 ├── types/                       Type declarations for the hooks

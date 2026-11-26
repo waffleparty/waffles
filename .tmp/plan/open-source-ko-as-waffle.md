@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T20:24:07.222Z
+updated: 2026-11-26T20:34:57.871Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -57,7 +57,7 @@ updated: 2026-11-26T20:24:07.222Z
     - [x] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
   - [x] 6.4 Serve the plan outline tool from an MCP server
   - [ ] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
-    - [ ] 6.5.1 Add the shared command adapter and the Codex hooks <!-- agent=a17b6f3c2785cc474 -->
+    - [x] 6.5.1 Add the shared command adapter and the Codex hooks
     - [ ] 6.5.2 Add the Cursor hooks
     - [ ] 6.5.3 Add the Antigravity hooks
   - [ ] 6.6 Add an in-process adapter for OpenCode <!-- agent=a1a6fafc9eb7f7370 -->
@@ -70,7 +70,7 @@ updated: 2026-11-26T20:24:07.222Z
     - [ ] 6.6.7 Document how to install waffles on OpenCode
     - [-] 6.6.8 Test the panel's resize by drag and its key scrolling on the local machine
   - [ ] 6.7 Add an Antigravity manifest
-  - [ ] 6.8 Move the Codex manifest to a root plugin.json
+  - [x] 6.8 Move the Codex manifest to a root plugin.json
   - [x] 6.9 Port the Python scripts to TypeScript
     - [x] 6.9.1 Port backlog_queue.py and builders.py
     - [x] 6.9.2 Port merge_queue.py, review_branch.py, and watch.py
@@ -87,3 +87,8 @@ updated: 2026-11-26T20:24:07.222Z
     - [x] 6.13.2 Fix the watcher's lost and repeated events
     - [x] 6.13.3 Fix the checkpoint's failures after it wrote the description
     - [x] 6.13.4 Fix the item files with CRLF line ends and the pull requests with missing fields
+  - [ ] 6.14 Widen the MCP server into a general front for the core
+    - [ ] 6.14.1 Refactor the server into registries for tools, prompts, and resources, with the mode commands <!-- agent=a7b5074e7a2ee6f0d -->
+    - [ ] 6.14.2 Offer the scripts as tools
+    - [ ] 6.14.3 Let hook events reach the core through the server
+    - [ ] 6.14.4 Look into a plan outline view through MCP Apps
