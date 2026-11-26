@@ -99,14 +99,18 @@ export async function forgetSession(folder: string, sessionId: string): Promise<
   await fs.rm(sessionPath(folder, sessionId), { force: true })
 }
 
-/** Removes the values of other sessions last written more than SESSION_MS ago. */
+/**
+ * Removes the files in the sessions folder last written more than SESSION_MS ago, other than this
+ * session's values: other sessions' values, and the files an adapter keeps beside them, including
+ * one a process that stopped midway left behind.
+ */
 export async function pruneSessions(folder: string, sessionId: string, now = Date.now()): Promise<void> {
   const dir = join(folder, 'sessions')
   const keep = `${fileOf(sessionId)}.json`
   for (const name of await fs.readdir(dir).catch(() => [] as string[])) {
-    if (name === keep || !name.endsWith('.json')) continue
+    if (name === keep) continue
     const stat = await fs.stat(join(dir, name)).catch(() => null)
-    if (stat && now - stat.mtimeMs > SESSION_MS) await fs.rm(join(dir, name), { force: true })
+    if (stat?.isFile() && now - stat.mtimeMs > SESSION_MS) await fs.rm(join(dir, name), { force: true })
   }
 }
 

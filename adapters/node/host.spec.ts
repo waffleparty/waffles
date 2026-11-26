@@ -84,6 +84,19 @@ test('forgetting a session removes its values, and old sessions are pruned', asy
   assert.equal(await $.state.get('mode'), 'production')
 })
 
+test('pruning removes the old files a session leaves beside its values, and keeps new ones', async () => {
+  const { state } = await host()
+  const dir = join(state, 'sessions')
+  await fs.mkdir(dir, { recursive: true })
+  // A take that stopped between its rename and its remove leaves the context it took.
+  const leftovers = ['old.context.jsonl', 'old.context.jsonl.4242.taken', 'old.prompt.json']
+  for (const name of leftovers) await fs.writeFile(join(dir, name), '')
+  await pruneSessions(state, 's1')
+  assert.deepEqual((await fs.readdir(dir)).sort(), [...leftovers].sort())
+  await pruneSessions(state, 's1', Date.now() + SESSION_MS + 1000)
+  assert.deepEqual(await fs.readdir(dir), [])
+})
+
 test('files: write makes the folders, list and stat describe, remove is quiet for a missing file', async () => {
   const { $, cwd } = await host()
   const path = join(cwd, 'a', 'b', 'note.txt')

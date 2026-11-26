@@ -1,4 +1,4 @@
-import { promises as fs, realpathSync } from 'node:fs'
+import { appendFileSync, promises as fs, realpathSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -30,31 +30,44 @@ async function readStdin(): Promise<string> {
 }
 
 // Context a platform defers waits in a file beside the session's values, so their pruning removes it.
-const deferredPath = (folder: string, sessionId: string) => sessionPath(folder, sessionId).replace(/\.json$/, '.context.json')
+// Each block is one JSON line, added with an append: two events that defer at once both keep their
+// blocks, and a take never makes blocks come back, since no defer reads the file and writes it again.
+const deferredPath = (folder: string, sessionId: string) => sessionPath(folder, sessionId).replace(/\.json$/, '.context.jsonl')
 
-/** Adds blocks to the session's deferred context; a block already waiting isn't added twice. */
+/** Adds blocks to the session's deferred context; a block added twice is taken once. */
 export async function defer(folder: string, sessionId: string, blocks: readonly string[]): Promise<void> {
+  if (blocks.length === 0) return
   const path = deferredPath(folder, sessionId)
-  const waiting = await readBlocks(path)
-  const draft = `${path}.${process.pid}.${Date.now()}.tmp`
   await fs.mkdir(dirname(path), { recursive: true })
-  await fs.writeFile(draft, JSON.stringify([...waiting, ...blocks.filter(block => !waiting.includes(block))]))
-  await fs.rename(draft, path)
+  // One write of every line, synchronous, so no take in this process runs between its open and its write.
+  appendFileSync(path, blocks.map(block => `${JSON.stringify(block)}\n`).join(''))
 }
+
+// Takes in this process so far: each take's file has its own name, even beside another take of this process.
+let takes = 0
 
 /** The session's deferred context, taken: the file is renamed first, so two events never both take it. */
 export async function takeDeferred(folder: string, sessionId: string): Promise<string[]> {
   const path = deferredPath(folder, sessionId)
-  const taken = `${path}.${process.pid}.taken`
+  takes += 1
+  const taken = `${path}.${process.pid}.${takes}.taken`
   if (!(await fs.rename(path, taken).then(() => true, () => false))) return []
   const blocks = await readBlocks(taken)
   await fs.rm(taken, { force: true })
-  return blocks
+  return [...new Set(blocks)]
 }
 
+// The blocks of a deferred context file, in the order added; a line that isn't a JSON string is left out.
 async function readBlocks(path: string): Promise<string[]> {
-  const value: unknown = await fs.readFile(path, 'utf8').then(JSON.parse, () => [])
-  return Array.isArray(value) ? value.filter((block): block is string => typeof block === 'string') : []
+  const text = await fs.readFile(path, 'utf8').catch(() => '')
+  return text.split('\n').flatMap(line => {
+    try {
+      const block: unknown = JSON.parse(line)
+      return typeof block === 'string' ? [block] : []
+    } catch {
+      return []
+    }
+  })
 }
 
 /** The text the hook prints for one event: empty to print nothing. */
