@@ -1,12 +1,15 @@
 import type { Host, RunResult } from './host.ts'
+import { absolute } from './paths.ts'
 import { dropPlan, mirrorPlan } from './plan-mirror.ts'
 import { outlineIn, stateIn } from './plan-store.ts'
+import type { CoreTool, Json } from './tools.ts'
 
 /*
  * Renders the plan outline into its section of the pull request's description.
  *
  * Usage: node scripts/checkpoint.ts [--pr NUMBER] [--dry-run]. The hook in hooks/checkpoint.ts runs
- * the same checkpoint after a `git push` or a `gh pr create` that worked.
+ * the same checkpoint after a `git push` or a `gh pr create` that worked, and the `checkpoint` tool
+ * (CHECKPOINT_TOOL, below) runs it on every platform.
  *
  * Run in a checkout. The checkpoint reads the plan outline from the checkout's plan folder,
  * <git dir>/waffles/plan/, and writes it as a checklist between the markers below, in the description
@@ -79,6 +82,9 @@ const str = (value: unknown) =>
 /** A git or gh command that failed: the checkpoint prints its message and ends with 1. */
 class Failure extends Error {}
 
+/** A command whose stdout the platform cut: a failure, never an answer such as "no pull request". */
+class Cut extends Failure {}
+
 /** The checkout the checkpoint runs in, and when its time runs out (ms since the epoch); null for no limit. */
 type Checkout = { $: Host; folder: string; deadline: number | null }
 
@@ -96,6 +102,8 @@ async function run(c: Checkout, argv: string[], stdin?: string): Promise<string>
     throw new Failure(`${argv[0]} could not run: ${error instanceof Error ? error.message : String(error)}`)
   }
   if (done.exitCode !== 0) throw new Failure(`${argv.slice(0, 3).join(' ')} failed: ${strip(universal(done.stderr)) || strip(universal(done.stdout))}`)
+  // A description read in part would be written back in part.
+  if (done.isTruncated) throw new Cut(`${argv.slice(0, 3).join(' ')} printed more than the platform passes on, so the checkpoint does not go on from a part of it`)
   return universal(done.stdout)
 }
 
@@ -356,7 +364,7 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
       try {
         view = await run(c, ['gh', 'pr', 'view', ...(pr ? [pr] : []), '--json', 'number,url,body,headRefName,state'])
       } catch (error) {
-        if (!(error instanceof Failure)) throw error
+        if (!(error instanceof Failure) || error instanceof Cut) throw error
         return out(`No pull request for ${pr ? `#${pr}` : `the branch ${branch}`}: nothing to update.`)
       }
       const info: unknown = JSON.parse(view)
@@ -393,6 +401,52 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
     // Anything else prints its stack after the line, as an error the script did not expect did.
     return { exitCode: 1, stdout: '', stderr: `checkpoint: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n` }
   }
+}
+
+// --- The tool ----------------------------------------------------------------
+
+// All of a tool call's git and gh commands together: inside the 60 s that some MCP clients (Codex) give a tool call.
+const TOOL_MS = 45_000
+
+/** The tool's input as the checkpoint takes it; a string that tells what is wrong with it otherwise. */
+export function checkpointInputOf(input: Json): (CheckpointOptions & { folder?: string }) | string {
+  const { pr, dryRun, folder, ...extra } = input
+  const unknown = Object.keys(extra)
+  if (unknown.length) return `The checkpoint tool takes pr, dryRun, and folder, not ${unknown.join(', ')}.`
+  // A model may send the number as a number; gh takes it as text.
+  const number = typeof pr === 'number' && Number.isInteger(pr) && pr > 0 ? String(pr) : pr
+  if (number !== undefined && (typeof number !== 'string' || !DIGITS.test(number))) return 'pr must be a pull request number, or left out.'
+  if (dryRun !== undefined && typeof dryRun !== 'boolean') return 'dryRun must be true or false, or left out.'
+  if (folder !== undefined && (typeof folder !== 'string' || !folder.trim())) return 'folder must be the path of a checkout, or left out.'
+  return { ...(number === undefined ? {} : { pr: number }), ...(dryRun ? { isDryRun: true } : {}), ...(folder === undefined ? {} : { folder }) }
+}
+
+export const CHECKPOINT_TOOL: CoreTool = {
+  name: 'checkpoint',
+  title: 'Checkpoint',
+  description:
+    "Renders the plan outline into its section of a pull request's description: the open pull request for the checked-out branch of the checkout at folder (the session's folder when left out), or pull request pr, which must be for that branch. It leaves the rest of the description as it is, commits and pushes nothing, and a second call with nothing changed changes nothing. With dryRun, it answers with the new description and writes nothing. The answer is the checkpoint's line: what it did, or why there was nothing to do. A hook already runs it after a git push or gh pr create that worked; call it where no hook ran, or to see the description first.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+      pr: { type: 'string', pattern: '^[0-9]+$', description: 'The pull request number. Left out: the open pull request for the checked-out branch.' },
+      dryRun: { type: 'boolean', description: 'Answer with the new description, and write nothing.' },
+      folder: { type: 'string', description: "The checkout, as an absolute path or one relative to the session's folder. Left out: the session's folder." },
+    },
+    additionalProperties: false,
+  },
+  annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  call: async ($, input) => {
+    const parsed = checkpointInputOf(input)
+    if (typeof parsed === 'string') return { refusal: parsed }
+    const { folder, ...options } = parsed
+    const done = await checkpoint($, absolute(await $.session.cwd(), folder ?? '.'), { ...options, timeoutMs: TOOL_MS })
+    if (done.exitCode === 0) return { text: done.stdout.replace(/\n$/, '') }
+    // The stack of an error the checkpoint did not expect goes to the log, and its first line to the model.
+    const [line = '', ...stack] = done.stderr.trim().split('\n')
+    if (stack.length) $.log(done.stderr)
+    return { refusal: line }
+  },
 }
 
 // --- After a shell command ---------------------------------------------------

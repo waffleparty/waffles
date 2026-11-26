@@ -4,7 +4,8 @@ import type { RunResult } from '../core/host.ts'
 
 /*
  * Renders the plan outline into its section of the pull request's description: core/checkpoint.ts
- * says how.
+ * says how. The checkpoint tool does the same; this is for a person, and for a platform where the
+ * tool is missing.
  *
  * Usage: node scripts/checkpoint.ts [--pr NUMBER] [--dry-run]
  *

@@ -1,3 +1,4 @@
+import { CHECKPOINT_TOOL } from './checkpoint.ts'
 import type { Host } from './host.ts'
 import { MERGE_QUEUE_TOOL } from './merge-queue.ts'
 
@@ -6,9 +7,15 @@ import { MERGE_QUEUE_TOOL } from './merge-queue.ts'
  * 1. Write its logic in a core file that reaches files and processes only through the Host (`$`).
  * 2. Export a `CoreTool` from that file: name, description, input schema, and a `call` that returns an answer.
  * 3. Add it to `TOOLS` below. The MCP server and OpenCode then offer it with no other change.
- * 4. On Claude Code, add its name to `NAMES` in hooks/tools.ts: the engine reads a tool's name from the
- *    hooks module's source. hooks/tools.test.ts fails until `NAMES` and `TOOLS` agree.
+ * 4. On Claude Code, write out its `tool.call` hook in `registerTools` in hooks/tools.ts: the engine reads a
+ *    tool's name from the hooks module's source. hooks/tools.test.ts fails until the hooks and `TOOLS` agree.
  * 5. Test the logic in a `core/*.spec.ts` with the fake Host of core/testing.ts.
+ *
+ * A tool runs in the session's folder. One that acts on another checkout takes the folder as input, makes it
+ * absolute from the session's folder (core/paths.ts), and passes it as `cwd` to every command. Every command has a
+ * time limit sized to it, and the call as a whole ends well inside what a platform gives a tool call. An answer read
+ * from a command's stdout is refused when the platform cut it (`isTruncated`). The answer holds what the caller
+ * needs, not a command's raw output. A tool refuses an input key it does not take before it runs anything.
  */
 
 export type Json = Record<string, unknown>
@@ -49,7 +56,7 @@ export type CoreTool = {
 }
 
 /** The core's tools: each adapter offers every one. */
-export const TOOLS: readonly CoreTool[] = [MERGE_QUEUE_TOOL]
+export const TOOLS: readonly CoreTool[] = [MERGE_QUEUE_TOOL, CHECKPOINT_TOOL]
 
 /** An answer as text, for a platform whose tools return text alone: a structured value as its JSON. */
 export const textOf = (answer: ToolAnswer): { text: string } | { refusal: string } =>

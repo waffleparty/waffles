@@ -138,7 +138,14 @@ export function hostOf($: EngineInterface): Host {
       },
       realPath: async path => (await $.fs.stat(path, { resolve: true })).realPath ?? path,
     },
-    process: { run: (argv, init) => $.process.run(argv, init) },
+    process: {
+      // Claude Code passes on the first 4 MiB of each stream and says when it cut one. Answers are read from
+      // stdout, so a cut stdout is the one the core is told of.
+      run: async (argv, init) => {
+        const r = await $.process.run(argv, init)
+        return { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr, ...(r.isStdoutTruncated ? { isTruncated: true } : {}) }
+      },
+    },
     session: { id: () => $.session.id(), cwd: () => $.session.cwd() },
     clock: { now: () => $.clock.now() },
     home: () => $.env.get('HOME'),

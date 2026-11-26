@@ -35,7 +35,9 @@ test('every core tool is listed with its schemas and hints', LIMIT, async () => 
   const list = await s.request('tools/list', { _meta: META })
   for (const tool of TOOLS) {
     const listed = list.result.tools.find((t: { name: string }) => t.name === tool.name)
-    assert.deepEqual(listed, { name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema, outputSchema: tool.outputSchema, annotations: tool.annotations })
+    // A tool with no output schema is listed without one.
+    const output = tool.outputSchema ? { outputSchema: tool.outputSchema } : {}
+    assert.deepEqual(listed, { name: tool.name, title: tool.title, description: tool.description, inputSchema: tool.inputSchema, ...output, annotations: tool.annotations })
   }
   assert.ok(list.result.tools.some((t: { name: string }) => t.name === MERGE_QUEUE_TOOL.name))
   await s.close()

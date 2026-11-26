@@ -6,8 +6,10 @@ import { delimiter, dirname, join } from 'node:path'
 import { test } from 'node:test'
 
 import { nodeHost } from '../adapters/node/host.ts'
-import { afterShell, checkpoint, END, parseArgs, place, render, START } from './checkpoint.ts'
+import { afterShell, checkpoint, CHECKPOINT_TOOL, END, parseArgs, place, render, START } from './checkpoint.ts'
 import type { Host } from './host.ts'
+import { fakeHost } from './testing.ts'
+import { TOOLS } from './tools.ts'
 
 // Answers `gh pr view` from the state file's "pr" (null: no pull request; a string: printed as it is),
 // and stores the body `gh pr edit --body-file -` reads from stdin. Every call is recorded.
@@ -464,4 +466,41 @@ checkoutTest('a pull request with no state or no head branch says which, and is 
 test('--pr takes ASCII digits only', () => {
   assert.deepEqual(parseArgs(['--pr', '12']), { pr: '12' })
   for (const number of ['²', '①', '٣', '１２', '1²']) assert.equal(parseArgs(['--pr', number]), null, number)
+})
+
+checkoutTest('the checkpoint tool runs in the folder it is given, and answers with the line', async co => {
+  // The session's folder is the one above the checkout: the tool goes by its folder input.
+  const $ = nodeHost({ sessionId: 'tool', cwd: co.root, names: NAMES, stateFolder: join(co.root, 'state') })
+  const call = (input: Record<string, unknown>) => co.withEnv(() => CHECKPOINT_TOOL.call($, input))
+
+  assert.deepEqual(await call({ folder: 'work', dryRun: true }), { text: `${BODY}\n\n${section(CHECKLIST)}` })
+  assert.deepEqual(await co.edits(), [])
+  assert.deepEqual(await call({ folder: co.work, pr: 7 }), { text: 'Updated the plan outline in #7: https://github.com/o/r/pull/7' })
+  assert.deepEqual(await call({ folder: 'work' }), { text: 'The plan outline in #7 is up to date.' })
+  // Outside a checkout, git's message is the refusal.
+  const outside = await call({})
+  assert.ok('refusal' in outside && outside.refusal.startsWith('checkpoint: git rev-parse --path-format=absolute failed: '), JSON.stringify(outside))
+})
+
+test('the checkpoint tool refuses an input it cannot use, and runs nothing', async () => {
+  const $ = fakeHost()
+  for (const [input, refusal] of [
+    [{ pr: 'x' }, 'pr must be a pull request number, or left out.'],
+    [{ pr: '１２' }, 'pr must be a pull request number, or left out.'],
+    [{ dryRun: 'yes' }, 'dryRun must be true or false, or left out.'],
+    [{ folder: '' }, 'folder must be the path of a checkout, or left out.'],
+    [{ branch: 'feat' }, 'The checkpoint tool takes pr, dryRun, and folder, not branch.'],
+  ] as const) {
+    assert.deepEqual(await CHECKPOINT_TOOL.call($, input), { refusal }, JSON.stringify(input))
+  }
+  assert.deepEqual($.ran, [])
+  assert.ok(TOOLS.includes(CHECKPOINT_TOOL))
+})
+
+test('a stdout the platform cut is a failure, not "no pull request"', async () => {
+  const $ = fakeHost({
+    run: argv => (argv[0] === 'git' ? { stdout: argv.includes('--git-dir') ? '/work/.git\n' : 'feat\n' } : { stdout: '{"number": 7', isTruncated: true }),
+  })
+  const done = await checkpoint($, '/work')
+  assert.deepEqual(done, { exitCode: 1, stdout: '', stderr: 'checkpoint: gh pr view printed more than the platform passes on, so the checkpoint does not go on from a part of it\n' })
 })

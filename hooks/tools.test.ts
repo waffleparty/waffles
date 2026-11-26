@@ -13,6 +13,7 @@ function world(on: On) {
   const runs: [string[], string | undefined][] = []
   const done = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
   on('session.cwd', () => ({ value: '/repo' }))
+  on('clock.now', () => ({ value: 1000 }))
   on('process.run', ($, e) => {
     runs.push([[...e.argv], e.init?.cwd])
     const [command, ...args] = e.argv
@@ -46,13 +47,14 @@ test('every core tool is registered with its description and input schema', asyn
   }
 })
 
-// The hooks module writes each tool's hook out by name: a core tool with no hook here fails this test.
+// The hooks module writes each tool's hook out by name: a core tool with no hook here fails this test. Every
+// tool refuses an input it does not take before it runs a command, so the answer is the same on both hosts.
 test("every core tool's calls are answered by the core tool itself", async ($, on) => {
   world(on)
   for (const tool of TOOLS) {
-    const said = textOf(await tool.call(fakeHost(), {}))
+    const said = textOf(await tool.call(fakeHost(), { notAnInput: 1 }))
     const expected = 'refusal' in said ? { deny: said.refusal } : { result: said.text }
-    expect(await $.tool.call({ tool: `mcp__waffles__${tool.name}` } as never)).toEqual(expected)
+    expect(await $.tool.call({ tool: `mcp__waffles__${tool.name}`, notAnInput: 1 } as never)).toEqual(expected)
   }
 })
 
@@ -83,4 +85,27 @@ test("a failure of gh is a deny with gh's message", async ($, on) => {
   world(on)
 
   expect(await $.tool.call({ tool: 'mcp__waffles__merge_queue', op: 'mode', pr: '12' } as never)).toEqual({ deny: 'gh api rules/branches/main failed: not here' })
+})
+
+test('the checkpoint runs in the folder it is given, from the session’s folder, and a failure of git is a deny', async ($, on) => {
+  const { runs } = world(on)
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__checkpoint', folder: 'app', agentId: 'a1' } as never)
+
+  expect(r).toEqual({ deny: 'checkpoint: git rev-parse --path-format=absolute failed: not here' })
+  expect(runs).toEqual([[['git', 'rev-parse', '--path-format=absolute', '--git-dir'], '/repo/app']])
+})
+
+test('a stdout that Claude Code cut is refused, not read in part', async ($, on) => {
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('clock.now', () => ({ value: 1000 }))
+  on('process.run', ($, e) => {
+    const [command, ...args] = e.argv
+    const stdout = command === 'git' ? (args.includes('--git-dir') ? '/repo/.git\n' : 'feat\n') : '{"number": 7, "body": "'
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: command === 'gh', isStderrTruncated: false } }
+  })
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__checkpoint' } as never)
+
+  expect(r).toEqual({ deny: 'checkpoint: gh pr view printed more than the platform passes on, so the checkpoint does not go on from a part of it' })
 })

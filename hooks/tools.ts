@@ -32,6 +32,7 @@ async function answer($: EngineInterface, name: string, e: ToolCallInput): Promi
 
 export function registerTools(on: On) {
   on('tool.call', { tool: 'mcp__waffles__merge_queue' }, ($, e) => answer($, 'merge_queue', e))
+  on('tool.call', { tool: 'mcp__waffles__checkpoint' }, ($, e) => answer($, 'checkpoint', e))
 }
 
 // The module's one session.start hook calls this. The engine reads no name here, so every tool registers from the list.

@@ -92,7 +92,11 @@ export type Names = {
 export type FileKind = 'file' | 'dir' | 'other'
 export type FileEntry = { name: string; kind: FileKind; size: number; mtimeMs: number }
 export type FileStat = { kind: FileKind; size: number; mtimeMs: number }
-export type RunResult = { exitCode: number; stdout: string; stderr: string }
+/**
+ * A command's end. `isTruncated` is true where the platform kept only the start of what the command printed to
+ * stdout (Claude Code passes on 4 MiB): an answer read from stdout is then read from a part of it.
+ */
+export type RunResult = { exitCode: number; stdout: string; stderr: string; isTruncated?: boolean }
 export type AgentInfo = { id: string; status: string }
 
 export type InteractionMode = 'production' | 'rapid' | 'backlog'
