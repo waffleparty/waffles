@@ -10,6 +10,10 @@ import { openAtStart, openUnlessClosed } from './plan-ui'
 const mode = atom({ plugin: 'waffles', key: 'mode' } as const, 'production')
 const rapidBase = atom({ plugin: 'waffles', key: 'rapidBase' } as const, null)
 const run = atom({ plugin: 'waffles', key: 'run' } as const, false)
+const runDenials = atom({ plugin: 'waffles', key: 'runDenials' } as const, 0)
+const runStartedAt = atom({ plugin: 'waffles', key: 'runStartedAt' } as const, null)
+const runAsking = atom({ plugin: 'waffles', key: 'runAsking' } as const, false)
+const rapidStated = atom({ plugin: 'waffles', key: 'rapidStated' } as const, false)
 const planGoal = atom({ plugin: 'waffles', key: 'planGoal' } as const, null)
 const planTree = atom({ plugin: 'waffles', key: 'planTree' } as const, null)
 const planKept = atom({ plugin: 'waffles', key: 'planKept' } as const, null)
@@ -28,6 +32,14 @@ async function getState($: EngineInterface, key: Key): Promise<SessionState[Key]
       return read($, rapidBase)
     case 'run':
       return read($, run)
+    case 'runDenials':
+      return read($, runDenials)
+    case 'runStartedAt':
+      return read($, runStartedAt)
+    case 'runAsking':
+      return read($, runAsking)
+    case 'rapidStated':
+      return read($, rapidStated)
     case 'planGoal':
       return read($, planGoal)
     case 'planTree':
@@ -55,6 +67,18 @@ async function setState($: EngineInterface, key: Key, value: SessionState[Key]):
       return
     case 'run':
       await update($, run, () => value as SessionState['run'])
+      return
+    case 'runDenials':
+      await update($, runDenials, () => value as SessionState['runDenials'])
+      return
+    case 'runStartedAt':
+      await update($, runStartedAt, () => value as SessionState['runStartedAt'])
+      return
+    case 'runAsking':
+      await update($, runAsking, () => value as SessionState['runAsking'])
+      return
+    case 'rapidStated':
+      await update($, rapidStated, () => value as SessionState['rapidStated'])
       return
     case 'planGoal':
       await update($, planGoal, () => value as SessionState['planGoal'])

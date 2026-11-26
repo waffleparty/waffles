@@ -26,12 +26,14 @@ export const CLOSED = 'The question was closed without an answer. Take what the 
 const MAIN_QUESTION = "Denied: The user is away during a /waffles:non-interactive run and can't answer. A run asks 1 question, at its start. Make the decision yourself, note it on its step in the plan outline if it is worth checking, and keep going."
 const AGENT_QUESTION = "Denied: The user is away during a /waffles:non-interactive run and can't answer. Report the question in your result, and carry on with the rest of your piece."
 
-// What one process keeps for one session; `startUnattended` reads the run back from the session's values.
+// What one process keeps for one session. `startUnattended` reads the run back from the session's
+// values, with the denials, the start question's time and its dialog, which `saveUnattended` writes
+// back for an adapter whose process serves one event. A process that lasts keeps them here alone.
 type Vars = {
   isRun: boolean
   denials: number
-  // When the run's command was typed; null with no run, and once its question is asked. A new process
-  // leaves it null: the run then asks nothing, which the skill treats as no answer.
+  // When the run's command was typed; null with no run, and once its question is asked. A process
+  // that starts after a reload leaves it null: the run then asks nothing, which the skill treats as no answer.
   startedAt: number | null
   // The start question is on screen.
   isAsking: boolean
@@ -50,7 +52,22 @@ export async function isRunning($: Host) {
 
 /** The session started, or the process did: the run comes back from the session's values. */
 export async function startUnattended($: Host) {
-  vars($).isRun = await $.state.get('run')
+  const v = vars($)
+  v.isRun = await $.state.get('run')
+  v.denials = await $.state.get('runDenials')
+  v.startedAt = await $.state.get('runStartedAt')
+  v.isAsking = await $.state.get('runAsking')
+}
+
+/**
+ * Writes what this process changed of the run to the session's values, for the next process. An adapter
+ * whose process serves one event calls it at the event's end, after `startUnattended` at its start.
+ */
+export async function saveUnattended($: Host) {
+  const v = vars($)
+  if ((await $.state.get('runDenials')) !== v.denials) await $.state.set('runDenials', v.denials)
+  if ((await $.state.get('runStartedAt')) !== v.startedAt) await $.state.set('runStartedAt', v.startedAt)
+  if ((await $.state.get('runAsking')) !== v.isAsking) await $.state.set('runAsking', v.isAsking)
 }
 
 /** A prompt was submitted: one the person typed starts a run when it is the run's command, and ends one otherwise. */

@@ -59,6 +59,14 @@ declare module 'claude-code' {
       effortPicking: boolean
       /** A /waffles:non-interactive run is active; it ends at a typed prompt, /backlog-entry, /prod, /rapid or /clear. */
       run: boolean
+      /** Permission requests denied in a row during the run. */
+      runDenials: number
+      /** When the run's command was typed, in ms since the epoch; null with no run, and once its start question is asked. */
+      runStartedAt: number | null
+      /** The run's start question is on screen. */
+      runAsking: boolean
+      /** The first message named pending rapid work; the turn that reads it takes it over. */
+      rapidStated: boolean
       /** /prod (the default), /rapid or /backlog-entry, until another of them or /clear. */
       mode: InteractionMode
       /** The base of rapid work not yet handed to the model in production mode; null when none is pending. */

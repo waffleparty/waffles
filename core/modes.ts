@@ -114,10 +114,8 @@ export const ASSESS_PROMPT = ASSESS
 // What one process keeps for one session; `startMode` reads the mode back from the session's values.
 type Vars = {
   isBacklog: boolean
-  // The first message named pending rapid work; the turn that reads it takes it over.
-  isPendingStated: boolean
 }
-const vars = ($: Pick<Host, 'memory'>) => memoryOf<Vars>($, 'modes', () => ({ isBacklog: false, isPendingStated: false }))
+const vars = ($: Pick<Host, 'memory'>) => memoryOf<Vars>($, 'modes', () => ({ isBacklog: false }))
 
 /** The interaction mode, for a view. */
 export async function interactionMode($: Host): Promise<InteractionMode> {
@@ -197,9 +195,9 @@ export async function submitMode($: Host, prompt: Prompt, before: WafflesMode): 
  * when it is stated.
  */
 export async function completeMode($: Host) {
-  const v = vars($)
-  if (!v.isPendingStated) return
-  v.isPendingStated = false
+  // A session value, since the first message may be made in another process than the turn's end.
+  if (!(await $.state.get('rapidStated'))) return
+  await $.state.set('rapidStated', false)
   await $.state.set('rapidBase', null)
 }
 
@@ -207,7 +205,7 @@ export async function completeMode($: Host) {
 export async function modeContext($: Host): Promise<string> {
   const current = await wafflesMode($)
   const base = current === 'production' ? await $.state.get('rapidBase') : null
-  vars($).isPendingStated = base !== null
+  if ((await $.state.get('rapidStated')) !== (base !== null)) await $.state.set('rapidStated', base !== null)
   return base === null ? `${STATEMENT} ${current}` : `${STATEMENT} ${current}. ${pending(base, $.names.ask)}`
 }
 

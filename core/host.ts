@@ -130,6 +130,14 @@ export type SessionState = {
   rapidBase: RapidBase | null
   /** An unattended run is active. */
   run: boolean
+  /** Permission requests denied in a row during the run. */
+  runDenials: number
+  /** When the run's command was typed, in ms since the epoch; null with no run, and once its start question is asked. */
+  runStartedAt: number | null
+  /** The run's start question is on screen. */
+  runAsking: boolean
+  /** The first message named pending rapid work; the turn that reads it takes it over. */
+  rapidStated: boolean
   /** The slug of the session's active goal; null when it has none. */
   planGoal: string | null
   /** The active goal as last read, for drawing; with none active, the kept goal's. */
@@ -151,6 +159,10 @@ export const INITIAL: SessionState = {
   mode: 'production',
   rapidBase: null,
   run: false,
+  runDenials: 0,
+  runStartedAt: null,
+  runAsking: false,
+  rapidStated: false,
   planGoal: null,
   planTree: null,
   planKept: null,
