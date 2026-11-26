@@ -67,6 +67,8 @@ Set `env` in the entry when the client shows tools under another pattern, or sta
 | `WAFFLES_TOOL_PREFIX` | `mcp__waffles__` | What comes before a tool's name as the model sees it, for every tool the instructions name. Set it to an empty string where the client shows the bare name. |
 | `WAFFLES_PLAN_TOOL` | The prefix and `plan` | The plan outline tool's whole name as the model sees it, in place of the prefix |
 | `WAFFLES_ASK_TOOL` | `a multiple-choice question` | The tool the model asks the person a question with, used in the rules. The default reads as plain words, so on a client with no such tool the model asks in the chat. |
+| `WAFFLES_SKILL_PREFIX` | Not set | What comes before a skill's name where the instructions name a skill, such as `waffles:` for "the waffles:backlog skill". Unset, a skill goes by its name alone. The plugin's MCP configurations for Codex and Antigravity set it to `waffles:`. |
+| `WAFFLES_RUN_COMMAND` | Not set | What the person types to start an unattended run, such as `/waffles:non-interactive`, where the instructions name the run. Unset, they name it "a run of the non-interactive skill". The plugin's MCP configurations for Codex and Antigravity set it to `/waffles:non-interactive`, and Cursor's to `/non-interactive`. |
 | `WAFFLES_MCP_MODULES` | Every module | The modules to offer, comma-separated: `modes`, `plan`, `tools` (the core's tools). The server announces a capability only for what they provide. |
 | `WAFFLES_SESSION_ID` | A new ID for each server process | The session the mode and the active goal belong to. Set it to the ID the platform's hooks use, so the hooks and the server agree. |
 | `WAFFLES_CWD` | The process's working directory | The folder whose checkout holds the plan outline |

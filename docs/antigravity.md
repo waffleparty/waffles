@@ -18,7 +18,7 @@ This wiring follows Antigravity's documentation (Plugins, Build plugins, Hooks, 
 
 | Feature | On Antigravity |
 | --- | --- |
-| Skills | All skills in `skills/`, named `waffles:<skill>`. |
+| Skills | All skills in `skills/`, named `waffles:<skill>`. The modes' rules and a run's refusals name a skill that way, and the run as `/waffles:non-interactive`. |
 | Modes | The modes' rules and the current mode go to the model when a conversation starts. A mode command changes the mode (see [Mode commands](#mode-commands)). In backlog mode each prompt carries the mode beside it. The MCP server's `mode` tool reads or sets the mode; the hook approves its calls (`auto_approve`), as it does the plan outline tool's. |
 | Unattended runs | A prompt that starts with `/waffles:non-interactive` starts a run, and the next prompt ends it. During a run, each tool call is answered `deny_unless_prior_grant` with what to do instead: a call that your rules or an earlier grant allow runs, and one that would ask you is refused. A call to `ask_permission` is refused outright, and after 5 such refusals in a row the run is told to wrap up. The run's first question (`ask_question`) within 5 minutes of its start goes to you; every later one is refused. |
 | Plan outline | Its rules and the active goal's tree, or the open goals, go to the model when a conversation starts. The plan outline tool comes from the plugin's MCP server (`mcp_config.json`, server `waffles`, which Antigravity names `waffles_waffles`). The server's entry loads the tool eagerly, so the model calls it as `mcp_waffles_waffles_plan`. Antigravity asks before an MCP tool call by default; the hook approves this tool's calls (`auto_approve`), during a run too. Your own deny and ask rules still apply. |

@@ -1,6 +1,18 @@
 # Skills
 
-Skills that are not part of the backlog or unattended-run workflows. Each runs as `/waffles:<name>`.
+Skills that are not part of the backlog or unattended-run workflows. Each runs as `/waffles:<name>` on Claude Code; the other platforms' pages say how they run a skill.
+
+A skill's text is the same on every platform, so it names things in a form true on all of them:
+
+| Thing | How a skill names it |
+| --- | --- |
+| A tool of the plugin | Its core name, such as `builders`, with the note that each platform adds its own prefix (`mcp__waffles__builders`) |
+| The question tool | "ask the user a multiple-choice question (`AskUserQuestion` on Claude Code)" at its first use in a file, then "the question tool" |
+| Another skill of the plugin | By its name, such as "the waffles backlog skill"; `/waffles:backlog` on Claude Code only where the person types it |
+| A capability only some platforms have | What is needed in plain words, then Claude Code's tool as the example (the Agent tool with `model` and `effort`, SendMessage, Monitor, auto mode), and what to do where the platform lacks it |
+| An agent in `agents/` | Its Claude Code name, such as `waffles:implementer`, with the role it stands for, so another platform starts its own agent for the role |
+
+The texts the hooks write, such as the modes' rules and a run's refusals, take the platform's own forms from the adapter's names (`Names` in `core/host.ts`).
 
 ## Commit prep
 

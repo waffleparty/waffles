@@ -52,7 +52,7 @@ During a run:
 - Every later question is refused at once. A subagent's question and permission requests are refused too, under its main session's run.
 - Each turn runs at Extra high effort, where the model offers it.
 
-The skill's text still names Claude Code's tools and agents in places (such as `AskUserQuestion` and the `waffles:*` agents), so a run on OpenCode routes work to OpenCode's own `general` and `explore` agents.
+The run's refusals and the modes' rules name the run as `@non-interactive` and each skill by its name, such as "the backlog skill". The skills' text is the same on every platform: it names the question tool, the plan outline tool, and the `waffles:*` agents by what they do, with Claude Code's names as examples, so a run on OpenCode asks with `question` and routes work to OpenCode's own `general` and `explore` agents.
 
 ### Auto effort
 

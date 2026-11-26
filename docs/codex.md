@@ -6,7 +6,7 @@ waffles runs on OpenAI Codex through Codex's plugin format and its command hooks
 
 | Feature | On Codex |
 | --- | --- |
-| Skills | All skills in `skills/`, named `waffles:<skill>`. |
+| Skills | All skills in `skills/`, named `waffles:<skill>`. The modes' rules and a run's refusals name a skill that way, and the run as `/waffles:non-interactive`. |
 | Modes | The modes' rules and the current mode go to the model at the session's start, after a resume, a clear, and a compaction. A mode command changes the mode (see [Mode commands](#mode-commands)). In backlog mode each prompt carries the mode beside it. |
 | Unattended runs | A prompt that starts with `/waffles:non-interactive` starts a run, and the next prompt ends it. During a run, a permission request is denied with what to do instead, and after 5 denials in a row the run is told to wrap up. The run's first question (`request_user_input`) within 5 minutes of its start goes to you; every later one is refused. |
 | Plan outline | Its rules and the active goal's tree, or the open goals, go to the model at the session's start. The plan outline tool comes from the plugin's MCP server (`mcp.json`, server `waffles`), which the model calls as `mcp__waffles__plan`. |

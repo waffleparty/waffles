@@ -6,7 +6,7 @@ waffles runs on Cursor through Cursor's plugin format and its command hooks. Cur
 
 | Feature | On Cursor |
 | --- | --- |
-| Skills | All skills in `skills/`. Cursor runs a skill as `/<skill>`. |
+| Skills | All skills in `skills/`. Cursor runs a skill as `/<skill>`. The modes' rules name a skill by its name and a run as `/non-interactive`. |
 | Modes | The modes' rules and the current mode go to the model when a conversation starts. A mode command changes the mode (see [Mode commands](#mode-commands)). The model reads a change, and backlog mode's statement beside each prompt, with the result of its next tool call (see [Context per prompt](#context-per-prompt)). |
 | Plan outline | Its rules and the active goal's tree, or the open goals, go to the model when a conversation starts. The plan outline tool comes from the plugin's MCP server (`adapters/command/cursor-mcp.json`, server `waffles`). |
 | Checkpoint | After a `git push` or `gh pr create` that exits 0, the plan outline goes into the pull request's description, and the model reads the checkpoint's line after the command's result. |
