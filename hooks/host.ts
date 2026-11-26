@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import type { Host, Memory, SessionState } from '../core/host.ts'
+import type { Host, Memory, Names, SessionState } from '../core/host.ts'
 import { openAtStart, openUnlessClosed } from './plan-ui'
 
 // The session's values are `$.state` atoms, so a drawing that reads one is drawn again when the core
@@ -84,6 +84,17 @@ async function setState($: EngineInterface, key: Key, value: SessionState[Key]):
 // starts over on a reload, as the module does.
 const memory: Memory = {}
 
+/** The core's memory alone, for a hook that reads no more of the host. */
+export const MEMORY = { memory }
+
+/** What Claude Code calls its own things. hooks/plan.ts names the same tool where it hooks its calls. */
+export const NAMES: Names = {
+  assistant: 'Claude',
+  planTool: 'mcp__waffles__plan',
+  ask: 'AskUserQuestion',
+  planMode: "Claude Code's plan mode",
+}
+
 /** The core's host on Claude Code: each call goes to `$`. */
 export function hostOf($: EngineInterface): Host {
   return {
@@ -110,6 +121,11 @@ export function hostOf($: EngineInterface): Host {
     memory,
     agents: { list: () => $.agent.list() },
     view: { planActive: when => (when === 'start' ? openAtStart($) : openUnlessClosed($)) },
+    // A session no plugin may shape refuses the row, as may a plugin above.
+    conversation: {
+      note: text => $.session.append({ message: { type: 'user', content: [{ type: 'text', text }] } }).then(r => r.deny === undefined),
+    },
+    names: NAMES,
     log: message => $.ui.log(message, { to: 'debug' }),
   }
 }

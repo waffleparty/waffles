@@ -1,24 +1,14 @@
-import type { Host } from './host.ts'
+import type { Host, Names } from './host.ts'
 import { activeGoal, logFailure, openGoalLines } from './plan.ts'
 import { findPlanRoot, goalName, listGoals } from './plan-store.ts'
 import { renderTree } from './plan-tree.ts'
-
-/** What the rules call the platform's own things. */
-export type PlanNames = {
-  /** The plan outline tool's name, as the model calls it. */
-  tool: string
-  /** The tool the model asks the person a multiple-choice question with. */
-  ask: string
-  /** The platform's own feature named "plan mode", which the plan outline is not; null where it has none. */
-  planMode: string | null
-}
 
 /**
  * The plan outline's rules for the system prompt. The same names give the same bytes in every request,
  * so the prompt cache holds; the tree goes in the first message instead. They are there in a checkout
  * with no .tmp/plan/ too: the rules say when to start the first goal.
  */
-export const planRules = ({ tool, ask, planMode }: PlanNames): string =>
+export const planRules = ({ planTool: tool, ask, planMode }: Names): string =>
   `# waffles plan outline
 
 The waffles plugin keeps a plan outline: a tree of the work in this checkout, stored as one goal file per goal in .tmp/plan/ and shown to the person beside the chat. It shows the path from the goal to the current step, so the person can find the way back after side quests. Change it only with the ${tool} tool, never by editing its goal files.${planMode === null ? '' : ` The plan outline is not ${planMode}.`}

@@ -1,14 +1,13 @@
 import type { EngineInterface } from 'claude-code'
 
 import { planContext as context, planRules } from '../core/plan-prompt.ts'
-import { hostOf } from './host'
-import { TOOL } from './plan'
+import { hostOf, NAMES } from './host'
 
 /** The plan outline's rules as a system prompt section: the same bytes in every request, so the prompt cache holds. */
 export const RULES = {
   id: 'waffles:plan-outline',
   scope: 'session',
-  text: planRules({ tool: TOOL, ask: 'AskUserQuestion', planMode: "Claude Code's plan mode" }),
+  text: planRules(NAMES),
 } as const
 
 /** The first message's plan outline block; empty with nothing to say. */

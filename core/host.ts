@@ -58,8 +58,25 @@ export type Host = {
     /** A goal became active: at the session's start, or by a call. */
     planActive(when: 'start' | 'call'): Promise<void>
   }
+  conversation: {
+    /** Adds a row the model reads at the end of the conversation. False where the platform refuses it. */
+    note(text: string): Promise<boolean>
+  }
+  /** What the platform calls its own things, in text the model reads. */
+  names: Names
   /** A line for the platform's debug log. */
   log(message: string): void
+}
+
+export type Names = {
+  /** What the person calls the assistant. */
+  assistant: string
+  /** The plan outline tool's name, as the model calls it. */
+  planTool: string
+  /** The tool the model asks the person a multiple-choice question with. */
+  ask: string
+  /** The platform's own feature named "plan mode", which the plan outline is not; null where it has none. */
+  planMode: string | null
 }
 
 export type FileKind = 'file' | 'dir' | 'other'
@@ -69,6 +86,20 @@ export type RunResult = { exitCode: number; stdout: string; stderr: string }
 export type AgentInfo = { id: string; status: string }
 
 export type InteractionMode = 'production' | 'rapid' | 'backlog'
+/** The mode the model is told: the interaction mode, or an unattended run over it. */
+export type WafflesMode = InteractionMode | 'non-interactive'
+/** A prompt as the core reads it. */
+export type Prompt = {
+  /** From the person: typed, including over a running turn, not a notification or a trigger. */
+  isPerson: boolean
+  /** Typed by the person and not delivered into a running turn. */
+  isTyped: boolean
+  /** The slash command it runs, by name; undefined for plain text. */
+  command: string | undefined
+  /** The platform made it, not the person. */
+  isMeta: boolean
+  text: string
+}
 /** Where rapid work started: HEAD then, and the paths already changed then, relative to the repository root. */
 export type RapidBase = { head: string; dirty: string[] }
 /** A goal file other than the session's active goal. */
