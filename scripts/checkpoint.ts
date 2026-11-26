@@ -9,7 +9,8 @@ import type { RunResult } from '../core/host.ts'
  * Usage: node scripts/checkpoint.ts [--pr NUMBER] [--dry-run]
  *
  * Run in a checkout. Exit codes: 0 when the description is up to date or there is nothing to do, 1
- * when git or gh fails, 2 for bad arguments.
+ * when git or gh fails, 2 for bad arguments. What it did goes to stdout; why it failed, and the
+ * usage, go to stderr.
  */
 
 // The checkpoint reads no session value and names nothing to a model.

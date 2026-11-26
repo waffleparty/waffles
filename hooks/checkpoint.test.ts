@@ -6,36 +6,42 @@ import { folderOf } from './checkpoint'
 const RAN = { result: { stdout: 'pushed', stderr: '' } }
 
 const GOAL = '---\ngoal: Ship it\nstatus: open\n---\n- [ ] 1 Ship it\n'
-const PR = { number: 7, url: 'https://github.com/o/r/pull/7', body: '## Summary\nShip it.', headRefName: 'feat', baseRefName: 'main', state: 'OPEN' }
+const PR = { number: 7, url: 'https://github.com/o/r/pull/7', body: '## Summary\nShip it.', headRefName: 'feat', state: 'OPEN' }
+const PLAN = '/repo/.git/waffles/plan'
+const GIT_DIR = 'git rev-parse --path-format=absolute --git-dir'
 
-// What git and gh answer in a checkout at /repo on the branch feat, pushed, with the outline committed
-// and pull request #7 open for it.
+// What git and gh answer in a checkout at /repo on the branch feat, pushed, with pull request #7 open
+// for it. A detached HEAD to the copy's `symbolic-ref`, so it stops there.
 function repo(command: string): { exitCode: number; stdout: string } {
-  if (command === 'git rev-parse --show-toplevel') return { exitCode: 0, stdout: '/repo\n' }
+  if (command === GIT_DIR) return { exitCode: 0, stdout: '/repo/.git\n' }
   if (command === 'git rev-parse --abbrev-ref HEAD') return { exitCode: 0, stdout: 'feat\n' }
   if (command.startsWith('gh pr view ')) return { exitCode: 0, stdout: `${JSON.stringify(PR)}\n` }
   if (command.startsWith('git rev-parse --verify -q ')) return { exitCode: 0, stdout: 'abc\n' }
-  if (command === 'git ls-tree --name-only HEAD:.tmp/plan') return { exitCode: 0, stdout: 'g.md\n' }
-  if (command === 'git show HEAD:.tmp/plan/g.md') return { exitCode: 0, stdout: GOAL }
   if (command === 'git rev-list --count abc..HEAD') return { exitCode: 0, stdout: '0\n' }
+  if (command.startsWith('git symbolic-ref ')) return { exitCode: 1, stdout: '' }
   return { exitCode: 0, stdout: '' }
 }
 
 // Stands in for Bash and for the checkout: `repo` answers each command the checkpoint runs, every run
-// is recorded as `[command, cwd]` and its time limit in `limits`, the working tree has no .tmp/plan/,
+// is recorded as `[command, cwd]` and its time limit in `limits`, the plan folder holds one goal file,
 // and the clock stands still. Bash records each command it ran.
-function world(on: On, bash: object = RAN) {
+function world(on: On, bash: object = RAN, broken: string | null = null) {
   const runs: [string, string | undefined][] = []
   const limits: (number | undefined)[] = []
   const commands: string[] = []
+  // The command that fails as git does outside a repository.
+  const answer = (command: string) => (command === broken ? { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository\n' } : { ...repo(command), stderr: '' })
   on('session.cwd', () => ({ value: '/repo' }))
-  on('fs.exists', () => ({ value: false }))
+  on('fs.exists', ($, e) => ({ value: e.path === PLAN || e.path === `${PLAN}/g.md` }))
+  on('fs.stat', ($, e) => ({ value: { kind: e.path === PLAN ? 'dir' : 'file', size: GOAL.length, mtimeMs: 0, isLink: false } }) as never)
+  on('fs.list', () => ({ value: [{ name: 'g.md', kind: 'file', size: GOAL.length, mtimeMs: 0, isLink: false }] }) as never)
+  on('fs.read', () => ({ value: GOAL }))
   on('clock.now', () => ({ value: 1000 }))
   on('process.run', ($, e) => {
     const command = e.argv.join(' ')
     runs.push([command, e.init?.cwd])
     limits.push(e.init?.timeoutMs)
-    return { value: { ...repo(command), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    return { value: { ...answer(command), isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('tool.call', { tool: 'Bash' }, ($, e) => {
     if (e.tool === 'Bash') commands.push(e.command)
@@ -44,8 +50,8 @@ function world(on: On, bash: object = RAN) {
   return { runs, limits, commands }
 }
 
-// The folder of each checkpoint: its first command asks git for the checkout's top level there.
-const folders = (runs: [string, string | undefined][]) => runs.filter(r => r[0] === 'git rev-parse --show-toplevel').map(r => r[1])
+// The folder of each checkpoint: its first command, the checkout's `gh pr view`, runs there.
+const folders = (runs: [string, string | undefined][]) => runs.filter(r => r[0].startsWith('gh pr view ')).map(r => r[1])
 
 const bash = (command: string) => ({ tool: 'Bash', command }) as const
 
@@ -55,14 +61,25 @@ test('a push that worked runs the checkpoint, then the copy, and tells the model
   const r = await $.tool.call(bash('git push -u origin feat'))
 
   const edit = runs.findIndex(run => run[0] === 'gh pr edit 7 --body-file -')
-  expect(runs[0]).toEqual(['git rev-parse --show-toplevel', '/repo'])
+  expect(runs[0]).toEqual([GIT_DIR, '/repo'])
   expect(edit).toBeGreaterThan(0)
-  // Then the copy on the remote: git gives it no git dir here, so it stops there.
-  expect(runs.slice(edit + 1)).toEqual([['git rev-parse --path-format=absolute --git-dir', '/repo']])
+  // Then the copy on the remote: at a detached HEAD it stops after asking for the branch.
+  expect(runs.slice(edit + 1)).toEqual([
+    [GIT_DIR, '/repo'],
+    ['git symbolic-ref --short -q HEAD', '/repo'],
+  ])
   expect(runs.every(run => run[1] === '/repo')).toBe(true)
   // With the clock standing still, each command may take all of the checkpoint's 60 seconds, and of the copy's 30.
   expect(limits).toEqual(runs.map((run, i) => (i <= edit ? 60_000 : 30_000)))
   expect(r).toEqual({ ...RAN, context: ['waffles checkpoint: Updated the plan outline in #7: https://github.com/o/r/pull/7'] })
+})
+
+test('a checkpoint that fails tells the model its line from stderr', async ($, on) => {
+  world(on, RAN, GIT_DIR)
+
+  const r = await $.tool.call(bash('git push'))
+
+  expect(r).toEqual({ ...RAN, context: ['waffles checkpoint: checkpoint: git rev-parse --path-format=absolute failed: fatal: not a git repository'] })
 })
 
 test('opening a pull request runs the checkpoint', async ($, on) => {

@@ -1,5 +1,6 @@
 import type { Host, RunResult } from './host.ts'
 import { dropPlan, mirrorPlan } from './plan-mirror.ts'
+import { outlineIn, stateIn } from './plan-store.ts'
 
 /*
  * Renders the plan outline into its section of the pull request's description.
@@ -7,24 +8,22 @@ import { dropPlan, mirrorPlan } from './plan-mirror.ts'
  * Usage: node scripts/checkpoint.ts [--pr NUMBER] [--dry-run]. The hook in hooks/checkpoint.ts runs
  * the same checkpoint after a `git push` or a `gh pr create` that worked.
  *
- * Run in a checkout. The checkpoint reads the plan outline from .tmp/plan/ and writes it as a
- * checklist between the markers below, in the description of the open pull request for the
- * checked-out branch (or of --pr NUMBER, which must be for that branch). It leaves the rest of the
- * description as it is. Where the description has no markers yet, the section takes the place of a
- * "## Plan outline" section, or goes after the other sections, ahead of the attribution lines at the
- * end.
+ * Run in a checkout. The checkpoint reads the plan outline from the checkout's plan folder,
+ * <git dir>/waffles/plan/, and writes it as a checklist between the markers below, in the description
+ * of the open pull request for the checked-out branch (or of --pr NUMBER, which must be for that
+ * branch). It leaves the rest of the description as it is. Where the description has no markers yet,
+ * the section takes the place of a "## Plan outline" section, or goes after the other sections, ahead
+ * of the attribution lines at the end.
  *
- * When .tmp/plan/assumed-for-you.md is there, the section ends with its list under "### Assumed for
+ * When assumed-for-you.md is in the plan folder, the section ends with its list under "### Assumed for
  * you": the decisions an agent made in the person's place.
  *
- * The checklist says "Ahead of the branch" when the checkout holds changes that are not committed or
- * commits that are not pushed. Once a commit has removed .tmp/, the checklist is the outline as that
- * commit's parent held it, with the step "Remove the working files" ticked; only a commit after the
- * base branch counts. The checkpoint never commits or pushes. A second run with nothing changed
- * changes nothing. --dry-run prints the new description instead of writing it.
+ * The checklist says "Ahead of the branch" when the branch is not pushed or has commits that are not
+ * pushed. The checkpoint never commits or pushes. A second run with nothing changed changes nothing.
+ * --dry-run prints the new description instead of writing it.
  *
  * Exit codes: 0 when the description is up to date or there is nothing to do, 1 when git or gh
- * fails, 2 for bad arguments.
+ * fails, 2 for bad arguments. What it did goes to stdout; why it failed goes to stderr.
  *
  * It reads text as Python's text mode did when this was a Python script: `\r\n` and a lone `\r` read
  * as `\n`, whitespace and digits are Unicode's, and names sort by code point. The text it prints is
@@ -34,7 +33,6 @@ import { dropPlan, mirrorPlan } from './plan-mirror.ts'
 export const START = '<!-- waffles:plan-outline:start -->'
 export const END = '<!-- waffles:plan-outline:end -->'
 const HEADING = '## Plan outline'
-const REMOVE_STEP = 'remove the working files'
 // The record of decisions made for the person, beside the outline; rendered after the checklist, never read as a checklist.
 const ASSUMED = 'assumed-for-you.md'
 const ASSUMED_HEADING = '### Assumed for you'
@@ -114,7 +112,7 @@ async function tryGit(c: Checkout, ...args: string[]): Promise<string | null> {
 
 // --- Reading the outline ---------------------------------------------------
 
-/** An outline file: its name in .tmp/plan/ and its text. */
+/** An outline file: its name in the plan folder and its text. */
 export type OutlineFile = [name: string, text: string]
 
 /** (front matter, body lines) of a goal file, or (null, all lines) when it has no front matter. */
@@ -145,7 +143,7 @@ function isChecklist(lines: string[]): boolean {
 const STATES: Record<string, 'open' | 'done' | 'dropped' | 'deferred'> = { ' ': 'open', '~': 'open', r: 'open', x: 'done', '-': 'dropped', '>': 'deferred' }
 
 /** The checklist lines of a goal file's steps. */
-function goalItems(body: string[], isRemoved: boolean): string[] {
+function goalItems(body: string[]): string[] {
   const items: string[] = []
   for (const line of body) {
     const m = GOAL_STEP.exec(line)
@@ -154,14 +152,13 @@ function goalItems(body: string[], isRemoved: boolean): string[] {
     let title = m[5]!.replace(NOTE, '')
     // The plan tool escapes a planned title that starts like a kind marker.
     if (ESCAPED.test(title)) title = title.slice(1)
-    let state = STATES[box]!
+    const state = STATES[box]!
     if (state === 'deferred') {
       const link = LINK.exec(title)
       title = link ? `${link[1]} (moved to the backlog: ${link[2]})` : `${title} (moved to the backlog)`
     } else if (state === 'dropped') {
       title = `~~${title}~~ (dropped)`
     }
-    if (isRemoved && strip(title).toLowerCase() === REMOVE_STEP) state = 'done'
     const mark = state === 'open' ? ' ' : 'x'
     items.push(`${indent}- [${mark}] ${stepId}. ${title}`)
   }
@@ -169,7 +166,7 @@ function goalItems(body: string[], isRemoved: boolean): string[] {
 }
 
 /** The task items of a plain checklist file, with each step ID written as `1.`. */
-function checklistItems(lines: string[], isRemoved: boolean): string[] {
+function checklistItems(lines: string[]): string[] {
   const items: string[] = []
   for (const line of lines) {
     const m = TASK.exec(line)
@@ -178,14 +175,8 @@ function checklistItems(lines: string[], isRemoved: boolean): string[] {
     let text = m[3]!
     const at = text.indexOf(' ')
     const [first, rest] = at < 0 ? [text, ''] : [text.slice(0, at), text.slice(at + 1)]
-    let title: string
-    if (STEP_ID.test(first) && rest) {
-      text = `${first.replace(/\.+$/, '')}. ${rest}`
-      title = rest
-    } else {
-      title = text
-    }
-    const mark = box === 'x' || box === 'X' || (isRemoved && strip(title).toLowerCase() === REMOVE_STEP) ? 'x' : ' '
+    if (STEP_ID.test(first) && rest) text = `${first.replace(/\.+$/, '')}. ${rest}`
+    const mark = box === 'x' || box === 'X' ? 'x' : ' '
     items.push(`${indent}- [${mark}] ${text}`)
   }
   return items
@@ -207,7 +198,7 @@ function assumedItems(text: string): string[] {
  * The checklist for the outline files, sorted by name, then the "assumed for you" list when there is
  * one; null when no file is an outline.
  */
-export function render(files: readonly OutlineFile[], isRemoved: boolean): string[] | null {
+export function render(files: readonly OutlineFile[]): string[] | null {
   const goals: [string, string[]][] = []
   const plain: [string, string[]][] = []
   let assumed: string[] = []
@@ -218,11 +209,11 @@ export function render(files: readonly OutlineFile[], isRemoved: boolean): strin
     }
     const [front, body] = splitFront(text)
     if (front !== null) {
-      goals.push([front.get('goal')!, goalItems(body, isRemoved)])
+      goals.push([front.get('goal')!, goalItems(body)])
     } else if (isChecklist(body)) {
       const heading = body.find(line => line.startsWith('#'))
       const title = heading === undefined ? name.slice(0, -3) : strip(heading.replace(/^#+/, ''))
-      plain.push([title, checklistItems(body, isRemoved)])
+      plain.push([title, checklistItems(body)])
     }
   }
   // A plan document beside the goal files is not a checklist; goal files come first when both are there.
@@ -241,27 +232,20 @@ export function render(files: readonly OutlineFile[], isRemoved: boolean): strin
 
 const isOutlineName = (name: string) => name.endsWith('.md') && !name.startsWith('.')
 
-/**
- * The outline files and whether a commit removed them, or null. Only a commit on this branch, after
- * `base` (a ref of the base branch), counts as the one that removed them.
- */
-async function outlineFiles(c: Checkout, top: string, base: string | null): Promise<[OutlineFile[], boolean] | null> {
-  const folder = `${top}/.tmp/plan`
-  if (await isFolder(c.$, folder)) {
-    const files: OutlineFile[] = []
-    const entries = (await c.$.fs.list(folder)).filter(entry => isOutlineName(entry.name))
-    for (const entry of entries.sort((a, b) => byCodePoint(a.name, b.name))) {
-      if (entry.kind === 'file') files.push([entry.name, universal(await c.$.fs.read(`${folder}/${entry.name}`))])
-    }
-    if (files.length) return [files, false]
+/** The checkout's plan folder: `waffles/plan` in its git dir, as the plan outline keeps it. */
+async function planFolder(c: Checkout): Promise<string> {
+  return outlineIn(stateIn(strip(await git(c, 'rev-parse', '--path-format=absolute', '--git-dir')).replace(/\/+$/, '')))
+}
+
+/** The outline files in the plan folder, sorted by name; empty when there is no folder. */
+async function outlineFiles(c: Checkout, folder: string): Promise<OutlineFile[]> {
+  if (!(await isFolder(c.$, folder))) return []
+  const files: OutlineFile[] = []
+  const entries = (await c.$.fs.list(folder)).filter(entry => isOutlineName(entry.name))
+  for (const entry of entries.sort((a, b) => byCodePoint(a.name, b.name))) {
+    if (entry.kind === 'file') files.push([entry.name, universal(await c.$.fs.read(`${folder}/${entry.name}`))])
   }
-  // Not in the working tree: as HEAD holds it, else as the parent of the commit that removed it.
-  const files = await committedFiles(c, 'HEAD')
-  if (files.length) return [files, false]
-  if (base === null) return null
-  const last = strip((await tryGit(c, 'log', '-1', '--format=%H', `${base}..HEAD`, '--', '.tmp/plan')) ?? '')
-  const removed = last ? await committedFiles(c, `${last}^`) : null
-  return removed?.length ? [removed, true] : null
+  return files
 }
 
 // Whether a folder is at the path, through any link.
@@ -273,38 +257,20 @@ async function isFolder($: Host, path: string): Promise<boolean> {
   )
 }
 
-/** The outline files in .tmp/plan/ at a commit; empty when it has none. */
-async function committedFiles(c: Checkout, rev: string): Promise<OutlineFile[]> {
-  const listed = await tryGit(c, 'ls-tree', '--name-only', `${rev}:.tmp/plan`)
-  if (!listed) return []
-  const names = listed.split('\n').filter(isOutlineName).sort(byCodePoint)
-  const files: OutlineFile[] = []
-  for (const name of names) files.push([name, await git(c, 'show', `${rev}:.tmp/plan/${name}`)])
-  return files
-}
-
 // --- The state of the checkout --------------------------------------------
 
-/** The remote ref of the base branch, else of the remote's default branch; null when neither is there. */
-async function baseRef(c: Checkout, base: unknown): Promise<string | null> {
-  if (base && (await tryGit(c, 'rev-parse', '--verify', '-q', `refs/remotes/origin/${str(base)}`)) !== null) return `refs/remotes/origin/${str(base)}`
-  const fallback = strip((await tryGit(c, 'symbolic-ref', '-q', 'refs/remotes/origin/HEAD')) ?? '')
-  return fallback || null
-}
-
-/** The "ahead of the branch" line, or null when everything is committed and pushed. */
+/** The "ahead of the branch" line, or null when every commit is pushed. */
 async function aheadNote(c: Checkout, branch: string): Promise<string | null> {
-  const reasons: string[] = []
   const upstream = await tryGit(c, 'rev-parse', '--verify', '-q', `refs/remotes/origin/${branch}`)
+  let reason: string
   if (upstream === null) {
-    reasons.push('the branch is not pushed')
+    reason = 'the branch is not pushed'
   } else {
     const count = Number(strip(await git(c, 'rev-list', '--count', `${strip(upstream)}..HEAD`)) || 0)
-    if (count) reasons.push(`${count} commit${count !== 1 ? 's' : ''} not pushed`)
+    if (!count) return null
+    reason = `${count} commit${count !== 1 ? 's' : ''} not pushed`
   }
-  if (strip(await git(c, 'status', '--porcelain'))) reasons.push('changes not committed')
-  if (!reasons.length) return null
-  return `> **Ahead of the branch:** this checklist includes work that is not on the branch yet (${reasons.join('; ')}).`
+  return `> **Ahead of the branch:** this checklist includes work that is not on the branch yet (${reason}).`
 }
 
 // --- The description -------------------------------------------------------
@@ -384,11 +350,11 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
     const c: Checkout = { $, folder, deadline: options.timeoutMs === undefined ? null : (await $.clock.now()) + options.timeoutMs }
     const { pr, isDryRun = false } = options
     try {
-      const top = strip(await git(c, 'rev-parse', '--show-toplevel'))
+      const plan = await planFolder(c)
       const branch = strip(await git(c, 'rev-parse', '--abbrev-ref', 'HEAD'))
       let view: string
       try {
-        view = await run(c, ['gh', 'pr', 'view', ...(pr ? [pr] : []), '--json', 'number,url,body,headRefName,baseRefName,state'])
+        view = await run(c, ['gh', 'pr', 'view', ...(pr ? [pr] : []), '--json', 'number,url,body,headRefName,state'])
       } catch (error) {
         if (!(error instanceof Failure)) throw error
         return out(`No pull request for ${pr ? `#${pr}` : `the branch ${branch}`}: nothing to update.`)
@@ -406,10 +372,10 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
       if (get('state') !== 'OPEN') return out(`Pull request #${number()} is ${str(get('state')).toLowerCase()}: its checklist stays as it ended.`)
       if (get('headRefName') == null) return out(`gh gave no head branch for pull request #${number()}: nothing to update.`)
       if (get('headRefName') !== branch) return out(`Pull request #${number()} is for ${str(get('headRefName'))}, not ${branch}: nothing to update.`)
-      const found = await outlineFiles(c, top, await baseRef(c, get('baseRefName')))
-      if (found === null) return out(`No plan outline in .tmp/plan/: #${number()} stays as it is.`)
-      const items = render(...found)
-      if (items === null) return out(`No checklist in .tmp/plan/: #${number()} stays as it is.`)
+      const files = await outlineFiles(c, plan)
+      if (!files.length) return out(`No plan outline in ${plan}: #${number()} stays as it is.`)
+      const items = render(files)
+      if (items === null) return out(`No checklist in ${plan}: #${number()} stays as it is.`)
       const note = await aheadNote(c, branch)
       const body = (get('body') || '') as string
       const next = place(body, section(items, note))
@@ -420,11 +386,11 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
       const url = get('url')
       return out(`Updated the plan outline in #${number()}${note ? ' (ahead of the branch)' : ''}${url == null ? '.' : `: ${str(url)}`}`)
     } catch (error) {
-      if (error instanceof Failure) return { exitCode: 1, stdout: `checkpoint: ${error.message}\n`, stderr: '' }
+      if (error instanceof Failure) return { exitCode: 1, stdout: '', stderr: `checkpoint: ${error.message}\n` }
       throw error
     }
   } catch (error) {
-    // Anything else stops it with nothing printed, as an error the script did not expect did.
+    // Anything else prints its stack after the line, as an error the script did not expect did.
     return { exitCode: 1, stdout: '', stderr: `checkpoint: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n` }
   }
 }
@@ -484,9 +450,11 @@ export async function afterShell($: Host, command: string, cwd?: string): Promis
   if (folder === null) return null
   if (!isPush) return afterMerge($, folder, MERGE_NUMBER.exec(command)?.[1])
   const done = await checkpoint($, folder, { timeoutMs: CHECKPOINT_MS }).catch((error: unknown) => ({
-    stdout: `did not run: ${error instanceof Error ? error.message : String(error)}`,
+    stdout: '',
+    stderr: `checkpoint: did not run: ${error instanceof Error ? error.message : String(error)}`,
   }))
-  const line = done.stdout.trim()
+  // A failure's line, without the stack an error the checkpoint did not expect prints after it.
+  const line = done.stdout.trim() || (done.stderr.trim().split('\n')[0] ?? '')
   const lines = [line ? `waffles checkpoint: ${line}` : null, await mirrorPlan($, folder)].filter(text => text !== null)
   return lines.length ? lines.join('\n') : null
 }

@@ -6,11 +6,11 @@ import { delimiter, dirname, join } from 'node:path'
 import { test } from 'node:test'
 
 import { nodeHost } from '../adapters/node/host.ts'
-import { checkpoint, END, parseArgs, place, render, START } from './checkpoint.ts'
+import { afterShell, checkpoint, END, parseArgs, place, render, START } from './checkpoint.ts'
 import type { Host } from './host.ts'
 
-// Answers `gh pr view` from the state file's "pr" (null: no pull request), and stores the body
-// `gh pr edit --body-file -` reads from stdin. Every call is recorded.
+// Answers `gh pr view` from the state file's "pr" (null: no pull request; a string: printed as it is),
+// and stores the body `gh pr edit --body-file -` reads from stdin. Every call is recorded.
 const GH = `#!/usr/bin/env node
 const fs = require('node:fs')
 const path = process.env.GH_STUB_STATE
@@ -19,7 +19,9 @@ const args = process.argv.slice(2)
 state.calls.push(args)
 let code = 0
 if (args[0] === 'pr' && args[1] === 'view') {
-  if (state.pr === null) {
+  if (typeof state.pr === 'string') {
+    process.stdout.write(state.pr)
+  } else if (state.pr === null) {
     process.stderr.write('no pull requests found for branch\\n')
     code = 1
   } else {
@@ -45,7 +47,7 @@ updated: 2026-11-23T10:00:00.000Z
 - [x] 1 Add the order total to the order detail query
 - [ ] 2 Show the order total on the order detail screen
   - [x] 2.1 ? Check the empty state <!-- aliases=3.1 -->
-- [ ] 3 Remove the working files
+- [ ] 3 Show the order total in the order list
 `
 
 const BODY = `## Summary
@@ -72,13 +74,13 @@ const CHECKLIST = [
   '- [x] 1. Add the order total to the order detail query',
   '- [ ] 2. Show the order total on the order detail screen',
   '  - [x] 2.1. Check the empty state',
-  '- [ ] 3. Remove the working files',
+  '- [ ] 3. Show the order total in the order list',
 ]
 
-type Pr = { number: number; url: string; body: string; headRefName: string; baseRefName?: string; state: string }
+type Pr = { number: number; url: string; body: string; headRefName: string; state: string }
 type GhState = { pr: Pr | null; calls: string[][] }
 
-/** A clone of a bare remote, on branch feat with the outline committed and pushed, and a stub gh. */
+/** A clone of a bare remote, on branch feat, pushed, with the outline in its plan folder, and a stub gh. */
 class Checkout {
   readonly root: string
   readonly work: string
@@ -110,11 +112,9 @@ class Checkout {
     this.git('commit', '-q', '-m', 'Start')
     this.git('push', '-q', 'origin', 'main')
     this.git('switch', '-q', '-c', 'feat')
-    await this.write('.tmp/plan/show-the-parent-id.md', GOAL)
-    this.git('add', '.tmp')
-    this.git('commit', '-q', '-m', 'Add the plan outline')
     this.git('push', '-q', '-u', 'origin', 'feat')
-    await this.setPr({ number: 7, url: 'https://github.com/o/r/pull/7', body: BODY, headRefName: 'feat', baseRefName: 'main', state: 'OPEN' })
+    await this.writePlan('show-the-parent-id.md', GOAL)
+    await this.setPr({ number: 7, url: 'https://github.com/o/r/pull/7', body: BODY, headRefName: 'feat', state: 'OPEN' })
     return this
   }
 
@@ -132,7 +132,12 @@ class Checkout {
     await fs.writeFile(path, text)
   }
 
-  async setPr(pr: Pr | null): Promise<void> {
+  /** Writes a file of the plan folder, in the git dir. */
+  async writePlan(name: string, text: string): Promise<void> {
+    await this.write(`.git/waffles/plan/${name}`, text)
+  }
+
+  async setPr(pr: Pr | string | null): Promise<void> {
     await fs.writeFile(this.statePath, JSON.stringify({ pr, calls: [] }))
   }
 
@@ -209,9 +214,7 @@ checkoutTest('a changed outline replaces only the marked section', async co => {
   const pr = (await co.gh()).pr!
   pr.body = `Intro text\n\n${pr.body}\n\n## Notes\nKept as written.`
   await co.setPr(pr)
-  await co.write('.tmp/plan/show-the-parent-id.md', GOAL.replace('- [ ] 2 Show', '- [x] 2 Show'))
-  co.git('commit', '-q', '-am', 'Show the order total')
-  co.git('push', '-q')
+  await co.writePlan('show-the-parent-id.md', GOAL.replace('- [ ] 2 Show', '- [x] 2 Show'))
 
   const [code] = await co.checkpoint()
 
@@ -242,7 +245,7 @@ checkoutTest('a new section goes ahead of the attribution lines', async co => {
   assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section(CHECKLIST)}\n\n${footer}\n`)
 })
 
-checkoutTest('uncommitted and unpushed work marks the checklist ahead of the branch', async co => {
+checkoutTest('unpushed commits mark the checklist ahead of the branch; uncommitted changes do not', async co => {
   await co.write('a.txt', 'a\n')
   co.git('add', 'a.txt')
   co.git('commit', '-q', '-m', 'A')
@@ -251,72 +254,53 @@ checkoutTest('uncommitted and unpushed work marks the checklist ahead of the bra
 
   const [code, out] = await co.checkpoint()
 
-  const note = '> **Ahead of the branch:** this checklist includes work that is not on the branch yet (1 commit not pushed; changes not committed).'
+  const note = '> **Ahead of the branch:** this checklist includes work that is not on the branch yet (1 commit not pushed).'
   assert.equal(code, 0)
   assert.ok(out.includes('(ahead of the branch)'), out)
   assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section(CHECKLIST, note)}`)
-  // It never commits.
+  // It never commits, and the plan outline is not in the working tree.
   assert.equal(co.git('rev-parse', 'HEAD'), head)
   assert.equal(co.git('status', '--porcelain'), ' M README.md\n')
 
-  co.git('commit', '-q', '-am', 'B')
   co.git('push', '-q')
   await co.checkpoint()
   assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section(CHECKLIST)}`)
 })
 
-checkoutTest('after the working files are removed the checklist ends with that step ticked', async co => {
-  co.git('rm', '-q', '-r', '.tmp')
-  co.git('commit', '-q', '-m', 'Remove the working files')
-  co.git('push', '-q')
+checkoutTest('the record of decisions is the assumed for you list after the checklist', async co => {
+  await co.writePlan('assumed-for-you.md', ASSUMED_FILE)
 
   await co.checkpoint()
-  const body = (await co.gh()).pr!.body
-  await co.checkpoint()
 
-  assert.equal(body, `${BODY}\n\n${section([...CHECKLIST.slice(0, 3), '- [x] 3. Remove the working files'])}`)
-  assert.equal((await co.edits()).length, 1)
+  assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section([...CHECKLIST, '', '### Assumed for you', '', ...ASSUMED_LIST])}`)
 })
 
-checkoutTest('the record of decisions is the assumed for you list and stays after the working files go', async co => {
-  await co.write('.tmp/plan/assumed-for-you.md', ASSUMED_FILE)
-  co.git('add', '.tmp')
-  co.git('commit', '-q', '-m', 'Approve the spec')
-  co.git('push', '-q')
-
-  await co.checkpoint()
-  const body = (await co.gh()).pr!.body
-  co.git('rm', '-q', '-r', '.tmp')
-  co.git('commit', '-q', '-m', 'Remove the working files')
-  co.git('push', '-q')
-  await co.checkpoint()
-
-  assert.equal(body, `${BODY}\n\n${section([...CHECKLIST, '', '### Assumed for you', '', ...ASSUMED_LIST])}`)
-  assert.equal(
-    (await co.gh()).pr!.body,
-    `${BODY}\n\n${section([...CHECKLIST.slice(0, 3), '- [x] 3. Remove the working files', '', '### Assumed for you', '', ...ASSUMED_LIST])}`,
-  )
-})
-
-checkoutTest('an outline removed before the branch started is not rendered', async co => {
-  // The working files went in a commit on main; a new branch from there has none of its own.
-  co.git('rm', '-q', '-r', '.tmp')
-  co.git('commit', '-q', '-m', 'Remove the working files')
-  co.git('switch', '-q', 'main')
-  co.git('merge', '-q', '--ff-only', 'feat')
-  co.git('push', '-q', 'origin', 'main')
-  co.git('switch', '-q', '-c', 'next')
-  await co.write('b.txt', 'b\n')
-  co.git('add', 'b.txt')
-  co.git('commit', '-q', '-m', 'B')
-  co.git('push', '-q', '-u', 'origin', 'next')
-  await co.setPr({ number: 9, url: 'u', body: BODY, headRefName: 'next', baseRefName: 'main', state: 'OPEN' })
+checkoutTest('a checkout with no plan outline says where it looked', async co => {
+  await fs.rm(join(co.work, '.git', 'waffles'), { recursive: true })
 
   const [code, out] = await co.checkpoint()
 
   assert.equal(code, 0)
-  assert.equal(out.trim(), 'No plan outline in .tmp/plan/: #9 stays as it is.')
+  assert.equal(out.trim(), `No plan outline in ${join(co.work, '.git', 'waffles', 'plan')}: #7 stays as it is.`)
   assert.deepEqual(await co.edits(), [])
+})
+
+checkoutTest('a failure goes to stderr; after a push the model reads its line, not the stack of an error the checkpoint did not expect', async co => {
+  const outside = join(co.root, 'outside')
+  await fs.mkdir(outside)
+  const failed = await co.withEnv(() => checkpoint(co.host(), outside))
+
+  assert.equal(failed.exitCode, 1)
+  assert.equal(failed.stdout, '')
+  assert.match(failed.stderr, /^checkpoint: git rev-parse --path-format=absolute failed: fatal: not a git repository/)
+
+  await co.setPr('not json')
+  const broken = await co.withEnv(() => checkpoint(co.host(), co.work))
+  const line = await co.withEnv(() => afterShell(co.host(), 'git push', co.work))
+
+  assert.equal(broken.stdout, '')
+  assert.match(broken.stderr, /^checkpoint: SyntaxError: .*\n {4}at /)
+  assert.match(line ?? '', /^waffles checkpoint: checkpoint: SyntaxError: [^\n]*$/)
 })
 
 checkoutTest('no pull request or a merged one is left alone', async co => {
@@ -339,7 +323,7 @@ checkoutTest('a pull request for another branch is left alone', async co => {
   ;[code, out] = await co.checkpoint('--pr', '8')
   assert.equal(code, 0)
   assert.equal(out.trim(), 'Pull request #8 is for other, not feat: nothing to update.')
-  assert.deepEqual((await co.gh()).calls.at(-1), ['pr', 'view', '8', '--json', 'number,url,body,headRefName,baseRefName,state'])
+  assert.deepEqual((await co.gh()).calls.at(-1), ['pr', 'view', '8', '--json', 'number,url,body,headRefName,state'])
 })
 
 checkoutTest('dry run prints the description and writes nothing', async co => {
@@ -369,16 +353,16 @@ checkoutTest('the time limit bounds all the commands together', async co => {
   const done = await co.withEnv(() => checkpoint($, co.work, { timeoutMs: 60_000 }))
 
   assert.deepEqual(limits, [60_000, 40_000, 20_000])
-  assert.deepEqual(done, { exitCode: 1, stdout: 'checkpoint: git could not run: the checkpoint ran out of time\n', stderr: '' })
+  assert.deepEqual(done, { exitCode: 1, stdout: '', stderr: 'checkpoint: gh could not run: the checkpoint ran out of time\n' })
   assert.deepEqual(await co.edits(), [])
 })
 
 test('dropped deferred parked review and subagent steps', () => {
   const goal = GOAL.replace(
-    '- [ ] 3 Remove the working files',
+    '- [ ] 3 Show the order total in the order list',
     '- [-] 3 Try the old query\n- [>] 4 Add caching → .backlog/cache.md\n- [~] 5 ⤷ Fix the build <!-- parked=2.1 -->\n- [ ] 6 \\? Odd title\n- [r] 7 Merge the fixes\n- [ ] 8 Archive <!-- agent=a1 -->',
   )
-  assert.deepEqual(render([['g.md', goal]], false)!.slice(3), [
+  assert.deepEqual(render([['g.md', goal]])!.slice(3), [
     '- [x] 3. ~~Try the old query~~ (dropped)',
     '- [x] 4. Add caching (moved to the backlog: .backlog/cache.md)',
     '- [ ] 5. Fix the build',
@@ -389,28 +373,22 @@ test('dropped deferred parked review and subagent steps', () => {
 })
 
 test('a plain checklist is rendered and a plan document is not', () => {
-  const plain = '# Work\n\n- [x] 1. First\n- [ ] 2 Second\n- [ ] Remove the working files\n'
+  const plain = '# Work\n\n- [x] 1. First\n- [ ] 2 Second\n- [X] Third\n'
   const document = '# Plan\n\nSome prose.\n\n- [ ] not a step list\n'
   assert.deepEqual(
-    render(
-      [
-        ['outline.md', plain],
-        ['plan.md', document],
-      ],
-      true,
-    ),
-    ['- [x] 1. First', '- [ ] 2. Second', '- [x] Remove the working files'],
+    render([
+      ['outline.md', plain],
+      ['plan.md', document],
+    ]),
+    ['- [x] 1. First', '- [ ] 2. Second', '- [x] Third'],
   )
-  assert.equal(render([['plan.md', document]], false), null)
+  assert.equal(render([['plan.md', document]]), null)
   // Goal files come before a plain checklist.
   assert.deepEqual(
-    render(
-      [
-        ['a.md', GOAL],
-        ['outline.md', plain],
-      ],
-      false,
-    ),
+    render([
+      ['a.md', GOAL],
+      ['outline.md', plain],
+    ]),
     CHECKLIST,
   )
 })
@@ -418,39 +396,30 @@ test('a plain checklist is rendered and a plan document is not', () => {
 test('the assumed for you list follows the checklist and is never a checklist itself', () => {
   const taskLike = '# Assumed for you\n\n- [ ] 1. A line that looks like a task\n'
   assert.deepEqual(
-    render(
-      [
-        ['a.md', GOAL],
-        ['assumed-for-you.md', ASSUMED_FILE],
-      ],
-      false,
-    ),
+    render([
+      ['a.md', GOAL],
+      ['assumed-for-you.md', ASSUMED_FILE],
+    ]),
     [...CHECKLIST, '', '### Assumed for you', '', ...ASSUMED_LIST],
   )
   // With no outline beside it, there is nothing to render.
-  assert.equal(render([['assumed-for-you.md', taskLike]], false), null)
+  assert.equal(render([['assumed-for-you.md', taskLike]]), null)
   // An empty record adds nothing.
   assert.deepEqual(
-    render(
-      [
-        ['a.md', GOAL],
-        ['assumed-for-you.md', '# Assumed for you\n\n'],
-      ],
-      false,
-    ),
+    render([
+      ['a.md', GOAL],
+      ['assumed-for-you.md', '# Assumed for you\n\n'],
+    ]),
     CHECKLIST,
   )
 })
 
 test('several goals each get a heading', () => {
   const other = GOAL.replace('goal: Show the order total', 'goal: Fix the date').replace('\n  - [x] 2.1 ? Check the empty state <!-- aliases=3.1 -->', '')
-  const lines = render(
-    [
-      ['a.md', GOAL],
-      ['b.md', other],
-    ],
-    false,
-  )!
+  const lines = render([
+    ['a.md', GOAL],
+    ['b.md', other],
+  ])!
   assert.deepEqual(lines.slice(0, 2), ['### Show the order total', ''])
   assert.deepEqual(lines.slice(6, 9), ['', '### Fix the date', ''])
 })
@@ -461,28 +430,6 @@ test('a body with crlf line ends keeps them', () => {
   const placed = place(body, block)
   assert.equal(placed, `## Summary\r\nText\r\n\r\n${START}\r\nA\r\n${END}\r\n`)
   assert.equal(place(placed, block), placed)
-})
-
-checkoutTest('the working files removed in an earlier commit of the branch still give the checklist', async co => {
-  co.git('rm', '-q', '-r', '.tmp')
-  co.git('commit', '-q', '-m', 'Remove the working files')
-  await co.write('b.txt', 'b\n')
-  co.git('add', 'b.txt')
-  co.git('commit', '-q', '-m', 'B')
-  // main moves on, and the branch takes it in with a merge after the removal.
-  co.git('switch', '-q', 'main')
-  await co.write('c.txt', 'c\n')
-  co.git('add', 'c.txt')
-  co.git('commit', '-q', '-m', 'C')
-  co.git('push', '-q', 'origin', 'main')
-  co.git('switch', '-q', 'feat')
-  co.git('merge', '-q', '--no-edit', 'main')
-  co.git('push', '-q')
-
-  const [code, out] = await co.checkpoint()
-
-  assert.equal(code, 0, out)
-  assert.equal((await co.gh()).pr!.body, `${BODY}\n\n${section([...CHECKLIST.slice(0, 3), '- [x] 3. Remove the working files'])}`)
 })
 
 checkoutTest('a pull request with no url is still updated, and the run ends well', async co => {
@@ -502,7 +449,7 @@ checkoutTest('a pull request with no state or no head branch says which, and is 
     ['state', 'gh gave no state for pull request #7: nothing to update.'],
     ['headRefName', 'gh gave no head branch for pull request #7: nothing to update.'],
   ] as const) {
-    const pr: Partial<Pr> = { number: 7, url: 'u', body: BODY, headRefName: 'feat', baseRefName: 'main', state: 'OPEN' }
+    const pr: Partial<Pr> = { number: 7, url: 'u', body: BODY, headRefName: 'feat', state: 'OPEN' }
     delete pr[key]
     await co.setPr(pr as Pr)
 
