@@ -15,10 +15,10 @@ type Tool = { name: string; description?: string; input?: unknown; execute: (inp
 // A stand-in for OpenCode's plugin context: it keeps what the plugin registers, and a session record per ID.
 // `emit` sends an event to the plugin's subscription; `question` is OpenCode's built-in question tool,
 // which answers `answer` unless its signal aborts first.
-async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = { s1: {} }) {
+async function fakeContext(sessionInfo: Record<string, { parentID?: string; time?: { busy?: number; idle?: number } }> = { s1: {} }) {
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'waffles-opencode-')))
-  const sessions = new Map<string, { id: string; parentID?: string; metadata?: Json; location: { directory: string } }>()
-  for (const [id, info] of Object.entries(sessionInfo)) sessions.set(id, { id, ...info, location: { directory: root } })
+  const sessions = new Map<string, { id: string; parentID?: string; metadata?: Json; time: { busy?: number; idle?: number }; location: { directory: string } }>()
+  for (const [id, info] of Object.entries(sessionInfo)) sessions.set(id, { id, time: {}, ...info, location: { directory: root } })
   const entries = new Map<string, Map<string, unknown>>()
   const registered = {
     tools: [] as Tool[],
@@ -65,6 +65,7 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = 
       },
       prompt: async (input: Json) => void registered.prompts.push(input),
       context: async () => registered.messages,
+      list: async ({ parentID }: { parentID?: string }) => ({ data: [...sessions.values()].filter(info => info.parentID === parentID) }),
       hook: hook('session'),
       instructions: {
         entry: {
@@ -303,6 +304,68 @@ test("a subagent's requests run at its own variant", async () => {
   const request = { sessionID: 'child', model: { providerID: 'anthropic', id: 'claude-sonnet-5-5' }, system: [] as Json[], options: {} as Json }
   await registered.hooks['session.context']!(request as never)
   assert.deepEqual(request.options, {})
+  await cleanup()
+})
+
+// The plan outline's tree as the session's record holds it for the terminal UI part, once `ready` holds.
+async function treeWhen(sessions: Map<string, { metadata?: Json }>, ready: (steps: Json[]) => boolean): Promise<Json[]> {
+  for (let i = 0; i < 100; i++) {
+    const steps = ((sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planTree as { steps?: Json[] } | null | undefined)?.steps ?? []
+    if (ready(steps)) return steps
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  throw new Error('The plan outline never got there.')
+}
+
+const subagent = (sessionID: string, input: Json, child: string) => ({
+  tool: 'subagent',
+  status: 'completed',
+  sessionID,
+  input,
+  result: { content: 'started', metadata: { sessionID: child, status: 'running' } },
+})
+
+test("a subagent whose description names a step marks it, and its turn's end sets the step to review", async () => {
+  const { registered, sessions, emit, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  await registered.tools[0]!.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await registered.hooks['tool.execute.after']!(subagent('s1', { agent: 'general', description: '2: Test it', prompt: 'p' }, 'child') as never)
+  let steps = await treeWhen(sessions, all => all[1]?.agent === 'child')
+  assert.equal(steps[0]?.agent, undefined)
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 'child' } })
+  steps = await treeWhen(sessions, all => all[1]?.agent === undefined)
+  assert.equal(steps[1]?.state, 'review')
+  await cleanup()
+})
+
+test('a subagent that names no step, a follow-up, or a subagent of a subagent marks nothing', async () => {
+  const { registered, sessions, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  await registered.tools[0]!.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }] }, { sessionID: 's1' })
+  const after = (sessionID: string, input: Json) => registered.hooks['tool.execute.after']!(subagent(sessionID, input, 'other') as never)
+  await after('s1', { description: '2 parallel searches', prompt: 'p' })
+  await after('s1', { description: '1: Build', prompt: 'p', sessionID: 'other' })
+  await after('child', { description: '1: Build', prompt: 'p' })
+  await new Promise(resolve => setTimeout(resolve, 100))
+  assert.equal((await treeWhen(sessions, () => true))[0]?.agent, undefined)
+  await cleanup()
+})
+
+test("the core's sweep sees each child session, running while its last turn has not ended", async () => {
+  const { registered, sessions, cleanup } = await fakeContext({
+    s1: {},
+    done: { parentID: 's1', time: { busy: 1, idle: 2 } },
+    working: { parentID: 's1', time: { busy: 3, idle: 2 } },
+    other: { parentID: 'elsewhere', time: { busy: 1 } },
+  })
+  await registered.tools[0]!.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  for (const [description, child] of [['1: Build', 'done'], ['2: Test', 'working']] as const) {
+    await registered.hooks['tool.execute.after']!(subagent('s1', { description }, child) as never)
+  }
+  await treeWhen(sessions, all => all[0]?.agent === 'done' && all[1]?.agent === 'working')
+  // Switching to the goal again sweeps its subagents: the one that ended goes to review.
+  await registered.tools[0]!.execute({ op: 'goal', switch: 'ship-it' }, { sessionID: 's1' })
+  const steps = await treeWhen(sessions, all => all[0]?.agent === undefined)
+  assert.equal(steps[0]?.state, 'review')
+  assert.equal(steps[1]?.agent, 'working')
   await cleanup()
 })
 

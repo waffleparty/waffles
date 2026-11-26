@@ -7,7 +7,7 @@ import type { Plugin } from '@opencode/plugin'
 import { adapterContext } from '../../core/backlog-adapter.ts'
 import { afterShell } from '../../core/checkpoint.ts'
 import { lowestLevel } from '../../core/effort.ts'
-import { INITIAL, type Host, type Names, type SessionState } from '../../core/host.ts'
+import { INITIAL, type AgentInfo, type Host, type Names, type SessionState } from '../../core/host.ts'
 import {
   ASSESS_PROMPT,
   COMMANDS,
@@ -21,7 +21,7 @@ import {
   submitMode,
   wafflesMode,
 } from '../../core/modes.ts'
-import { callPlan, endPlan, PLAN_TOOL, POLL_MS, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
+import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, spawnPlan, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
 import { isRunCommand, permissionAsked, startUnattended, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
@@ -45,8 +45,9 @@ import { NOTICE } from './view.ts'
  * as the model's own variant of that level; /auto-effort turns it on or off. The small model it asks is the
  * session's own, at its lowest variant: price alone does not tell a fast cheap model in a provider's list.
  *
- * Not here yet: the marking of a step by its subagent. The plan outline's view and the footer are the
- * terminal UI part's (tui.tsx).
+ * A subagent the main session starts with the subagent tool, whose description names a step first with a
+ * colon (`6.2: Build the parser`), marks that step while it works; its session's turn end sets the step to
+ * review. The plan outline's view and the footer are the terminal UI part's (tui.tsx).
  */
 
 /** What OpenCode calls its own things. */
@@ -69,6 +70,8 @@ const SHOWN: readonly (keyof SessionState)[] = ['planTree']
 const MODE_ENTRY = 'waffles-mode'
 const PLAN_ENTRY = 'waffles-plan-outline'
 const ADAPTER_ENTRY = 'waffles-backlog-adapter'
+/** OpenCode's built-in tool that starts a subagent in a child session; it always runs in the background. */
+export const SUBAGENT_TOOL = 'subagent'
 // How long the list of models, and their variants, is used before it is read again.
 const MODELS_MS = 60_000
 
@@ -179,6 +182,16 @@ const plugin: Plugin.Plugin = {
       return { providerID: ref.providerID, id: ref.id, ...(variant === null ? {} : { variant }) }
     }
 
+    // The subagents a session started: its child sessions, running while their last turn has not ended.
+    const childrenOf = async (sessionID: string): Promise<AgentInfo[]> => {
+      const page = await ctx.session.list({ parentID: sessionID, limit: 200 })
+      return page.data.map(child => {
+        const { busy, idle } = child.time
+        const status = busy === undefined ? (idle === undefined ? 'pending' : 'completed') : idle === undefined || busy > idle ? 'running' : 'completed'
+        return { id: child.id, status }
+      })
+    }
+
     // The text of the session's last assistant message that holds any.
     const lastReplyOf = async (sessionID: string): Promise<string> => {
       const messages = await ctx.session.context({ sessionID })
@@ -214,6 +227,7 @@ const plugin: Plugin.Plugin = {
               lastReply: () => lastReplyOf(sessionID).catch(() => ''),
               note: text => entry(MODE_ENTRY, text).then(() => true),
             },
+            agents: { list: () => childrenOf(sessionID) },
             // A question that gets no answer in time is stopped, so it costs nothing more.
             model: {
               ask: async (prompt, { timeoutMs }) => {
@@ -372,7 +386,20 @@ const plugin: Plugin.Plugin = {
 
     // After a shell command that pushed or opened a pull request, the plan outline goes into the pull
     // request's description, and the model reads what the checkpoint did after the command's own output.
-    const shell = await ctx.tool.hook('execute.after', async event => {
+    // A subagent the main session starts marks the step its description names first. A follow-up to a
+    // subagent (an input with a sessionID) is not a new one.
+    const spawned = async (event: { sessionID: string; input: unknown; result: { metadata?: unknown } }) => {
+      const input = event.input as { description?: unknown; sessionID?: unknown } | null
+      const child = (event.result.metadata as { sessionID?: unknown } | undefined)?.sessionID
+      if (typeof input?.description !== 'string' || input.sessionID !== undefined || typeof child !== 'string') return
+      const session = await sessionOf(event.sessionID).catch(() => null)
+      if (!session || session.isChild) return
+      await started(event.sessionID, session)
+      spawnPlan(session.$, input.description, child)
+    }
+
+    const after = await ctx.tool.hook('execute.after', async event => {
+      if (event.tool === SUBAGENT_TOOL && event.status === 'completed') return spawned(event)
       if (event.tool !== 'shell' || event.status !== 'completed') return
       const input = event.input as { command?: unknown; workdir?: unknown } | null
       if (typeof input?.command !== 'string') return
@@ -389,8 +416,13 @@ const plugin: Plugin.Plugin = {
     // goal. A turn ends when the session's execution settles: OpenCode 2.4 sends plugins no session.idle.
     const TURN_ENDS: readonly string[] = ['session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.idle']
     const types = ['session.execution.started', 'session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.idle', 'session.deleted'] as const
+    // A subagent's turn end sets its step to review; the main session's ends the turn's effort and mode work.
     const turnEnded = async (sessionID: string, session: Session) => {
-      if (session.isChild) return
+      if (session.parentID !== null) {
+        const parent = await sessionOf(session.parentID).catch(() => null)
+        if (parent && !parent.isChild) await completePlan(parent.$, sessionID).catch(() => undefined)
+        return
+      }
       effort.complete(sessionID)
       await completeMode(session.$).catch(() => undefined)
     }
@@ -401,10 +433,12 @@ const plugin: Plugin.Plugin = {
         if (sessionID === undefined) continue
         if (event.type === 'session.execution.started') busy.add(sessionID)
         else busy.delete(sessionID)
-        const known = sessions.get(sessionID)
+        // A turn's end is looked up even for a session no hook has met yet: a subagent may run no tool at all.
+        const isEnd = TURN_ENDS.includes(event.type)
+        const known = sessions.get(sessionID) ?? (isEnd ? sessionOf(sessionID) : undefined)
         const session = known === undefined ? null : await known.catch(() => null)
         if (!session) continue
-        if (TURN_ENDS.includes(event.type)) await turnEnded(sessionID, session)
+        if (isEnd) await turnEnded(sessionID, session)
         else if (event.type === 'session.deleted') {
           await endPlan(session.$, sessionID, false).catch(() => undefined)
           effort.forget(sessionID)
@@ -423,7 +457,7 @@ const plugin: Plugin.Plugin = {
     return async () => {
       clearInterval(timer)
       events.abort()
-      await Promise.all([context.dispose(), prompt.dispose(), permission.dispose(), shell.dispose()].map(done => Promise.resolve(done).catch(() => undefined)))
+      await Promise.all([context.dispose(), prompt.dispose(), permission.dispose(), after.dispose()].map(done => Promise.resolve(done).catch(() => undefined)))
     }
   },
 }
