@@ -70,23 +70,32 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 /** The plugin's folder: two levels above this file. */
 export const pluginRoot = () => join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-/** The `name` and `description` of a skill file's front matter; null when it has none. */
-export function skillHeader(text: string): { name: string; description: string } | null {
+// Skills that only work where a hook answers them. `plan` opens Claude Code's pane; on OpenCode the
+// sidebar always shows the plan outline, and the skill's text would tell the model the plugin is broken.
+const NOT_HERE: readonly string[] = ['plan']
+
+/**
+ * The `name` and `description` of a skill file's front matter, and whether the model may load the skill
+ * by itself: `disable-model-invocation: true` keeps a skill for the person to call. Null when the file
+ * names no skill.
+ */
+export function skillHeader(text: string): { name: string; description: string; autoinvoke: boolean } | null {
   const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1]
   if (front === undefined) return null
   const field = (key: string) => new RegExp(`^${key}:[ \\t]*(.*)$`, 'm').exec(front)?.[1]?.trim().replace(/^(["'])(.*)\1$/, '$2')
   const [name, description] = [field('name'), field('description')]
-  return name && description ? { name, description } : null
+  return name && description ? { name, description, autoinvoke: field('disable-model-invocation') !== 'true' } : null
 }
 
-type SkillFile = { id: string; name: string; description: string; path: string; content: string }
+type SkillFile = { id: string; name: string; description: string; autoinvoke: boolean; path: string; content: string }
 
-/** The skills in the plugin's `skills/` folder, one per folder with a SKILL.md that names itself. */
+/** The skills in the plugin's `skills/` folder that work here, one per folder with a SKILL.md that names itself. */
 export async function readSkills(root: string): Promise<SkillFile[]> {
   const folder = join(root, 'skills')
   const names = await fs.readdir(folder).catch(() => [] as string[])
   const skills: SkillFile[] = []
   for (const id of names.sort()) {
+    if (NOT_HERE.includes(id)) continue
     const path = join(folder, id, 'SKILL.md')
     const content = await fs.readFile(path, 'utf8').catch(() => null)
     const header = content === null ? null : skillHeader(content)

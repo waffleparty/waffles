@@ -15,12 +15,18 @@ const keptOf = (metadata: unknown): Kept => {
 
 const goalOf = (kept: Kept): Goal | null => (kept.planTree && Array.isArray(kept.planTree.steps) ? kept.planTree : null)
 
-/** The footer's parts: the mode (or a run over it), then the plan outline's current step when a goal is drawn. */
-export function footerParts(metadata: unknown): { mark: string; mode: string; step: string | null } {
+// The mark's color for each mode, as on Claude Code: a run, production, backlog, rapid.
+const RUN = '#f97316'
+const COLORS: Record<string, string> = { production: '#6495ed', backlog: '#a855f7', rapid: '#7fff00' }
+
+/** The footer's parts: the mode (or a run over it) with its mark's color, then the plan outline's current step when a goal is drawn. */
+export function footerParts(metadata: unknown): { mark: string; color: string; mode: string; step: string | null } {
   const kept = keptOf(metadata)
   const goal = goalOf(kept)
   const step = goal ? currentOf(goal) : null
-  return kept.run === true ? { mark: '▶', mode: 'non-interactive', step } : { mark: '●', mode: kept.mode ?? 'production', step }
+  if (kept.run === true) return { mark: '▶', color: RUN, mode: 'non-interactive', step }
+  const mode = kept.mode ?? 'production'
+  return { mark: '●', color: COLORS[mode] ?? COLORS.production!, mode, step }
 }
 
 /** The plan outline for the sidebar: the goal's title, then its tree, one line each; empty with no goal drawn. */

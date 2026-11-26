@@ -18,9 +18,8 @@ export default Plugin.define({
         const parts = () => footerParts(metadata(input.sessionID))
         return (
           <box flexDirection="row">
-            <text fg={context.theme.text.muted}>
-              {parts().mark} {parts().mode}
-            </text>
+            <text fg={parts().color}>{parts().mark}</text>
+            <text fg={context.theme.text.muted}> {parts().mode}</text>
             <Show when={parts().step}>
               <text fg={context.theme.text.muted}> · {parts().step}</text>
             </Show>

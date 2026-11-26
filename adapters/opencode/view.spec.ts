@@ -9,14 +9,14 @@ const goal = () => newGoal('Ship it', [{ title: 'Build', kind: 'planned' }, { ti
 
 test('with nothing kept, the footer shows production mode and the sidebar is empty', () => {
   for (const metadata of [undefined, null, {}, { waffles: 'x' }, { other: 1 }]) {
-    assert.deepEqual(footerParts(metadata), { mark: '●', mode: 'production', step: null })
+    assert.deepEqual(footerParts(metadata), { mark: '●', color: '#6495ed', mode: 'production', step: null })
     assert.deepEqual(outlineLines(metadata), [])
   }
 })
 
 test('the footer shows the mode, and a run over it', () => {
-  assert.deepEqual(footerParts({ waffles: { mode: 'rapid' } }), { mark: '●', mode: 'rapid', step: null })
-  assert.deepEqual(footerParts({ waffles: { mode: 'rapid', run: true } }), { mark: '▶', mode: 'non-interactive', step: null })
+  assert.deepEqual(footerParts({ waffles: { mode: 'rapid' } }), { mark: '●', color: '#7fff00', mode: 'rapid', step: null })
+  assert.deepEqual(footerParts({ waffles: { mode: 'rapid', run: true } }), { mark: '▶', color: '#f97316', mode: 'non-interactive', step: null })
 })
 
 test('with a goal drawn, the footer names its current step and the sidebar lists its tree', () => {

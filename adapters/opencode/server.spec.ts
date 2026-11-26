@@ -71,7 +71,9 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = 
 }
 
 test('a skill file names itself in its front matter', () => {
-  assert.deepEqual(skillHeader('---\nname: ask\ndescription: "Collect the open items"\n---\n\nBody'), { name: 'ask', description: 'Collect the open items' })
+  assert.deepEqual(skillHeader('---\nname: ask\ndescription: "Collect the open items"\n---\n\nBody'), { name: 'ask', description: 'Collect the open items', autoinvoke: true })
+  // A skill kept for the person to call is not offered to the model.
+  assert.equal(skillHeader('---\nname: run\ndescription: Run it\ndisable-model-invocation: true\n---\n')?.autoinvoke, false)
   assert.equal(skillHeader('No front matter'), null)
   assert.equal(skillHeader('---\nname: only\n---\n'), null)
 })
@@ -79,7 +81,11 @@ test('a skill file names itself in its front matter', () => {
 test("the plugin's own skills are read from its skills folder", async () => {
   const skills = await readSkills(pluginRoot())
   const ids = skills.map(s => s.id)
-  for (const id of ['ask', 'backlog', 'plan', 'work-loop']) assert.ok(ids.includes(id), `${id} is among ${ids.join(', ')}`)
+  for (const id of ['ask', 'backlog', 'work-loop']) assert.ok(ids.includes(id), `${id} is among ${ids.join(', ')}`)
+  // The pane skill needs Claude Code's hook: here its text would tell the model the plugin is broken.
+  assert.ok(!ids.includes('plan'))
+  assert.equal(skills.find(s => s.id === 'work-loop')?.autoinvoke, false)
+  assert.equal(skills.find(s => s.id === 'ask')?.autoinvoke, true)
   assert.ok(skills.every(s => s.content.startsWith('---') && s.path.endsWith('SKILL.md')))
 })
 
