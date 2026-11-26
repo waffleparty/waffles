@@ -114,9 +114,6 @@ async function setState($: EngineInterface, key: Key, value: SessionState[Key]):
 // starts over on a reload, as the module does.
 const memory: Memory = {}
 
-/** The core's memory alone, for a hook that reads no more of the host. */
-export const MEMORY = { memory }
-
 /** What Claude Code calls its own things. hooks/plan.ts names the same tool where it hooks its calls. */
 export const NAMES: Names = {
   assistant: 'Claude',

@@ -8,7 +8,7 @@ import { completeMode, endMode, interactionMode, modeContext, MODES_SECTION, reg
 import { completePlan, endPlan, registerPlan, startPlan, submitPlan } from './plan'
 import { RULES, planContext } from './plan-prompt'
 import { footerItem, registerPlanUi } from './plan-ui'
-import { isRunning, registerUnattended, startUnattended, submitUnattended } from './unattended'
+import { isRunning, registerUnattended, submitUnattended } from './unattended'
 
 const RUN = '#f97316'
 const IDLE = '#6495ed'
@@ -71,7 +71,6 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     await startEffort($)
-    await startUnattended($)
     await startMode($)
     // A plan outline that fails to start leaves the dev-server poll to start.
     await startPlan($).catch(() => undefined)

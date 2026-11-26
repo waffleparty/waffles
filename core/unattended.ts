@@ -26,22 +26,24 @@ export const CLOSED = 'The question was closed without an answer. Take what the 
 const MAIN_QUESTION = "Denied: The user is away during a /waffles:non-interactive run and can't answer. A run asks 1 question, at its start. Make the decision yourself, note it on its step in the plan outline if it is worth checking, and keep going."
 const AGENT_QUESTION = "Denied: The user is away during a /waffles:non-interactive run and can't answer. Report the question in your result, and carry on with the rest of your piece."
 
-// What one process keeps for one session. `startUnattended` reads the run back from the session's
-// values, with the denials, the start question's time and its dialog, which `saveUnattended` writes
-// back for an adapter whose process serves one event. A process that lasts keeps them here alone.
+// The run is in the session's values (`run`, `runDenials`, `runStartedAt`, `runAsking`), so every
+// process that serves the session reads the same run. One process keeps, for one session, the calls
+// the platform called writes (anything not read-only), by ID, until they finish, and the queue its
+// changes to the run wait in.
 type Vars = {
-  isRun: boolean
-  denials: number
-  // When the run's command was typed; null with no run, and once its question is asked. A process
-  // that starts after a reload leaves it null: the run then asks nothing, which the skill treats as no answer.
-  startedAt: number | null
-  // The start question is on screen.
-  isAsking: boolean
-  // Calls the platform called writes (anything not read-only), until they finish.
   writes: Set<string>
+  queue: Promise<unknown>
 }
-const vars = ($: Pick<Host, 'memory'>) =>
-  memoryOf<Vars>($, 'unattended', () => ({ isRun: false, denials: 0, startedAt: null, isAsking: false, writes: new Set() }))
+const vars = ($: Pick<Host, 'memory'>) => memoryOf<Vars>($, 'unattended', () => ({ writes: new Set(), queue: Promise.resolve() }))
+
+// Runs a change after the ones this process queued before it, so 2 changes at once never both read a
+// value before either writes it.
+function serial<T>($: Pick<Host, 'memory'>, change: () => Promise<T>): Promise<T> {
+  const v = vars($)
+  const done = v.queue.then(change)
+  v.queue = done.catch(() => undefined)
+  return done
+}
 
 export const isRunCommand = (name: string | undefined) => RUN_COMMAND.test(name ?? '')
 
@@ -50,60 +52,49 @@ export async function isRunning($: Host) {
   return $.state.get('run')
 }
 
-/** The session started, or the process did: the run comes back from the session's values. */
-export async function startUnattended($: Host) {
-  const v = vars($)
-  v.isRun = await $.state.get('run')
-  v.denials = await $.state.get('runDenials')
-  v.startedAt = await $.state.get('runStartedAt')
-  v.isAsking = await $.state.get('runAsking')
-}
-
-/**
- * Writes what this process changed of the run to the session's values, for the next process. An adapter
- * whose process serves one event calls it at the event's end, after `startUnattended` at its start.
- */
-export async function saveUnattended($: Host) {
-  const v = vars($)
-  if ((await $.state.get('runDenials')) !== v.denials) await $.state.set('runDenials', v.denials)
-  if ((await $.state.get('runStartedAt')) !== v.startedAt) await $.state.set('runStartedAt', v.startedAt)
-  if ((await $.state.get('runAsking')) !== v.isAsking) await $.state.set('runAsking', v.isAsking)
-}
-
 /** A prompt was submitted: one the person typed starts a run when it is the run's command, and ends one otherwise. */
 export async function submitUnattended($: Host, prompt: Prompt) {
   if (!prompt.isTyped) return
-  const v = vars($)
-  v.isRun = isRunCommand(prompt.command)
-  v.denials = 0
-  v.isAsking = false
-  v.startedAt = null
-  await $.state.set('run', v.isRun)
-  // Last, so a clock that can't be read never keeps a run from starting: the run then asks nothing.
-  if (v.isRun) v.startedAt = await $.clock.now().catch(() => null)
+  const isRun = isRunCommand(prompt.command)
+  await serial($, async () => {
+    await reset($)
+    await $.state.set('run', isRun)
+    // Last, so a clock that can't be read never keeps a run from starting: the run then asks nothing.
+    if (isRun) await $.state.set('runStartedAt', await $.clock.now().catch(() => null))
+  })
 }
 
 /** Ends a run: the person changed the mode by hand, or cleared the conversation. */
 export async function endRun($: Host) {
-  const v = vars($)
-  v.isRun = false
-  v.denials = 0
-  v.isAsking = false
-  v.startedAt = null
-  await $.state.set('run', false)
+  await serial($, async () => {
+    await reset($)
+    await $.state.set('run', false)
+  })
+}
+
+async function reset($: Host) {
+  await $.state.set('runDenials', 0)
+  await $.state.set('runAsking', false)
+  await $.state.set('runStartedAt', null)
 }
 
 /**
  * A permission request came up. Nobody can answer one during a run, so it is denied rather than left
  * to wait all night: the text the asker reads, or null to let the request through (no run, or the
- * start question's own dialog, which the person may still be there to answer).
+ * start question's own dialog, which the person may still be there to answer). `isCounted` is false
+ * where the platform can't say whether the request reached the person: that denial isn't counted.
  */
-export function permissionAsked($: Pick<Host, 'memory'>, { isQuestion, isAgent }: { isQuestion: boolean; isAgent: boolean }): string | null {
-  const v = vars($)
-  if (!v.isRun) return null
-  if (v.isAsking && isQuestion && !isAgent) return null
-  v.denials += 1
-  return v.denials >= STUCK_DENIALS ? (isAgent ? AGENT_STUCK : MAIN_STUCK) : `${AWAY} ${isAgent ? AGENT_NEXT : MAIN_NEXT}`
+export async function permissionAsked(
+  $: Host,
+  { isQuestion, isAgent, isCounted = true }: { isQuestion: boolean; isAgent: boolean; isCounted?: boolean },
+): Promise<string | null> {
+  return serial($, async () => {
+    if (!(await $.state.get('run'))) return null
+    if (isQuestion && !isAgent && (await $.state.get('runAsking'))) return null
+    const denials = (await $.state.get('runDenials')) + 1
+    if (isCounted) await $.state.set('runDenials', denials)
+    return denials >= STUCK_DENIALS ? (isAgent ? AGENT_STUCK : MAIN_STUCK) : `${AWAY} ${isAgent ? AGENT_NEXT : MAIN_NEXT}`
+  })
 }
 
 /**
@@ -113,36 +104,39 @@ export function permissionAsked($: Pick<Host, 'memory'>, { isQuestion, isAgent }
  * refused at once (`deny`), so none waits all night.
  */
 export async function questionAsked($: Host, isAgent: boolean): Promise<{ pass: true } | { ask: true } | { deny: string }> {
-  const v = vars($)
-  if (!v.isRun) return { pass: true }
-  if (isAgent) return { deny: AGENT_QUESTION }
-  // Taken before the clock is read, so 2 questions at once, or a clock that fails, can't both use it.
-  const at = v.startedAt
-  v.startedAt = null
+  // The command's time is taken before the clock is read, so 2 questions at once, or a clock that
+  // fails, can't both use it.
+  const taken = await serial($, async (): Promise<{ pass: true } | { deny: string } | { at: number | null }> => {
+    if (!(await $.state.get('run'))) return { pass: true }
+    if (isAgent) return { deny: AGENT_QUESTION }
+    const at = await $.state.get('runStartedAt')
+    if (at !== null) await $.state.set('runStartedAt', null)
+    return { at }
+  })
+  if (!('at' in taken)) return taken
+  const { at } = taken
   const isStart = at !== null && (await $.clock.now()) - at <= START_WINDOW_MS
   if (!isStart) return { deny: MAIN_QUESTION }
-  v.isAsking = true
+  await serial($, () => $.state.set('runAsking', true))
   return { ask: true }
 }
 
 /** The start question is off the screen, answered or not. */
-export function questionDone($: Pick<Host, 'memory'>): void {
-  vars($).isAsking = false
+export async function questionDone($: Host): Promise<void> {
+  await serial($, () => $.state.set('runAsking', false))
 }
 
 /** The check of a question failed. It must not leave a dialog open all night: during a run, the refusal's text; else null. */
-export function questionFailed($: Pick<Host, 'memory'>): string | null {
-  return vars($).isRun ? MAIN_QUESTION : null
+export async function questionFailed($: Host): Promise<string | null> {
+  return (await $.state.get('run')) ? MAIN_QUESTION : null
 }
 
 /** The platform checked a tool call that isn't read-only, by its ID. */
-export function writeChecked($: Pick<Host, 'memory'>, id: string): void {
-  const v = vars($)
-  if (v.isRun) v.writes.add(id)
+export async function writeChecked($: Host, id: string): Promise<void> {
+  if (await $.state.get('run')) vars($).writes.add(id)
 }
 
 /** A tool call ended. A write that ran means approvals are flowing again: the count of denials starts over. */
-export function writeEnded($: Pick<Host, 'memory'>, id: string, isDone: boolean): void {
-  const v = vars($)
-  if (v.writes.delete(id) && isDone) v.denials = 0
+export async function writeEnded($: Host, id: string, isDone: boolean): Promise<void> {
+  if (vars($).writes.delete(id) && isDone) await serial($, () => $.state.set('runDenials', 0))
 }

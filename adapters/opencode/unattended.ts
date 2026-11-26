@@ -29,7 +29,7 @@ export function guardQuestion<C extends Context, R>(
       asked = await questionAsked(session.$, session.isChild)
     } catch {
       // A check that fails must not leave a question open all night: during a run, refuse.
-      const deny = questionFailed(session.$)
+      const deny = await questionFailed(session.$)
       if (deny === null) return original(input, context)
       throw new Error(deny)
     }
@@ -54,7 +54,7 @@ export function guardQuestion<C extends Context, R>(
     } finally {
       clearTimeout(timer)
       context.signal.removeEventListener('abort', onAbort)
-      questionDone(session.$)
+      await questionDone(session.$)
     }
   }
 }

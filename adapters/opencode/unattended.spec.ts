@@ -33,13 +33,16 @@ function questionTool() {
 }
 
 const context = () => ({ sessionID: 's1', signal: new AbortController().signal })
-const tick = () => new Promise(resolve => setTimeout(resolve, 5))
+// Waits until the question is on the screen: the run's checks read the session's values from disk first.
+async function shown(tool: { calls: readonly unknown[] }) {
+  while (tool.calls.length === 0) await new Promise(resolve => setTimeout(resolve, 1))
+}
 
 test('outside a run the question goes to the person and waits for them', async () => {
   const $ = await hostIn(false)
   const tool = questionTool()
   const asked = guardQuestion(tool.execute, async () => ({ $, isChild: false }), 10)(null, context())
-  await tick()
+  await shown(tool)
   await new Promise(resolve => setTimeout(resolve, 30))
   tool.answer('B')
   assert.equal(await asked, 'B')
@@ -49,7 +52,7 @@ test("the run's start question takes the answer given in time", async () => {
   const $ = await hostIn(true)
   const tool = questionTool()
   const asked = guardQuestion(tool.execute, async () => ({ $, isChild: false }), 1000)(null, context())
-  await tick()
+  await shown(tool)
   tool.answer('A')
   assert.equal(await asked, 'A')
 })
@@ -61,14 +64,14 @@ test("the run's start question ends unanswered after its wait, and leaves the sc
   // The question's own signal aborted, which is what takes OpenCode's question off the screen.
   assert.equal(tool.calls[0]?.aborted, true)
   // The start question is no longer on the screen: a permission request is denied again.
-  assert.match(permissionAsked($, { isQuestion: true, isAgent: false }) ?? '', /^Denied/)
+  assert.match((await permissionAsked($, { isQuestion: true, isAgent: false })) ?? '', /^Denied/)
 })
 
 test("a dismissed start question tells the model what to do, rather than ending the run's turn", async () => {
   const $ = await hostIn(true)
   const tool = questionTool()
   const asked = guardQuestion(tool.execute, async () => ({ $, isChild: false }), 1000)(null, context())
-  await tick()
+  await shown(tool)
   tool.dismiss()
   await assert.rejects(asked, new RegExp(`^Error: ${CLOSED.slice(0, 30)}`))
 })
@@ -76,7 +79,7 @@ test("a dismissed start question tells the model what to do, rather than ending 
 test('a session the plugin cannot read leaves the question alone', async () => {
   const tool = questionTool()
   const asked = guardQuestion(tool.execute, async () => null, 10)(null, context())
-  await tick()
+  await shown(tool)
   tool.answer('C')
   assert.equal(await asked, 'C')
 })

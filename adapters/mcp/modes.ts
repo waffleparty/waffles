@@ -12,7 +12,6 @@ import {
   runRapid,
   startMode,
 } from '../../core/modes.ts'
-import { startUnattended } from '../../core/unattended.ts'
 import { userText, type Module, type Session, type Tool } from './registry.ts'
 
 /**
@@ -92,9 +91,8 @@ export const modesModule: Module = {
     `${MODES_TEXT}
 
 On this client the /${PROD_COMMAND}, /${RAPID_COMMAND} and /${BACKLOG_COMMAND} commands are prompts of the waffles MCP server, and no mode statement comes with the first message: the ${seenAs(MODE_TOOL.name)} tool returns the current one when called with no input.`,
-  // The mode and a run come back from the session's values.
+  // The mode comes back from the session's values.
   start: async ({ $ }) => {
-    await startUnattended($)
     await startMode($)
   },
 }

@@ -23,7 +23,7 @@ import {
 } from '../../core/modes.ts'
 import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, spawnPlan, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
-import { isRunCommand, permissionAsked, startUnattended, submitUnattended } from '../../core/unattended.ts'
+import { isRunCommand, permissionAsked, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
 import { autoEffort, EFFORT_COMMAND, EFFORT_DESCRIPTION, type ModelRef, type Variant } from './effort.ts'
 import { guardQuestion, QUESTION_TOOL } from './unattended.ts'
@@ -260,7 +260,6 @@ const plugin: Plugin.Plugin = {
     const started = (sessionID: string, session: Session): Promise<void> =>
       (session.started ??= (async () => {
         const { $ } = session
-        await startUnattended($)
         await startMode($)
         await startPlan($).catch(error => $.log(`the plan outline did not start: ${messageOf(error)}`))
         const put = (key: string, value: string) =>
@@ -381,7 +380,7 @@ const plugin: Plugin.Plugin = {
       if (event.effect !== 'ask') return
       const session = await runOf(event.sessionID)
       if (!session) return
-      const message = permissionAsked(session.$, { isQuestion: event.action === NAMES.ask, isAgent: session.isChild })
+      const message = await permissionAsked(session.$, { isQuestion: event.action === NAMES.ask, isAgent: session.isChild })
       if (message === null) return
       event.effect = 'deny'
       event.message = message

@@ -19,7 +19,7 @@ import {
 } from '../../core/modes.ts'
 import { endPlan, startPlan, submitPlan, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
-import { permissionAsked, questionAsked, questionDone, saveUnattended, startUnattended, submitUnattended } from '../../core/unattended.ts'
+import { permissionAsked, questionAsked, questionDone, submitUnattended } from '../../core/unattended.ts'
 import { forgetSession, pruneSessions, sessionPath } from '../node/host.ts'
 
 /**
@@ -141,7 +141,8 @@ async function isNewPrompt({ $, sessionId, stateFolder }: Session, text: string)
 
 async function tool($: Host, isQuestion: boolean, isAgent: boolean, mayAsk: boolean): Promise<NeutralAnswer> {
   if (!isQuestion && mayAsk) {
-    const message = permissionAsked($, { isQuestion, isAgent })
+    // A refusal of a call that would ask isn't counted: the platform doesn't say whether the call asked.
+    const message = await permissionAsked($, { isQuestion, isAgent, isCounted: false })
     return message === null ? { context: [] } : { context: [], denyAsk: message }
   }
   if (!isQuestion) return { context: [] }
@@ -152,7 +153,7 @@ async function tool($: Host, isQuestion: boolean, isAgent: boolean, mayAsk: bool
 }
 
 async function toolDone($: Host, isQuestion: boolean, shell: { command: string; cwd?: string } | null): Promise<NeutralAnswer> {
-  if (isQuestion) questionDone($)
+  if (isQuestion) await questionDone($)
   if (shell === null) return { context: [] }
   // A checkpoint that fails leaves the command's result as it was.
   const line = await afterShell($, shell.command, shell.cwd).catch(() => null)
@@ -168,14 +169,13 @@ async function end({ $, sessionId, stateFolder }: Session, isClear: boolean, isG
 }
 
 /**
- * Runs the core for one event of a session, in a process that serves this event alone: the values that
- * last come back from the session's values first, and go back to them after. A mode change's note
- * can't be appended to the conversation from here, so `notes` collects each one as the host's
- * `conversation.note`, and the answer's context starts with them.
+ * Runs the core for one event of a session, in a process that serves this event alone: the mode comes
+ * back from the session's values first. A mode change's note can't be appended to the conversation
+ * from here, so `notes` collects each one as the host's `conversation.note`, and the answer's context
+ * starts with them.
  */
 export async function handle(session: Session, event: NeutralEvent, notes: readonly string[]): Promise<NeutralAnswer> {
   const { $ } = session
-  await startUnattended($)
   await startMode($)
   const answer = await (async (): Promise<NeutralAnswer> => {
     switch (event.kind) {
@@ -188,7 +188,7 @@ export async function handle(session: Session, event: NeutralEvent, notes: reado
       case 'tool':
         return tool($, event.isQuestion, event.isAgent, event.mayAsk === true)
       case 'permission': {
-        const message = permissionAsked($, { isQuestion: event.isQuestion, isAgent: event.isAgent })
+        const message = await permissionAsked($, { isQuestion: event.isQuestion, isAgent: event.isAgent })
         return message === null ? { context: [] } : { context: [], deny: message }
       }
       case 'toolDone':
@@ -200,9 +200,5 @@ export async function handle(session: Session, event: NeutralEvent, notes: reado
         return end(session, event.isClear, event.isGone)
     }
   })()
-  // A refusal of a call that would ask isn't counted: the platform doesn't say whether the call asked,
-  // so the denial `permissionAsked` counted in this process is not saved.
-  const isUncounted = event.kind === 'tool' && event.mayAsk === true && !event.isQuestion
-  if ((event.kind !== 'end' || !event.isGone) && !isUncounted) await saveUnattended($)
   return { ...answer, context: [...notes, ...answer.context] }
 }

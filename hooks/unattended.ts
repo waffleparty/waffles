@@ -11,12 +11,11 @@ import {
   questionDone,
   questionFailed,
   START_ANSWER_MS,
-  startUnattended as start,
   submitUnattended as submit,
   writeChecked,
   writeEnded,
 } from '../core/unattended.ts'
-import { hostOf, MEMORY } from './host'
+import { hostOf } from './host'
 
 // The tool Claude asks the person a question with.
 const QUESTION = 'AskUserQuestion'
@@ -43,11 +42,6 @@ export async function isRunning($: EngineInterface) {
   return running(hostOf($))
 }
 
-// The module's one session.start hook calls this.
-export async function startUnattended($: EngineInterface) {
-  await start(hostOf($))
-}
-
 // The module's one prompt.submit hook calls this.
 export async function submitUnattended($: EngineInterface, e: PromptSubmitInput) {
   await submit(hostOf($), promptOf(e))
@@ -55,8 +49,8 @@ export async function submitUnattended($: EngineInterface, e: PromptSubmitInput)
 
 export function registerUnattended(on: On) {
   // Nobody can answer a prompt during a run, so deny it rather than wait all night.
-  on('classic.PermissionRequest', ($, e, next) => {
-    const message = permissionAsked(MEMORY, { isQuestion: e.tool_name === QUESTION, isAgent: e.agent_id !== undefined })
+  on('classic.PermissionRequest', async ($, e, next) => {
+    const message = await permissionAsked(hostOf($), { isQuestion: e.tool_name === QUESTION, isAgent: e.agent_id !== undefined })
     return message === null ? next(e) : { decision: { behavior: 'deny', message } }
   })
 
@@ -79,26 +73,26 @@ export function registerUnattended(on: On) {
       return answer
     } finally {
       timer?.cancel()
-      questionDone(MEMORY)
+      await questionDone(hostOf($))
     }
     // A check that fails must not leave a dialog open all night: during a run, refuse.
-  }).catch(($, e, next) => {
-    const deny = questionFailed(MEMORY)
+  }).catch(async ($, e, next) => {
+    const deny = await questionFailed(hostOf($))
     return deny === null ? next(e) : { deny }
   })
 
   // A write that ran means approvals are flowing again: the count starts over.
   on('tool.check', async ($, e, next) => {
     const r = await next(e)
-    if (e.tool_use_id && !e.isReadOnly) writeChecked(MEMORY, e.tool_use_id)
+    if (e.tool_use_id && !e.isReadOnly) await writeChecked(hostOf($), e.tool_use_id)
     return r
   })
-  on('classic.PostToolUse', ($, e, next) => {
-    writeEnded(MEMORY, e.tool_use_id, true)
+  on('classic.PostToolUse', async ($, e, next) => {
+    await writeEnded(hostOf($), e.tool_use_id, true)
     return next(e)
   })
-  on('classic.PostToolUseFailure', ($, e, next) => {
-    writeEnded(MEMORY, e.tool_use_id, false)
+  on('classic.PostToolUseFailure', async ($, e, next) => {
+    await writeEnded(hostOf($), e.tool_use_id, false)
     return next(e)
   })
 }
