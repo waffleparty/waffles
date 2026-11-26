@@ -1,4 +1,4 @@
-// Tests for backlog_queue.ts, with a fake adapter. Run: node --test "scripts/*_test.ts"
+// Tests for backlog-queue.ts, with a fake adapter. Run: node --test "scripts/*.spec.ts"
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const SCRIPT = join(HERE, 'backlog_queue.ts')
+const SCRIPT = join(HERE, 'backlog-queue.ts')
 
 const ITEM = `---
 status: new

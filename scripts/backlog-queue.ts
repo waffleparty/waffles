@@ -1,9 +1,9 @@
 // Hold the backlog adapter calls that could not reach the tracker, for replay.
 //
 // Usage:
-//   node backlog_queue.ts add <step> <item> --why <cause> [--data JSON] [--backlog DIR]
-//   node backlog_queue.ts list [--backlog DIR]
-//   node backlog_queue.ts done <seq> [--id ID] [--backlog DIR]
+//   node backlog-queue.ts add <step> <item> --why <cause> [--data JSON] [--backlog DIR]
+//   node backlog-queue.ts list [--backlog DIR]
+//   node backlog-queue.ts done <seq> [--id ID] [--backlog DIR]
 //
 // A repo that names a backlog adapter keeps its backlog in a tracker. When a write to it ends "unreachable", waffles
 // queues the call here, in .backlog/queue.json, and replays the queue, in order, at the next adapter call that

@@ -21,7 +21,7 @@ last steps: Remove the working files ─► push ─► gh pr ready
         finished, reviewed, and nothing that stays with the user?
            │ yes                              │ no ─► step left for the user
            ▼
-   merge_queue.ts mode
+   merge-queue.ts mode
      │
      ├─ no queue ─────────────► gh pr merge --squash ──────────────────────────► merged
      │                            │ refused by a rule ─► … --admin ────────────► merged
@@ -29,7 +29,7 @@ last steps: Remove the working files ─► push ─► gh pr ready
      ├─ a queue, no approval ─► gh pr merge <n> --<method> --admin ────────────► merged
      │
      └─ a queue, approved ────► gh pr merge <n>: adds it to the queue
-                                  │ merge_queue.ts state, until it ends:
+                                  │ merge-queue.ts state, until it ends:
                                   ├─ merged ───────────────────────────────────► merged
                                   └─ removed ─► ship removed (back to in work, note:
                                                 GitHub's reason); fix, push, add it again
@@ -57,7 +57,7 @@ last steps: Remove the working files ─► push ─► gh pr ready
   the pieces below it in a stack are merged; the `waffles:reviewer` review (see Finishing in SKILL.md)
   has no open **must fix** finding; the pull request's checks pass. Then run the
   production check below, and merge as
-  `node <skill-dir>/../../scripts/merge_queue.ts mode <number>` says.
+  `node <skill-dir>/../../scripts/merge-queue.ts mode <number>` says.
   Without a merge queue, merge with `gh pr merge <number> --squash`,
   passing the commit's subject and body yourself (`--subject`, `--body`) so
   that the `Co-Authored-By` trailer is kept. With one, see The merge queue. Don't pass `--delete-branch`: it
@@ -82,7 +82,7 @@ last steps: Remove the working files ─► push ─► gh pr ready
     settings for the queue's merge method, so put the digest in the pull request's body
     before you add it. Then wait for the result with Monitor: an until-loop
     that runs
-    `node <skill-dir>/../../scripts/merge_queue.ts state <number>` every
+    `node <skill-dir>/../../scripts/merge-queue.ts state <number>` every
     60 seconds and ends at `merged`, `removed`, or `closed`, for at most 2
     hours.
     - `merged`: go on as After a merge says.

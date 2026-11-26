@@ -45,7 +45,7 @@ finished:
 
 Each builder works in its own full clone of the repo, on its own branch, with its own draft pull request. The clone is at `<session scratchpad>/builders/<owner>/<repo>/<item>`, or under `$WAFFLES_BUILDERS_ROOT` when you set it. An item that depends on one not merged yet starts from that item's branch, as a stacked pull request.
 
-You review the pull request. **Merge** squash-merges it, restacks the items stacked on it, and removes the clone with `scripts/builders.py`, which refuses a clone that holds work origin lacks. **Revise** sends your changes to the builder's clone. **Drop** closes the pull request and deletes the clone and the item. A clone borrows the main checkout's objects while it clones, then lets go of them, so the clone is fast and needs nothing of the main checkout afterwards.
+You review the pull request. **Merge** squash-merges it, restacks the items stacked on it, and removes the clone with `scripts/builders.ts`, which refuses a clone that holds work origin lacks. **Revise** sends your changes to the builder's clone. **Drop** closes the pull request and deletes the clone and the item. A clone borrows the main checkout's objects while it clones, then lets go of them, so the clone is fast and needs nothing of the main checkout afterwards.
 
 ```
 backlog item ─► builder: clone, branch, draft pull request ─► checks ─► ready for review
@@ -65,7 +65,7 @@ backlog item ─► builder: clone, branch, draft pull request ─► checks ─
 
 ### Several UI items at once
 
-`scripts/review_branch.py build --waiting` makes a local branch, `waffles-review`, in your main checkout. It holds the default branch with every pull request that asks you for a review merged into it. A pull request that conflicts is left out and named. One dev server serves the branch. It is never pushed, it is rebuilt when a waiting pull request changes, and `done` switches your checkout back and deletes it. The build refuses a checkout with changes to tracked files.
+`scripts/review-branch.ts build --waiting` makes a local branch, `waffles-review`, in your main checkout. It holds the default branch with every pull request that asks you for a review merged into it. A pull request that conflicts is left out and named. One dev server serves the branch. It is never pushed, it is rebuilt when a waiting pull request changes, and `done` switches your checkout back and deletes it. The build refuses a checkout with changes to tracked files.
 
 ## Backlog adapter
 
@@ -99,7 +99,7 @@ Each check reports pass, fail with the fix, or could not check. A failure never 
 
 ## Tracker fallback
 
-When a repo's tracker cannot be reached, `scripts/backlog_queue.py` holds the tracker writes in `.backlog/queue.json` until the next call that succeeds replays them, oldest first. The queue stays out of git, through `.git/info/exclude`. The script never calls the tracker.
+When a repo's tracker cannot be reached, `scripts/backlog-queue.ts` holds the tracker writes in `.backlog/queue.json` until the next call that succeeds replays them, oldest first. The queue stays out of git, through `.git/info/exclude`. The script never calls the tracker.
 
 | Command | Purpose |
 | --- | --- |

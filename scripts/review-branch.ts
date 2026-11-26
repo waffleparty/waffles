@@ -1,8 +1,8 @@
 // Build a throwaway local branch in the main checkout that merges every pull request waiting for the person.
 //
 // Usage:
-//   node review_branch.ts build --repo DIR (--pr N... | --waiting)
-//   node review_branch.ts done --repo DIR
+//   node review-branch.ts build --repo DIR (--pr N... | --waiting)
+//   node review-branch.ts done --repo DIR
 //
 // The person reviews several finished UI items at once: one branch, `waffles-review`, holds the default branch with each
 // pull request merged into it, and one dev server serves it. The branch is never pushed: it has no upstream, and done
@@ -284,7 +284,7 @@ const WAITING: Action = { dest: 'waiting', flags: ['--waiting'], nargs: 0, kind:
 const BUILD_HELP = 'merge the waiting pull requests into the local branch waffles-review'
 const DONE_HELP = 'switch back and delete waffles-review'
 const BUILD = parser(
-  'review_branch.ts build',
+  'review-branch.ts build',
   [['[-h]', '--repo', 'REPO', '(--pr PR [PR ...] | --waiting)'], []],
   [
     ['options', [HELP_ROW, ['--repo REPO', 'the main checkout', 0], ['--pr PR [PR ...]', 'the pull requests, in merge order', 0], ['--waiting', 'every ready pull request that asks you for a review', 0]]],
@@ -293,13 +293,13 @@ const BUILD = parser(
   { exclusive: [PR, WAITING] },
 )
 const DONE = parser(
-  'review_branch.ts done',
+  'review-branch.ts done',
   [['[-h]', '--repo', 'REPO'], []],
   [['options', [HELP_ROW, ['--repo REPO', '', 0]]]],
   [HELP, { dest: 'repo', flags: ['--repo'], nargs: 1, kind: 'store', required: true }],
 )
 const TOP = parser(
-  'review_branch.ts',
+  'review-branch.ts',
   [['[-h]'], ['{build,done}', '...']],
   [
     ['positional arguments', [['{build,done}', '', 0], ['build', BUILD_HELP, 1], ['done', DONE_HELP, 1]]],

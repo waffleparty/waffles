@@ -1,4 +1,4 @@
-// Tests for merge_queue.ts, with a stub gh. Run: node --test "scripts/*_test.ts"
+// Tests for merge-queue.ts, with a stub gh. Run: node --test "scripts/*.spec.ts"
 
 import assert from 'node:assert/strict'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 
-import { main } from './merge_queue.ts'
+import { main } from './merge-queue.ts'
 
 // `gh pr view` answers pull request 12 of o/r on base "main", with the state's "review" as its review decision; `gh api repos/…/rules/branches/main` the state's
 // "rules" (or the free plan's 403 with "no_rulesets"); `gh api graphql` the state's "pr".

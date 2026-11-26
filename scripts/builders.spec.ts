@@ -1,4 +1,4 @@
-// Tests for builders.ts, on a local origin. Run: node --test "scripts/*_test.ts"
+// Tests for builders.ts, on a local origin. Run: node --test "scripts/*.spec.ts"
 
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'

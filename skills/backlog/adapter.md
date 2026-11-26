@@ -184,9 +184,9 @@ Adds an answer or a note to an item, or marks that it waits for a person.
 ## Fallback
 
 In a repo that names an adapter, `.backlog/` is a temporary queue for the time
-the tracker cannot be reached. The queue is `scripts/backlog_queue.ts` of the
-waffles plugin (`${CLAUDE_PLUGIN_ROOT}/scripts/backlog_queue.ts`, which is
-`<skill-dir>/../../scripts/backlog_queue.ts` from a skill's base directory). It keeps the calls in `.backlog/queue.json` of the main
+the tracker cannot be reached. The queue is `scripts/backlog-queue.ts` of the
+waffles plugin (`${CLAUDE_PLUGIN_ROOT}/scripts/backlog-queue.ts`, which is
+`<skill-dir>/../../scripts/backlog-queue.ts` from a skill's base directory). It keeps the calls in `.backlog/queue.json` of the main
 checkout, and never calls the tracker itself. The queue belongs to 1 machine:
 the script keeps it out of git (a line in `.git/info/exclude`), so another
 clone never replays it again.

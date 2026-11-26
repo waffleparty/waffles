@@ -1,4 +1,4 @@
-// Tests for review_branch.ts, on a local origin and a stub gh. Run: node --test "scripts/*_test.ts"
+// Tests for review-branch.ts, on a local origin and a stub gh. Run: node --test "scripts/*.spec.ts"
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 
-import { main } from './review_branch.ts'
+import { main } from './review-branch.ts'
 
 const GIT_ENV: Record<string, string> = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com' }
 

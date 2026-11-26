@@ -1,5 +1,5 @@
 // Tests for watch.ts, with gh and the shell stubbed through io.exec and the clock through io.time and io.sleep.
-// Run: node --test "skills/watch-ci/*_test.ts"
+// Run: node --test "skills/watch-ci/*.spec.ts"
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'

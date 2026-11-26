@@ -1,4 +1,4 @@
-// Tests for pycompat.ts. Each expected value is what Python 3.12 gives for the same input. Run: node --test "scripts/*_test.ts"
+// Tests for pycompat.ts. Each expected value is what Python 3.12 gives for the same input. Run: node --test "scripts/*.spec.ts"
 
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'

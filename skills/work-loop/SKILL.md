@@ -294,7 +294,7 @@ To look at several finished UI items at once, build 1 throwaway local branch
 in the main checkout that merges every pull request waiting for the user, and
 serve it with 1 dev server:
 
-1. `node <skill-dir>/../../scripts/review_branch.ts build --repo <main> --waiting`
+1. `node <skill-dir>/../../scripts/review-branch.ts build --repo <main> --waiting`
    (or `--pr <number>…` for the items the user named). It refuses a main
    checkout with changes to tracked files: say so, and offer the items one by
    one instead. It switches the checkout to the local branch `waffles-review`:
@@ -312,14 +312,14 @@ serve it with 1 dev server:
 4. Never push `waffles-review`, and never commit on it: it has no upstream, and it
    is rebuilt whenever a waiting pull request changes.
 5. When the review ends, run
-   `node <skill-dir>/../../scripts/review_branch.ts done --repo <main>`.
+   `node <skill-dir>/../../scripts/review-branch.ts done --repo <main>`.
    It switches the checkout back to the branch it was on and deletes
    `waffles-review`. Merge the items the user picked as below.
 
 ### Merging a pull request
 
 1. If you started the clone's dev server yourself, stop it.
-2. Merge as `node <skill-dir>/../../scripts/merge_queue.ts mode <number>`
+2. Merge as `node <skill-dir>/../../scripts/merge-queue.ts mode <number>`
    says. Without a merge queue:
    `gh pr merge <number> --squash --subject <subject> --body <digest>`, with
    the subject and digest that the `waffles:commit-prep` skill describes. When it
@@ -333,7 +333,7 @@ serve it with 1 dev server:
    the digest in the pull request's body, run `gh pr merge <number>` (no
    merge method, no `--auto`), and write under `## Progress` that it is in
    the queue. Then start Monitor with an until-loop that runs
-   `merge_queue.ts state <number>` every 60 seconds and ends at `merged`,
+   `merge-queue.ts state <number>` every 60 seconds and ends at `merged`,
    `removed`, or `closed`; its notification starts the next pass, and the
    item stays `review` until then. Go on with steps 3 to 5 once it is
    `merged`. When the queue removed it, set `status: escalated`, write

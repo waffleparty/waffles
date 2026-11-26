@@ -1,8 +1,8 @@
 // Tell how a pull request merges (directly, or through its base branch's merge queue), and where it stands.
 //
 // Usage:
-//   node merge_queue.ts mode PR [--repo OWNER/NAME]
-//   node merge_queue.ts state PR [--repo OWNER/NAME]
+//   node merge-queue.ts mode PR [--repo OWNER/NAME]
+//   node merge-queue.ts state PR [--repo OWNER/NAME]
 //
 // PR is a number, a URL, or a branch, as gh takes it.
 //
@@ -253,7 +253,7 @@ function parser(prog: string, usage: [string[], string[]], sections: [string, Ro
 
 const HELP: Action = { dest: 'help', flags: ['-h', '--help'], nargs: 0, kind: 'help' }
 const PARSER = parser(
-  'merge_queue.ts',
+  'merge-queue.ts',
   [['[-h]', '[--repo REPO]'], ['{mode,state}', 'pr']],
   [
     ['positional arguments', [['{mode,state}', '', 0], ['pr', '', 0]]],
