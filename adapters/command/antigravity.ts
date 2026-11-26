@@ -36,9 +36,13 @@ function callOf(input: Input): { name: string | undefined; args: Input } {
   return { name: text(call.name), args }
 }
 
-/** Whether a call is to the plan outline tool: by its own name, or through call_mcp_tool where the tool loads lazily. */
-export function isPlanCall(name: string | undefined, args: Input): boolean {
-  return name === NAMES.planTool || (name === 'call_mcp_tool' && args.ServerName === SERVER && args.ToolName === 'plan')
+/** The plugin's MCP tools, which the hook approves: the plan outline tool and the mode tool. */
+const OWN_TOOLS: readonly string[] = ['plan', 'mode']
+
+/** Whether a call is to one of the plugin's MCP tools: by its own name, or through call_mcp_tool where the tool loads lazily. */
+export function isOwnCall(name: string | undefined, args: Input): boolean {
+  if (name === 'call_mcp_tool') return args.ServerName === SERVER && OWN_TOOLS.includes(text(args.ToolName) ?? '')
+  return OWN_TOOLS.some(tool => name === `mcp_${SERVER}_${tool}`)
 }
 
 function eventOf(name: string, input: Input): NeutralEvent | null {
@@ -59,8 +63,8 @@ function eventOf(name: string, input: Input): NeutralEvent | null {
       if (call.name === undefined) return null
       // The model asks for more permissions: that asks the person, as a permission request does.
       if (call.name === ASK_PERMISSION) return { kind: 'permission', isQuestion: false, isAgent }
-      // Its own tool is never refused; `outputOf` approves it.
-      if (isPlanCall(call.name, call.args)) return { kind: 'tool', isQuestion: false, isAgent }
+      // Its own tools are never refused; `outputOf` approves them.
+      if (isOwnCall(call.name, call.args)) return { kind: 'tool', isQuestion: false, isAgent }
       return { kind: 'tool', isQuestion, isAgent, mayAsk: !isQuestion }
     // `error` holds the failure, a shell command's exit status among them; it is empty when the call worked.
     case 'PostToolUse': {
@@ -90,8 +94,8 @@ function outputOf(name: string, { context, deny, denyAsk }: NeutralAnswer, input
       // During a run: a call the person has granted before runs, and one that would ask is refused.
       if (denyAsk !== undefined) return { decision: 'deny_unless_prior_grant', reason: denyAsk }
       const call = callOf(input)
-      // MCP tools ask for approval by default; the plugin's own tool doesn't need it.
-      return { decision: isPlanCall(call.name, call.args) ? 'auto_approve' : 'allow' }
+      // MCP tools ask for approval by default; the plugin's own tools don't need it.
+      return { decision: isOwnCall(call.name, call.args) ? 'auto_approve' : 'allow' }
     }
     // Antigravity reads nothing from these but the empty object, which lets the stop happen.
     case 'PostToolUse':

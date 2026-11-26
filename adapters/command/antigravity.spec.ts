@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { isPlanCall } from './antigravity.ts'
+import { isOwnCall } from './antigravity.ts'
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), 'cli.ts')
 const STUCK = /5 permission requests in a row have been denied/
@@ -130,7 +130,19 @@ test('the plan outline tool is approved, during a run too', async () => {
   hook(state, 'PreInvocation', INPUTS.PreInvocation(cwd, '/waffles:non-interactive'))
   assert.deepEqual(hook(state, 'PreToolUse', eager).json, { decision: 'auto_approve' })
   assert.deepEqual(hook(state, 'PreToolUse', lazy).json, { decision: 'auto_approve' })
-  assert.equal(isPlanCall('call_mcp_tool', { ServerName: 'other_server', ToolName: 'plan' }), false)
+  assert.equal(isOwnCall('call_mcp_tool', { ServerName: 'other_server', ToolName: 'plan' }), false)
+})
+
+test('the mode tool is approved by name, eager or lazy, during a run too; another tool of the server is not', async () => {
+  const { state, cwd } = await temp()
+  const eager = INPUTS.PreToolUse(cwd, 'mcp_waffles_waffles_mode', {})
+  const lazy = INPUTS.PreToolUse(cwd, 'call_mcp_tool', { ServerName: 'waffles_waffles', ToolName: 'mode', Arguments: { set: 'rapid' } })
+  assert.deepEqual(hook(state, 'PreToolUse', eager).json, { decision: 'auto_approve' })
+  assert.deepEqual(hook(state, 'PreToolUse', lazy).json, { decision: 'auto_approve' })
+  hook(state, 'PreInvocation', INPUTS.PreInvocation(cwd, '/waffles:non-interactive'))
+  assert.deepEqual(hook(state, 'PreToolUse', lazy).json, { decision: 'auto_approve' })
+  assert.equal(isOwnCall('call_mcp_tool', { ServerName: 'waffles_waffles', ToolName: 'other' }), false)
+  assert.equal(isOwnCall('mcp_waffles_waffles_other', {}), false)
 })
 
 test('a push that worked leaves the checkpoint line for the next model call; one that failed leaves nothing', async () => {

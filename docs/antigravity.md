@@ -10,7 +10,7 @@ This wiring follows Antigravity's documentation (Plugins, Build plugins, Hooks, 
 | --- | --- | --- |
 | `SessionStart` | The modes' rules, the plan outline's rules and goal, the mode, and the backlog adapter request | Inject a system message step |
 | `PreInvocation` | The prompt's work: mode commands, the start and end of a run, the mode line in backlog mode. It fires before each model call, so the work runs for the first call of a prompt alone. | Inject a system message step |
-| `PreToolUse` | During a run, refuse calls that would ask you, and questions after the start question. Approve the plan outline tool. | `allow`, `auto_approve`, `deny`, or `deny_unless_prior_grant`, with a reason |
+| `PreToolUse` | During a run, refuse calls that would ask you, and questions after the start question. Approve the plan outline tool and the mode tool. | `allow`, `auto_approve`, `deny`, or `deny_unless_prior_grant`, with a reason |
 | `PostToolUse` | The checkpoint after a `run_command` that worked; the end of the run's start question | Nothing: the checkpoint's line waits for the next `PreInvocation` |
 | `Stop` | The turn's end, for the modes | Nothing (`{}` lets the stop happen) |
 
@@ -19,7 +19,7 @@ This wiring follows Antigravity's documentation (Plugins, Build plugins, Hooks, 
 | Feature | On Antigravity |
 | --- | --- |
 | Skills | All skills in `skills/`, named `waffles:<skill>`. |
-| Modes | The modes' rules and the current mode go to the model when a conversation starts. A mode command changes the mode (see [Mode commands](#mode-commands)). In backlog mode each prompt carries the mode beside it. |
+| Modes | The modes' rules and the current mode go to the model when a conversation starts. A mode command changes the mode (see [Mode commands](#mode-commands)). In backlog mode each prompt carries the mode beside it. The MCP server's `mode` tool reads or sets the mode; the hook approves its calls (`auto_approve`), as it does the plan outline tool's. |
 | Unattended runs | A prompt that starts with `/waffles:non-interactive` starts a run, and the next prompt ends it. During a run, each tool call is answered `deny_unless_prior_grant` with what to do instead: a call that your rules or an earlier grant allow runs, and one that would ask you is refused. A call to `ask_permission` is refused outright, and after 5 such refusals in a row the run is told to wrap up. The run's first question (`ask_question`) within 5 minutes of its start goes to you; every later one is refused. |
 | Plan outline | Its rules and the active goal's tree, or the open goals, go to the model when a conversation starts. The plan outline tool comes from the plugin's MCP server (`mcp_config.json`, server `waffles`, which Antigravity names `waffles_waffles`). The server's entry loads the tool eagerly, so the model calls it as `mcp_waffles_waffles_plan`. Antigravity asks before an MCP tool call by default; the hook approves this tool's calls (`auto_approve`), during a run too. Your own deny and ask rules still apply. |
 | Checkpoint | After a `git push` or `gh pr create` that `run_command` ran with no error, the plan outline goes into the pull request's description. `PostToolUse` answers nothing the model reads, so the checkpoint's line goes to the model at its next call. |
