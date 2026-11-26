@@ -56,8 +56,8 @@ last step: "Remove the working files" ─► git rm -r .tmp ─► commit ─►
    `[no ci]`, `[skip actions]`, or `skip-checks:`. CI runs on every push.
 7. **Finish.** The last step is `git rm -r .tmp` in its own commit, "Remove
    the working files". Push, then mark the pull request ready:
-   `gh pr ready`. The waffles hook refuses `gh pr merge` while `.tmp/` is on the
-   head branch.
+   `gh pr ready`. Nothing stops a merge while `.tmp/` is on the head branch:
+   check that this commit is pushed before you merge.
 
 ### Squash digest
 

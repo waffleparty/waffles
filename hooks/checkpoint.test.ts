@@ -61,31 +61,14 @@ test('a push in another folder runs the checkpoint there', async ($, on) => {
   expect(runs.map(r => r[2])).toEqual(['/repo/../other', '/abs/repo'])
 })
 
-test('a merge is refused with the reason while the head branch holds .tmp/', async ($, on) => {
-  const reason = 'Refused: the head branch feat of #7 still holds .tmp/, the working files.'
-  const { runs, commands } = world(on, { 'merge_guard.py': { exitCode: 3, stdout: `${reason}\n` } })
+test('a merge runs no script', async ($, on) => {
+  const { runs, commands } = world(on, {})
 
   const r = await $.tool.call(bash('gh pr merge 7 --squash'))
 
-  expect(runs).toEqual([['merge_guard.py', ['gh pr merge 7 --squash'], '/repo']])
-  expect(commands).toEqual([])
-  expect(r).toEqual({ deny: reason })
-})
-
-test('a merge goes on when the branch has no .tmp/, and with a note when gh could not tell', async ($, on) => {
-  const answers = { 'merge_guard.py': { exitCode: 0, stdout: '' } }
-  const { commands } = world(on, answers)
-
-  const clean = await $.tool.call(bash('gh pr merge 7 --squash'))
-  answers['merge_guard.py'] = { exitCode: 1, stdout: 'gh pr view failed, so waffles could not check the head branch for .tmp/: offline' }
-  const unknown = await $.tool.call(bash('gh pr merge 8 --squash'))
-
-  expect(commands).toEqual(['gh pr merge 7 --squash', 'gh pr merge 8 --squash'])
-  expect(clean).toEqual(RAN)
-  expect(unknown).toEqual({
-    ...RAN,
-    context: ['waffles did not check the head branch for .tmp/ before this merge: gh pr view failed, so waffles could not check the head branch for .tmp/: offline'],
-  })
+  expect(runs).toEqual([])
+  expect(commands).toEqual(['gh pr merge 7 --squash'])
+  expect(r).toEqual(RAN)
 })
 
 test('the folder of a command is the one its leading cd or git -C names', () => {

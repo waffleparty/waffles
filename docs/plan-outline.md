@@ -92,10 +92,9 @@ python3 -I <plugin root>/scripts/checkpoint.py [--pr <number>] [--dry-run]
 
 Checkpoints run after each `git push` and `gh pr create`, through the hooks below. A checkpoint at the end of a run or at the end of a session is not made: the push at a stop is what brings the checklist up to date.
 
-Two hooks on the Bash tool use the scripts, for Claude and for subagents alike:
+A hook on the Bash tool runs the script after `git push` and `gh pr create`, for Claude and for subagents alike. When the command worked, the hook runs the checkpoint script in the folder the command ran in, and the model reads its one-line outcome. A leading `cd <dir> &&`, or `git -C <dir>` for a push, names that folder, and `~` is the home folder. A folder named with `$` cannot be told from the command, so that push gets no checkpoint.
 
-- **After `git push` and `gh pr create`.** When the command worked, the hook runs the checkpoint script in the folder the command ran in, and the model reads its one-line outcome. A leading `cd <dir> &&`, or `git -C <dir>` for a push, names that folder, and `~` is the home folder. A folder named with `$` cannot be told from the command, so that push gets no checkpoint.
-- **Before `gh pr merge`.** `scripts/merge_guard.py` asks `gh` for the pull request the command names and whether `.tmp/` is on its head branch. While it is, the merge is refused with the reason: a squash would put the working files on the default branch. When `gh` cannot tell, the merge goes on, and the model reads why the check did not run. A repo can also add a CI check that fails while `.tmp/` is on a branch; the hook is the guard where it has none.
+The plugin does not stop a merge while `.tmp/` is on the head branch. The "Remove the working files" step is what keeps the working files off the default branch. A repo can add a CI check that fails while `.tmp/` is on a branch.
 
 ## Runs
 

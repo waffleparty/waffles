@@ -18,8 +18,8 @@ Skills follow the open Agent Skills format. The hooks (modes, plan outline, auto
 | --- | --- |
 | Claude Code | The hooks and the agents. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
-| `python3` | The scripts in `scripts/`: the checkpoint, the merge guard, builders, the merge queue, the review branch, the backlog queue, the outline from a plan, and the CI watcher. They use the standard library only. |
-| `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, the merge guard, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
+| `python3` | The scripts in `scripts/`: the checkpoint, builders, the merge queue, the review branch, the backlog queue, the outline from a plan, and the CI watcher. They use the standard library only. |
+| `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
 | The [superpowers](https://github.com/obra/superpowers) plugin, version 7.0.2 | `/waffles:design`, and unattended runs, which design items that need it. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
@@ -69,7 +69,7 @@ The agents load with the plugin and are available outside the skills that start 
 | Modes | `/prod`, `/rapid`, and `/backlog-entry`, and a statement of the current mode in every conversation. | [Modes](docs/modes.md) |
 | Plan outline | The `mcp__waffles__plan` tool, the pane, the footer item, and the pull request checklist. | [Plan outline](docs/plan-outline.md) |
 | Auto effort | A per-prompt effort pick, and the footer row. | [Modes](docs/modes.md#auto-effort) |
-| Checkpoint | After `git push` and `gh pr create`, the plan outline is rendered into the pull request; before `gh pr merge`, a guard refuses a merge that would carry `.tmp/`. | [Plan outline](docs/plan-outline.md#the-checklist-in-the-pull-request) |
+| Checkpoint | After `git push` and `gh pr create`, the plan outline is rendered into the pull request. | [Plan outline](docs/plan-outline.md#the-checklist-in-the-pull-request) |
 | Dev servers | A footer item that lists the dev servers running from the project, and opens one in the browser. | [Skills](docs/skills.md#dev-server) |
 | Unattended runs | Refuses permission prompts and questions during a run, and holds each turn at Extra high effort. | [Unattended runs](docs/unattended-runs.md) |
 
