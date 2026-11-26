@@ -1,7 +1,10 @@
-import type { EngineInterface, On } from 'claude-code'
+import type { On } from 'claude-code'
 
-// A cheap first look at a Bash command; the script reads the checkout properly. A `git push`
-// inside quoted text only costs a script run that finds nothing.
+import { checkpoint } from '../core/checkpoint.ts'
+import { hostOf } from './host'
+
+// A cheap first look at a Bash command; the checkpoint reads the checkout properly. A `git push`
+// inside quoted text only costs a checkpoint that finds nothing.
 const PUSH = /\bgit\s+(?:-C\s+\S+\s+)?push\b/
 // Opening the pull request renders the checklist too: the first push found no pull request to update.
 const CREATE = /\bgh\s+pr\s+create\b/
@@ -9,7 +12,8 @@ const CREATE = /\bgh\s+pr\s+create\b/
 const CD = /^\s*cd\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s*&&/
 const DASH_C = /\bgit\s+-C\s+("[^"]*"|'[^']*'|[^\s;&|]+)\s+push\b/
 
-const SCRIPT_MS = 60_000
+// All of a checkpoint's git and gh commands together: each one is given the time that is left.
+const CHECKPOINT_MS = 60_000
 
 /**
  * The folder a Bash command runs its push in: the one its leading `cd` or `git -C` names, else
@@ -26,12 +30,8 @@ export function folderOf(command: string, cwd: string, isPush: boolean, home: st
   return `${cwd.replace(/\/+$/, '')}/${dir}`
 }
 
-async function script($: EngineInterface, name: string, args: string[], cwd: string) {
-  return $.process.run(['python3', '-I', `${$.plugin.root}/scripts/${name}`, ...args], { cwd, timeoutMs: SCRIPT_MS })
-}
-
 /**
- * After a `git push` or a `gh pr create` that worked, the checkpoint script renders the plan outline into
+ * After a `git push` or a `gh pr create` that worked, the checkpoint renders the plan outline into
  * the pull request's description.
  */
 export function registerCheckpoint(on: On) {
@@ -46,7 +46,7 @@ export function registerCheckpoint(on: On) {
     // A push to a folder that can't be told gets no checkpoint: a checkpoint of the wrong checkout could change another pull request.
     const folder = folderOf(command, cwd, true, home)
     if (folder === null) return r
-    const done = await script($, 'checkpoint.py', [], folder).catch((error: unknown) => ({
+    const done = await checkpoint(hostOf($), folder, { timeoutMs: CHECKPOINT_MS }).catch((error: unknown) => ({
       stdout: `did not run: ${error instanceof Error ? error.message : String(error)}`,
     }))
     const line = done.stdout.trim()
