@@ -33,8 +33,8 @@
 // shared by every session of the user; a lock goes with its process, also when it is killed (./lock.ts). It exits
 // with COMMAND's code.
 //
-// Exit codes: 0 when done; 3 when refused, with the reason; 1 when git or gh failed, with its message; 2 for wrong
-// arguments. test-slot exits with its command's code.
+// Exit codes: 0 when done; 3 when refused, with the reason on stderr; 1 when git or gh failed, with its message on
+// stderr; 2 for wrong arguments, with the reason on stderr. test-slot exits with its command's code.
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -316,7 +316,7 @@ function parse(command: keyof typeof OPTIONS, argv: string[]): Record<string, st
   return values as Record<string, string | undefined>
 }
 
-export async function main(argv: string[], out: Out = process.stdout): Promise<number> {
+export async function main(argv: string[], out: Out = process.stdout, err: Out = process.stderr): Promise<number> {
   const [command, ...rest] = argv
   try {
     if (command === '-h' || command === '--help') {
@@ -330,10 +330,7 @@ export async function main(argv: string[], out: Out = process.stdout): Promise<n
         return 0
       }
       const slots = count('slots', args.slots, TEST_SLOTS)
-      if (args.command.length === 0 || slots < 1) {
-        out.write('test-slot needs a command after --, and 1 slot or more.\n')
-        return 2
-      }
+      if (args.command.length === 0 || slots < 1) throw new Usage('test-slot needs a command after --, and 1 slot or more.')
       return await testSlot(slots, args.command, out)
     }
     if (command !== 'clone' && command !== 'remove' && command !== 'limits') {
@@ -351,11 +348,11 @@ export async function main(argv: string[], out: Out = process.stdout): Promise<n
       else result = remove(root(args['root']), args['path']!)
     } catch (error) {
       if (error instanceof Refused) {
-        out.write(`Refused: ${error.message}\n`)
+        err.write(`Refused: ${error.message}\n`)
         return 3
       }
       if (error instanceof GitFailed) {
-        out.write(`${error.message}\n`)
+        err.write(`${error.message}\n`)
         return 1
       }
       throw error
@@ -363,7 +360,7 @@ export async function main(argv: string[], out: Out = process.stdout): Promise<n
     out.write(`${JSON.stringify(result)}\n`)
     return 0
   } catch (error) {
-    process.stderr.write(`builders: ${(error as Error).message}\n`)
+    err.write(`builders: ${(error as Error).message}\n`)
     return error instanceof Usage ? 2 : 1
   }
 }

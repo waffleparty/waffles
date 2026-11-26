@@ -77,10 +77,13 @@ describe('builders', () => {
     rmSync(tmp, { recursive: true, force: true })
   })
 
+  // The result on stdout; a refusal or a failure on stderr, with nothing on stdout.
   async function runScript(...args: string[]): Promise<[number, Clone & Record<string, unknown> | string]> {
-    const out = new Capture()
-    const code = await main(args, out)
-    return [code, code === 0 ? JSON.parse(out.text) : out.text]
+    const [out, err] = [new Capture(), new Capture()]
+    const code = await main(args, out, err)
+    if (code === 0) return [code, JSON.parse(out.text)]
+    assert.equal(out.text, '')
+    return [code, err.text]
   }
 
   async function clone(item: string, branch: string, ...more: string[]): Promise<Clone> {
@@ -183,12 +186,13 @@ describe('builders', () => {
   test('clone uses --root when no variable is set, and refuses with neither', async () => {
     delete process.env['WAFFLES_BUILDERS_ROOT']
     const other = join(dirname(root), 'scratch')
-    let out = new Capture()
-    assert.equal(await main(['clone', '--root', other, '--repo', mainCheckout, '--item', 'ITEM-9', '--branch', 'feat/ITEM-9'], out), 0)
-    assert.equal(JSON.parse(out.text).path, join(realpathSync(dirname(other)), 'scratch', 'example', 'widget', 'ITEM-9'))
-    out = new Capture()
-    assert.equal(await main(['clone', '--repo', mainCheckout, '--item', 'ITEM-8', '--branch', 'feat/ITEM-8'], out), 3)
-    assert.ok(out.text.includes('--root'))
+    const [code, result] = await runScript('clone', '--root', other, '--repo', mainCheckout, '--item', 'ITEM-9', '--branch', 'feat/ITEM-9')
+    assert.equal(code, 0)
+    assert.equal((result as Clone).path, join(realpathSync(dirname(other)), 'scratch', 'example', 'widget', 'ITEM-9'))
+    const [refused, text] = await runScript('clone', '--repo', mainCheckout, '--item', 'ITEM-8', '--branch', 'feat/ITEM-8')
+    assert.equal(refused, 3)
+    assert.ok(String(text).startsWith('Refused: '))
+    assert.ok(String(text).includes('--root'))
   })
 
   test('remove refuses a folder outside the builders root', async () => {
@@ -279,9 +283,13 @@ describe('limits', () => {
     writeFileSync(state, JSON.stringify({ prs: list, down }))
   }
 
+  // stdout when it counted; stderr, with nothing on stdout, when it refused or could not count.
   async function limits(): Promise<[number, string]> {
-    const out = new Capture()
-    return [await main(['limits', '--repo', repo], out), out.text]
+    const [out, err] = [new Capture(), new Capture()]
+    const code = await main(['limits', '--repo', repo], out, err)
+    if (code === 0) return [code, out.text]
+    assert.equal(out.text, '')
+    return [code, err.text]
   }
 
   test('with 10 pull requests waiting for review no builder starts, and the reason lists them', async () => {
@@ -335,6 +343,14 @@ describe('limits', () => {
 
   test("test-slot passes on the command's exit code", async () => {
     assert.equal(await main(['test-slot', '--', process.execPath, '-e', 'process.exit(5)'], new Capture()), 5)
-    assert.equal(await main(['test-slot'], new Capture()), 2)
+  })
+
+  test('bad arguments go to stderr and exit 2, with nothing on stdout', async () => {
+    for (const args of [['test-slot'], ['test-slot', '--slots', '0', '--', 'true'], ['limits'], ['frob']]) {
+      const [out, err] = [new Capture(), new Capture()]
+      assert.equal(await main(args, out, err), 2, args.join(' '))
+      assert.equal(out.text, '', args.join(' '))
+      assert.ok(err.text.startsWith('builders: '), err.text)
+    }
   })
 })
