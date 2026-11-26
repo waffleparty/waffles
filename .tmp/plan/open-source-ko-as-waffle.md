@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.3
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T16:55:23.380Z
+updated: 2026-11-26T16:55:31.900Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -48,7 +48,7 @@ updated: 2026-11-26T16:55:23.380Z
     - [x] 6.3.1 Design the boundary between the core library and the adapters
     - [x] 6.3.2 Confirm that Claude Code's hook runtime loads imports with a .ts extension
     - [x] 6.3.3 Define the host interface and its store
-    - [ ] 6.3.4 Move the plan outline into the core
+    - [x] 6.3.4 Move the plan outline into the core
     - [ ] 6.3.5 Move the modes and the unattended-run rules into the core
     - [ ] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
   - [ ] 6.4 Serve the plan outline tool from an MCP server

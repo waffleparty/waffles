@@ -1,6 +1,5 @@
-import type { EngineInterface } from 'claude-code'
-
-import { parseGoal, serializeGoal, PlanError, type Goal } from '../core/plan-tree.ts'
+import type { Host } from './host.ts'
+import { parseGoal, serializeGoal, PlanError, type Goal } from './plan-tree.ts'
 
 /** A session lock older than this (ms) no longer holds its goal. */
 export const STALE_MS = 120_000
@@ -8,11 +7,11 @@ export const STALE_MS = 120_000
 /** A goal file, parsed, or with the error that kept it from being read or parsed. */
 export type GoalFile = { slug: string; goal: Goal } | { slug: string; error: string }
 
-/** The part of `$` the store calls, which a test can stand in for whole; every `$` is one. The store reads only text. */
+/** The part of the host the store calls, which a test can stand in for whole; every Host is one. The store reads only text. */
 export type StoreEngine = {
-  fs: Pick<EngineInterface['fs'], 'write' | 'exists' | 'list' | 'stat'> & { read: (path: string) => Promise<string> }
-  process: Pick<EngineInterface['process'], 'run'>
-  session: Pick<EngineInterface['session'], 'cwd'>
+  fs: Host['fs']
+  process: Host['process']
+  session: Pick<Host['session'], 'cwd'>
 }
 
 // The lines git prints, or null when it fails or prints nothing.
@@ -195,7 +194,7 @@ export async function saveGoal($: StoreEngine, slug: string, goal: Goal, outline
 export async function removeGoal($: StoreEngine, slug: string, outline?: string): Promise<void> {
   const path = goalPath(outline ?? (await planRoot($)).outline, slug)
   invalidate(path)
-  await $.process.run(['rm', '-f', path])
+  await $.fs.remove(path)
 }
 
 type Lock = { session: string; heartbeat: string }
@@ -231,7 +230,7 @@ export async function holder($: StoreEngine, slug: string, now: number, state?: 
  * Takes the goal's lock, or refreshes this session's heartbeat. False when another session's lock is
  * live. `state` saves a git run. Throws PlanError when the state folder isn't a folder.
  *
- * The lock is read and then written: `$.fs` has no exclusive create, so 2 sessions that claim within
+ * The lock is read and then written: the host's files have no exclusive create, so 2 sessions that claim within
  * the same few milliseconds can both win, the later write holding the lock. The loser finds out at its
  * next heartbeat (every 30 s), whose claim fails on the winner's live lock, and stops holding the goal.
  */
@@ -267,7 +266,7 @@ export async function recordActive($: StoreEngine, session: string, slug: string
 export async function forgetActive($: StoreEngine, session: string, state?: string): Promise<void> {
   if (!SESSION.test(session)) return
   const path = recordPath(state ?? (await planRoot($)).state, session)
-  if (await $.fs.exists(path)) await $.process.run(['rm', '-f', path])
+  if (await $.fs.exists(path)) await $.fs.remove(path)
 }
 
 /**
@@ -296,7 +295,7 @@ export async function pruneRecords($: StoreEngine, session: string, now: number,
   if (!(await $.fs.exists(dir))) return
   for (const entry of await $.fs.list(dir)) {
     if (entry.kind !== 'file' || entry.name === `${session}.json` || now - entry.mtimeMs <= RECORD_MS) continue
-    await $.process.run(['rm', '-f', `${dir}/${entry.name}`])
+    await $.fs.remove(`${dir}/${entry.name}`)
   }
 }
 
@@ -321,5 +320,5 @@ export async function release($: StoreEngine, slug: string, session: string, sta
     return
   }
   if (lock?.session !== session) return
-  await $.process.run(['rm', '-f', path])
+  await $.fs.remove(path)
 }

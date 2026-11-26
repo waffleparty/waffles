@@ -1,6 +1,6 @@
 import type { FsEntry, FsStat, On, ProcessRunResult } from 'claude-code'
 
-import type { StoreEngine } from './plan-store'
+import type { StoreEngine } from '../core/plan-store.ts'
 
 // Every set of a file gives it a modification time no file had before, in this test or another, as a
 // write on disk does: the store's cache, which outlives a test, then never takes one file for another.
@@ -164,8 +164,11 @@ export function fakeStoreDisk(): Disk & { $: StoreEngine } {
       },
       write: async (path, text) => at.write(path, text),
       exists: async path => at.exists(path),
-      list: async (path = '') => at.list(path),
-      stat: async (path, options) => at.stat(path, options?.resolve ?? false),
+      list: async path => at.list(path),
+      stat: async path => at.stat(path, false),
+      remove: async path => {
+        await at.run(['rm', '-f', path])
+      },
     },
     process: { run: argv => at.run(argv) },
     session: { cwd: async () => disk.cwd },

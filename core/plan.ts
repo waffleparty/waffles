@@ -1,7 +1,4 @@
-import { atom, read, update } from 'claude-code'
-import type { AgentStatus, EngineInterface, On, PromptSubmitInput, SessionEndInput } from 'claude-code'
-
-import type { PlanGoal, PlanOther, PlanStep } from '../types'
+import { memoryOf, type Host, type OtherGoal } from './host.ts'
 import {
   claim,
   findPlanRoot,
@@ -19,7 +16,7 @@ import {
   saveGoal,
   type GoalFile,
   type Where,
-} from './plan-store'
+} from './plan-store.ts'
 import {
   addSteps,
   agentsOf,
@@ -42,26 +39,13 @@ import {
   type Kind,
   type Result,
   type Step,
-} from '../core/plan-tree.ts'
-import { ELSEWHERE, openAtStart, openUnlessClosed } from './plan-ui'
+} from './plan-tree.ts'
 
-export const TOOL = 'mcp__waffles__plan'
+/** Opens the result of a call made while the active goal has no file in the shell's repo. */
+export const ELSEWHERE = 'Nothing changed:'
 
-// plan-ui.tsx draws types/index.d.ts's copies of Goal and Step: a change to one side alone fails to compile here.
-type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
-type Holds<T extends true> = T
-export type PlanShapes = [Holds<Equal<Goal, PlanGoal>>, Holds<Equal<Step, PlanStep>>]
-
-// plan-ui.tsx declares the same atoms to draw them: the scan reads an atom only where its file makes it.
-const planGoal = atom({ plugin: 'waffles', key: 'planGoal' } as const, null)
-const planTree = atom({ plugin: 'waffles', key: 'planTree' } as const, null)
-const planError = atom({ plugin: 'waffles', key: 'planError' } as const, null)
-const planOthers = atom({ plugin: 'waffles', key: 'planOthers' } as const, [])
-const planChanged = atom({ plugin: 'waffles', key: 'planChanged' } as const, [])
-const planKept = atom({ plugin: 'waffles', key: 'planKept' } as const, null)
-const planKeptIssue = atom({ plugin: 'waffles', key: 'planKeptIssue' } as const, null)
-
-const POLL_MS = 5_000
+/** How often an adapter with a timer calls `tickPlan`. */
+export const POLL_MS = 5_000
 // Well inside STALE_MS, so a running session's lock never goes stale.
 const BEAT_MS = 30_000
 // A slug the model names must look like one `slug()` makes: no path separators or dots.
@@ -72,11 +56,10 @@ const STEP_FIRST = /^(\d+(?:\.\d+)*):\s/
 // An agent ID goes in the step's note, `agent=<id>`: no space, `;`, `=` or `<!--` may break it.
 const AGENT_ID = /^[\w.:-]+$/
 // The subagents still at work; any other status has ended.
-const LIVE: readonly AgentStatus[] = ['pending', 'running', 'waiting']
+const LIVE: readonly string[] = ['pending', 'running', 'waiting']
 
 const DESCRIPTION =
   'Changes the plan outline: the tree of goals and steps for this repo that the person sees beside the chat. The only way to change its goal files in .tmp/plan/. Each call returns the changes and the new path.'
-const SUBAGENT = 'The plan outline is kept by the main conversation only.'
 const NO_GOAL = 'No active goal. Start one with op "goal".'
 const GIT_DOWN = 'git did not answer, so the plan outline was not saved. Try again.'
 // The active goal has no file in the repo of the shell's working directory, most often because the shell
@@ -147,31 +130,36 @@ const FLAGS = ['focus', 'cascade'] as const
 // The other fields that take no null: kind, and the lists.
 const NON_NULL = ['kind', 'steps', 'titles', 'ids'] as const
 
-// Module variables start over on a reload: the poll then claims again at once.
-let lastBeat = 0
-let isPollQueued = false
-let queue: Promise<unknown> = Promise.resolve()
-// How many sessions have ended in this process: a poll that started before an end writes nothing after it.
-let ends = 0
-// The folders as git last gave them to a poll or a call. Where git fails, they fall back to the working
-// directory's, which are never kept here: a poll that later finds the real ones would take them for the fallback.
-let lastRoot: Where | null = null
-// The session ID whose record a poll or a call last looked for: each session's goal is restored once
-// per process, at its first poll or call. A reload looks again; it finds no record unless a restart left one.
-let restoredFor: string | null = null
+// What one process keeps for one session. It starts over with the process: the poll then claims again at once.
+type Vars = {
+  lastBeat: number
+  isPollQueued: boolean
+  queue: Promise<unknown>
+  // How many times the session has ended in this process: a poll that started before an end writes nothing after it.
+  ends: number
+  // The folders as git last gave them to a poll or a call. Where git fails, they fall back to the working
+  // directory's, which are never kept here: a poll that later finds the real ones would take them for the fallback.
+  lastRoot: Where | null
+  // The session ID whose record a poll or a call last looked for: each session's goal is restored once
+  // per process, at its first poll or call. A new process looks again; it finds no record unless one was left.
+  restoredFor: string | null
+}
+const vars = ($: Pick<Host, 'memory'>) =>
+  memoryOf<Vars>($, 'plan', () => ({ lastBeat: 0, isPollQueued: false, queue: Promise.resolve(), ends: 0, lastRoot: null, restoredFor: null }))
 
 // Tool calls and polls run one at a time, so a poll never draws a tree a call just replaced.
-function serial<T>(work: () => Promise<T>): Promise<T> {
-  const run = queue.then(work, work)
-  queue = run.catch(() => undefined)
+function serial<T>($: Pick<Host, 'memory'>, work: () => Promise<T>): Promise<T> {
+  const v = vars($)
+  const run = v.queue.then(work, work)
+  v.queue = run.catch(() => undefined)
   return run
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Writes a failure the plan outline can't report anywhere else to the debug log, with its stack. */
-export function logFailure($: EngineInterface, what: string, error: unknown): void {
-  $.ui.log(`plan outline: ${what}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`, { to: 'debug' })
+export function logFailure($: Host, what: string, error: unknown): void {
+  $.log(`plan outline: ${what}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`)
 }
 
 /** The input with each scalar field's JSON type checked; refuses a field of the wrong type by name. */
@@ -237,7 +225,7 @@ function kindOf(kind: Kind | undefined): Kind {
  * session holds is left out, or with `isInUseShown` marked so.
  */
 export async function openGoalLines(
-  $: EngineInterface,
+  $: Host,
   files: readonly GoalFile[],
   root: Where,
   { except, isInUseShown }: { except?: string | null; isInUseShown: boolean },
@@ -255,7 +243,7 @@ export async function openGoalLines(
 }
 
 /** The goal a slug from the model names; refuses a slug that isn't one or names no goal file, listing the open goals. */
-async function named($: EngineInterface, files: readonly GoalFile[], root: Where, slug: string): Promise<Goal> {
+async function named($: Host, files: readonly GoalFile[], root: Where, slug: string): Promise<Goal> {
   const found = SLUG.test(slug) ? files.find(f => f.slug === slug) : undefined
   if (!found) {
     const lines = await openGoalLines($, files, root, { isInUseShown: true })
@@ -271,19 +259,19 @@ async function named($: EngineInterface, files: readonly GoalFile[], root: Where
  * `active` draws that goal as the active one before it is set; once `isEnded` holds, nothing is written.
  */
 async function refresh(
-  $: EngineInterface,
+  $: Host,
   files: readonly GoalFile[],
   root: Where,
   { active, isEnded = () => false }: { active?: string; isEnded?: () => boolean } = {},
 ) {
-  const slug = active ?? (await read($, planGoal))
-  const shown = slug ?? (await read($, planKept))
+  const slug = active ?? (await $.state.get('planGoal'))
+  const shown = slug ?? (await $.state.get('planKept'))
   const mine = shown === null ? undefined : files.find(f => f.slug === shown)
   const isRead = mine !== undefined && 'goal' in mine
   const error = slug === null ? null : !mine ? `No goal file ${goalName(slug)}` : 'error' in mine ? mine.error : null
   // With no active goal, the kept goal's tree stays drawn though its file is gone or unreadable: the pane says so.
   const issue = slug !== null || shown === null || isRead ? null : mine ? 'unreadable' : 'missing'
-  const others: PlanOther[] = []
+  const others: OtherGoal[] = []
   const rest = files.filter(f => f.slug !== shown && 'goal' in f && f.goal.status === 'open')
   if (rest.length) {
     const [now, me] = [await $.clock.now(), await $.session.id()]
@@ -295,31 +283,31 @@ async function refresh(
   }
   if (slug !== null || isRead) {
     const tree = isRead ? mine.goal : null
-    if (!isEnded() && !same(await read($, planTree), tree)) await update($, planTree, () => tree)
+    if (!isEnded() && !same(await $.state.get('planTree'), tree)) await $.state.set('planTree', tree)
   }
-  if (!isEnded() && (await read($, planKeptIssue)) !== issue) await update($, planKeptIssue, () => issue)
-  if (!isEnded() && (await read($, planError)) !== error) await update($, planError, () => error)
-  if (!isEnded() && !same(await read($, planOthers), others)) await update($, planOthers, () => others)
+  if (!isEnded() && (await $.state.get('planKeptIssue')) !== issue) await $.state.set('planKeptIssue', issue)
+  if (!isEnded() && (await $.state.get('planError')) !== error) await $.state.set('planError', error)
+  if (!isEnded() && !same(await $.state.get('planOthers'), others)) await $.state.set('planOthers', others)
 }
 
 /** Sets the goal whose tree the pane keeps while no goal is active; null once one is. */
-async function keep($: EngineInterface, slug: string | null) {
-  if ((await read($, planKept)) !== slug) await update($, planKept, () => slug)
+async function keep($: Host, slug: string | null) {
+  if ((await $.state.get('planKept')) !== slug) await $.state.set('planKept', slug)
 }
 
 /** The active goal is no longer this session's: its tree stays drawn, marked not active. */
-async function lose($: EngineInterface, slug: string) {
+async function lose($: Host, slug: string) {
   await keep($, slug)
-  await update($, planGoal, () => null)
+  await $.state.set('planGoal', null)
 }
 
 /** The session no longer has the goal active: its record goes, so a resume doesn't bring the goal back. */
-async function forget($: EngineInterface, me: string, root: Where) {
+async function forget($: Host, me: string, root: Where) {
   await forgetActive($, me, root.state).catch(error => logFailure($, "couldn't remove the session's record", error))
 }
 
 /** Lets go of the active goal: its lock, and where it stopped, for the result. */
-async function park($: EngineInterface, slug: string, me: string, root: Where): Promise<{ title: string; slug: string; at: string } | undefined> {
+async function park($: Host, slug: string, me: string, root: Where): Promise<{ title: string; slug: string; at: string } | undefined> {
   await release($, slug, me, root.state)
   try {
     const goal = await loadGoal($, slug, root.outline)
@@ -397,7 +385,7 @@ function operate(goal: Goal, input: Input, now: string): Result {
 }
 
 /** The tree of the goal named, else the active one, then the other open goals; with neither, the open goals. */
-async function show($: EngineInterface, root: Where, slug: string | undefined, active: string | null): Promise<string> {
+async function show($: Host, root: Where, slug: string | undefined, active: string | null): Promise<string> {
   const files = await listGoals($, root.outline)
   const shown = slug ?? active
   if (shown !== null) {
@@ -419,7 +407,7 @@ async function show($: EngineInterface, root: Where, slug: string | undefined, a
 // The session's record names the goal, so a resume of the session makes it active again.
 // False, with the goal not made active, once `isEnded` holds.
 async function activate(
-  $: EngineInterface,
+  $: Host,
   slug: string,
   me: string,
   files: readonly GoalFile[],
@@ -431,14 +419,14 @@ async function activate(
   await recordActive($, me, slug, root.state).catch(error => logFailure($, `couldn't record ${slug} as the session's goal`, error))
   if (isEnded()) return false
   await keep($, null)
-  if (changed !== null) await update($, planChanged, () => changed)
+  if (changed !== null) await $.state.set('planChanged', changed)
   await refresh($, files, root, { active: slug, isEnded })
   if (isEnded()) return false
-  await update($, planGoal, () => slug)
+  await $.state.set('planGoal', slug)
   return true
 }
 
-async function apply($: EngineInterface, raw: Record<string, unknown>): Promise<string> {
+async function apply($: Host, raw: Record<string, unknown>): Promise<string> {
   const input = checked(raw)
   const nowMs = await $.clock.now()
   const now = new Date(nowMs).toISOString()
@@ -449,10 +437,10 @@ async function apply($: EngineInterface, raw: Record<string, unknown>): Promise<
   if (isGitDown) throw new PlanError(GIT_DOWN)
   // A call that comes before the first poll of a resumed session finds its goal active.
   // A restore that fails leaves the call to work as with no record.
-  if ((await read($, planGoal)) === null) {
+  if ((await $.state.get('planGoal')) === null) {
     await restore($, me, root, isFromGit, nowMs).catch(error => logFailure($, "couldn't restore the session's goal", error))
   }
-  const active = await read($, planGoal)
+  const active = await $.state.get('planGoal')
   const isElsewhere = active !== null && !(await hasGoalFile($, active, root))
   if (input.op === 'show') return isElsewhere && input.goal === undefined ? elsewhere(active, root) : show($, root, input.goal, active)
 
@@ -475,11 +463,11 @@ async function apply($: EngineInterface, raw: Record<string, unknown>): Promise<
       await release($, slug, me, root.state).catch(failure => logFailure($, `couldn't release the lock on ${slug}`, failure))
       throw error
     }
-    lastBeat = nowMs
-    if (isFromGit) lastRoot = root
+    vars($).lastBeat = nowMs
+    if (isFromGit) vars($).lastRoot = root
     const parked = active === null ? undefined : await park($, active, me, root)
     await activate($, slug, me, [...files, { slug, goal }], root, goal.steps.map(s => s.id))
-    if (active === null) await openUnlessClosed($)
+    if (active === null) await $.view.planActive('call')
     return text([describe({ type: 'goal', title, slug, parked })], goal)
   }
 
@@ -489,12 +477,12 @@ async function apply($: EngineInterface, raw: Record<string, unknown>): Promise<
     const goal = await named($, files, root, slug)
     if (goal.status === 'done') throw new PlanError(`"${goal.title}" is done.`)
     if (!(await claim($, slug, me, nowMs, root.state))) throw new PlanError(`"${goal.title}" is in use by another session.`)
-    lastBeat = nowMs
-    if (isFromGit) lastRoot = root
+    vars($).lastBeat = nowMs
+    if (isFromGit) vars($).lastRoot = root
     const isSwept = (await sweepAgents($, slug, goal, root, nowMs).catch(error => sweepFailed($, slug, error))).length > 0
     const parked = active === null || active === slug ? undefined : await park($, active, me, root)
     await activate($, slug, me, isSwept ? await listGoals($, root.outline) : files, root, active !== slug ? [] : null)
-    if (active === null) await openUnlessClosed($)
+    if (active === null) await $.view.planActive('call')
     return text([`◇ continued goal: ${goal.title} [${slug}]${parkedNote(parked)}`], goal)
   }
 
@@ -513,8 +501,8 @@ async function apply($: EngineInterface, raw: Record<string, unknown>): Promise<
     await refresh($, await listGoals($, root.outline), root)
     throw new PlanError(`"${before.title}" is now in use by another session.`)
   }
-  lastBeat = nowMs
-  if (isFromGit) lastRoot = root
+  vars($).lastBeat = nowMs
+  if (isFromGit) vars($).lastRoot = root
   let result: Result
   if (input.op === 'move' && input.fromGoal !== undefined) {
     const from = input.fromGoal
@@ -544,20 +532,26 @@ async function apply($: EngineInterface, raw: Record<string, unknown>): Promise<
     await lose($, active)
   }
   const ids = touched(before, result)
-  await update($, planChanged, changed => [...new Set([...changed, ...ids])])
+  await mark($, ids)
   await refresh($, await listGoals($, root.outline), root)
   return text(result.changes.map((c: Change) => describe(c)), isDone ? null : result.goal)
+}
+
+/** Adds step IDs to the ones changed since the person's last prompt. */
+async function mark($: Host, ids: readonly string[]) {
+  const changed = await $.state.get('planChanged')
+  await $.state.set('planChanged', [...new Set([...changed, ...ids])])
 }
 
 /**
  * Applies a change a hook makes to the active goal, outside a tool call: a subagent that started or
  * finished. Nothing happens with no active goal, no change, or a lock another session took.
  */
-async function changeActive($: EngineInterface, change: (goal: Goal, now: string) => Result | null) {
+async function changeActive($: Host, change: (goal: Goal, now: string) => Result | null) {
   // A change that lands after the session ended would claim the lock its end released.
-  const at = ends
-  const isEnded = () => ends !== at
-  const slug = await read($, planGoal)
+  const at = vars($).ends
+  const isEnded = () => vars($).ends !== at
+  const slug = await $.state.get('planGoal')
   if (slug === null) return
   const nowMs = await $.clock.now()
   const me = await $.session.id()
@@ -570,10 +564,10 @@ async function changeActive($: EngineInterface, change: (goal: Goal, now: string
   if ((await holder($, slug, nowMs, root.state)) !== me) return
   if (!(await claim($, slug, me, nowMs, root.state))) return
   if (isEnded()) return await release($, slug, me, root.state)
-  lastBeat = nowMs
+  vars($).lastBeat = nowMs
   await saveGoal($, slug, result.goal, root.outline)
   const ids = touched(before, result)
-  await update($, planChanged, changed => [...new Set([...changed, ...ids])])
+  await mark($, ids)
   await refresh($, await listGoals($, root.outline), root)
 }
 
@@ -583,10 +577,10 @@ async function changeActive($: EngineInterface, change: (goal: Goal, now: string
  * takes up a goal, and at each heartbeat, for a finish whose change was lost. Returns the IDs of the steps
  * it changed. Call with the goal's lock held.
  */
-async function sweepAgents($: EngineInterface, slug: string, goal: Goal, root: Where, nowMs: number): Promise<string[]> {
+async function sweepAgents($: Host, slug: string, goal: Goal, root: Where, nowMs: number): Promise<string[]> {
   const ids = agentsOf(goal)
   if (!ids.length) return []
-  const agents = await $.agent.list()
+  const agents = await $.agents.list()
   const now = new Date(nowMs).toISOString()
   let next = goal
   const changed: string[] = []
@@ -603,7 +597,7 @@ async function sweepAgents($: EngineInterface, slug: string, goal: Goal, root: W
   return changed
 }
 
-function sweepFailed($: EngineInterface, slug: string, error: unknown): string[] {
+function sweepFailed($: Host, slug: string, error: unknown): string[] {
   logFailure($, `couldn't end the subagent marks of ${slug}`, error)
   return []
 }
@@ -614,17 +608,17 @@ function sweepFailed($: EngineInterface, slug: string, error: unknown): string[]
  * `/resume` the poll finds the new ID. A goal that is gone, done, or held by another live session is
  * not restored, and its record goes. Where git failed, a root that names no record is looked at again.
  */
-async function restore($: EngineInterface, me: string, root: Where, isFromGit: boolean, nowMs: number, isEnded: () => boolean = () => false) {
-  if (restoredFor === me) return
+async function restore($: Host, me: string, root: Where, isFromGit: boolean, nowMs: number, isEnded: () => boolean = () => false) {
+  if (vars($).restoredFor === me) return
   // Set before the work, so a poll and a call never restore at once; cleared again where the work
   // fails, so the next poll or call tries again.
-  restoredFor = me
+  vars($).restoredFor = me
   try {
     if (isFromGit) await pruneRecords($, me, nowMs, root.state).catch(error => logFailure($, "couldn't remove old session records", error))
     const slug = await recordedActive($, me, root.state)
     if (slug === null) {
       // A root that isn't git's can be the wrong one: a later poll with git looks again.
-      if (!isFromGit) restoredFor = null
+      if (!isFromGit) vars($).restoredFor = null
       return
     }
     if (!SLUG.test(slug)) return await forget($, me, root)
@@ -635,8 +629,8 @@ async function restore($: EngineInterface, me: string, root: Where, isFromGit: b
     if (!found || found.goal.status !== 'open') return await forget($, me, root)
     if (isEnded()) return
     if (!(await claim($, slug, me, nowMs, root.state))) return await forget($, me, root)
-    lastBeat = nowMs
-    if (isFromGit) lastRoot = root
+    vars($).lastBeat = nowMs
+    if (isFromGit) vars($).lastRoot = root
     const isSwept = (await sweepAgents($, slug, found.goal, root, nowMs).catch(error => sweepFailed($, slug, error))).length > 0
     const shown = isSwept ? await listGoals($, root.outline) : files
     // The session can end while the goal is made active: the lock claimed for it goes.
@@ -644,42 +638,43 @@ async function restore($: EngineInterface, me: string, root: Where, isFromGit: b
       await release($, slug, me, root.state).catch(error => logFailure($, `couldn't release the lock on ${slug}`, error))
       return
     }
-    await openUnlessClosed($)
+    await $.view.planActive('call')
   } catch (error) {
-    restoredFor = null
+    vars($).restoredFor = null
     throw error
   }
 }
 
 /** One poll: the heartbeat every BEAT_MS, then the redraw, with 1 git run. Writes nothing in a checkout with no `.tmp/plan/`. */
-async function poll($: EngineInterface) {
-  const at = ends
-  const isEnded = () => ends !== at
+async function poll($: Host) {
+  const at = vars($).ends
+  const isEnded = () => vars($).ends !== at
   // Read before git, which can outlast the session: a lock is claimed only under the ID of the session it is for.
   const me = await $.session.id()
   const { isFromGit, isGitDown, ...root } = await findPlanRoot($)
   // Git failed inside a repository: the fallback folders are in the working tree, so nothing is written
   // or redrawn there, and the pane keeps what it shows.
   if (isEnded() || isGitDown) return
-  const slug = await read($, planGoal)
+  const slug = await $.state.get('planGoal')
   // Where git failed (a timeout), the root is the working directory's: while a tree is drawn, the pane
   // keeps it rather than an error, and no lock is written there. Once git has given a
   // root, only that root is trusted; before that (outside git), the working directory's .tmp/plan is,
   // since the drawn goal was created there.
-  const shown = slug ?? (await read($, planKept))
+  const shown = slug ?? (await $.state.get('planKept'))
+  const { lastRoot } = vars($)
   const isUntrusted = lastRoot !== null ? root.outline !== lastRoot.outline : !(await $.fs.exists(root.outline))
   if (!isFromGit && shown !== null && isUntrusted) return
   const now = await $.clock.now()
   // Only from a root git gave, or, before git has given one, the working directory's.
-  if (slug === null && (isFromGit || lastRoot === null)) {
+  if (slug === null && (isFromGit || vars($).lastRoot === null)) {
     await restore($, me, root, isFromGit, now, isEnded)
     // The restore drew the tree and claimed the lock: the next heartbeat is due in BEAT_MS.
-    if ((await read($, planGoal)) !== null) return
+    if ((await $.state.get('planGoal')) !== null) return
   }
   // With no root found yet, the heartbeat waits for a poll that finds the goal's file.
-  if (slug !== null && now - lastBeat >= BEAT_MS && (await hasGoalFile($, slug, root))) {
+  if (slug !== null && now - vars($).lastBeat >= BEAT_MS && (await hasGoalFile($, slug, root))) {
     if (isEnded()) return
-    lastBeat = now
+    vars($).lastBeat = now
     const isHeld = await claim($, slug, me, now, root.state)
     // The session ended during the claim and released its lock: the claim mustn't outlive it.
     if (isEnded()) {
@@ -691,119 +686,129 @@ async function poll($: EngineInterface) {
       await lose($, slug)
       await forget($, me, root)
     }
-    const tree = await read($, planTree)
+    const tree = await $.state.get('planTree')
     if (isHeld && tree !== null && agentsOf(tree).length) {
       const swept = await loadGoal($, slug, root.outline)
         .then(goal => sweepAgents($, slug, goal, root, now))
         .catch(error => sweepFailed($, slug, error))
-      if (swept.length) await update($, planChanged, changed => [...new Set([...changed, ...swept])])
+      if (swept.length) await mark($, swept)
     }
   }
   const files = await listGoals($, root.outline)
   if (isEnded()) return
   await refresh($, files, root, { isEnded })
-  if (isFromGit) lastRoot = root
+  if (isFromGit) vars($).lastRoot = root
 }
 
 /** The slug of this session's active goal, or null. */
-export async function activeGoal($: EngineInterface): Promise<string | null> {
-  return read($, planGoal)
+export async function activeGoal($: Host): Promise<string | null> {
+  return $.state.get('planGoal')
 }
 
-// The module's one prompt.submit hook calls this. The highlights mark what changed since the person
-// last typed, so a prompt they type clears them; a notification, a trigger or a slash command (/waffles:plan
-// opens the pane that shows them) leaves them. The reset waits its turn behind a poll or a call, so
-// it is not awaited: the prompt never waits on the plan outline.
-export function submitPlan($: EngineInterface, e: PromptSubmitInput): void {
-  if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') return
-  if (e.command || e.isMeta) return
-  void serial(async () => {
-    if ((await read($, planChanged)).length) await update($, planChanged, () => [])
+/**
+ * The person typed a prompt. The highlights mark what changed since they last typed, so it clears
+ * them; an adapter leaves out a notification, a trigger and a slash command. The reset waits its turn
+ * behind a poll or a call, so it is not awaited: the prompt never waits on the plan outline.
+ */
+export function submitPlan($: Host): void {
+  void serial($, async () => {
+    if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
   }).catch(() => undefined)
 }
 
-// The module's one session.end hook calls this. The lock is released under the ending session's ID;
-// its record stays, so a later resume of it makes its goal active again. After /clear the process goes
-// on under a new ID with no active goal: the new conversation's first message lists the open goals,
-// and Claude continues one with switch. After /resume the next poll restores the resumed session's goal.
-//
-// It has session.end's time budget, so it doesn't queue behind a poll that may be waiting on git, and
-// it runs git only when git hasn't yet given the root to a poll or a call. A poll under way writes nothing after it.
-export async function endPlan($: EngineInterface, e: SessionEndInput) {
-  ends += 1
-  const slug = await read($, planGoal)
+/**
+ * The session ended. The lock is released under the ending session's ID; its record stays, so a later
+ * resume of it makes its goal active again. Where the process goes on under another session
+ * (`isProcessKept`: a clear, or a resume of another session), the new one starts with no active goal:
+ * its first message lists the open goals, and the next poll restores a resumed session's goal.
+ *
+ * It has the session end's time budget, so it doesn't queue behind a poll that may be waiting on git, and
+ * it runs git only when git hasn't yet given the root to a poll or a call. A poll under way writes nothing after it.
+ */
+export async function endPlan($: Host, sessionId: string, isProcessKept: boolean) {
+  vars($).ends += 1
+  const slug = await $.state.get('planGoal')
   // A lock that can't be removed goes stale in STALE_MS; the session still ends with no goal.
   if (slug !== null) {
-    await release($, slug, e.sessionId, lastRoot?.state).catch(error => logFailure($, `couldn't release the lock on ${slug}`, error))
+    await release($, slug, sessionId, vars($).lastRoot?.state).catch(error => logFailure($, `couldn't release the lock on ${slug}`, error))
   }
-  if (e.reason !== 'clear' && e.reason !== 'resume') return
-  // Only what holds a value is written, so a repo with no plan outline sees no writes. The pane keeps the
+  if (!isProcessKept) return
+  // Only what holds a value is written, so a repo with no plan outline sees no writes. A view keeps the
   // goal's tree, marked not active, until a goal becomes active.
   if (slug !== null) await lose($, slug)
-  if ((await read($, planError)) !== null) await update($, planError, () => null)
-  if ((await read($, planChanged)).length) await update($, planChanged, () => [])
+  if ((await $.state.get('planError')) !== null) await $.state.set('planError', null)
+  if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
 }
 
-// The module's one turn.complete hook calls this for a subagent's turn: its run ended, so its step
-// waits for the main thread to review the report. A failure goes to the debug log.
-// Queued, not awaited: the subagent's report never waits on the plan outline. A subagent no step names
-// costs nothing.
-export async function completePlan($: EngineInterface, agent: string) {
-  const tree = await read($, planTree)
+/**
+ * A subagent's run ended, so its step waits for the main thread to review the report. A failure goes
+ * to the debug log. Queued, not awaited: the subagent's report never waits on the plan outline. A
+ * subagent no step names costs nothing.
+ */
+export async function completePlan($: Host, agent: string) {
+  const tree = await $.state.get('planTree')
   if (tree === null || !agentsOf(tree).includes(agent)) return
-  void serial(() => changeActive($, (goal, now) => endAgent(goal, agent, 'review', now))).catch(error =>
+  void serial($, () => changeActive($, (goal, now) => endAgent(goal, agent, 'review', now))).catch(error =>
     logFailure($, `couldn't end the mark of subagent ${agent}`, error),
   )
 }
 
-export function registerPlan(on: On) {
-  // A background subagent the main thread starts for a step, named first in the Agent call's
-  // description, marks that step while it works. Queued, not awaited: the Agent call never waits on
-  // the plan outline, and a failure here never stops the subagent.
-  on('agent.spawn', async ($, e, next) => {
-    const r = await next(e)
-    if (r.deny !== undefined || r.agentId === undefined || !AGENT_ID.test(r.agentId)) return r
-    if (!e.background || e.parentAgentId !== undefined || e.isTeammate || e.workflow || e.resume) return r
-    const id = STEP_FIRST.exec(e.description.trim())?.[1]
-    if (id === undefined) return r
-    const agent = r.agentId
-    void serial(() => changeActive($, (goal, now) => markRunning(goal, id, agent, now))).catch(error =>
-      logFailure($, `couldn't mark step ${id} for subagent ${agent}`, error),
-    )
-    return r
-  })
-
-  on('tool.call', { tool: TOOL }, async ($, e) => {
-    if (e.agentId !== undefined) return { deny: SUBAGENT }
-    try {
-      return { result: await serial(() => apply($, e as unknown as Record<string, unknown>)) }
-    } catch (error) {
-      if (error instanceof PlanError) return { deny: error.message }
-      // A failure of the disk or of git: the model reads what went wrong, not a skipped hook; the stack goes to the debug log.
-      logFailure($, 'a call failed', error)
-      return { deny: `plan outline failed: ${error instanceof Error ? error.message : String(error)}` }
-    }
-  })
+/**
+ * The main thread started a background subagent. One whose description names its step first, with a
+ * colon, marks that step while it works. Queued, not awaited: the start never waits on the plan
+ * outline, and a failure here never stops the subagent.
+ */
+export function spawnPlan($: Host, description: string, agent: string): void {
+  if (!AGENT_ID.test(agent)) return
+  const id = STEP_FIRST.exec(description.trim())?.[1]
+  if (id === undefined) return
+  void serial($, () => changeActive($, (goal, now) => markRunning(goal, id, agent, now))).catch(error =>
+    logFailure($, `couldn't mark step ${id} for subagent ${agent}`, error),
+  )
 }
 
-// The module's one session.start hook calls this.
-export async function startPlan($: EngineInterface) {
-  await $.tool.register({ name: 'plan', description: DESCRIPTION, inputSchema: SCHEMA, isDeferred: false })
-  // /waffles:plan comes from the skill skills/plan, and plan-ui.tsx answers it: the toggle never waits on serial().
-  // A poll that fails has no one to tell: the next one tries again.
-  const tick = async () => {
-    if (isPollQueued) return
-    isPollQueued = true
-    await serial(() => poll($))
-      .catch(() => undefined)
-      .finally(() => {
-        isPollQueued = false
-      })
+/** The plan outline tool, as an adapter registers it: its name there, what it is for, and its input's JSON Schema. */
+export const PLAN_TOOL = { name: 'plan', description: DESCRIPTION, inputSchema: SCHEMA } as const
+
+/** The answer to a subagent that calls the tool. */
+export const SUBAGENT = 'The plan outline is kept by the main conversation only.'
+
+/**
+ * One call of the plan outline tool by the main conversation: the text the model reads, or why the
+ * call was refused. A failure of the disk or of git is a refusal too: the model reads what went wrong,
+ * and the stack goes to the debug log.
+ */
+export async function callPlan($: Host, input: Record<string, unknown>): Promise<{ result: string } | { deny: string }> {
+  try {
+    return { result: await serial($, () => apply($, input)) }
+  } catch (error) {
+    if (error instanceof PlanError) return { deny: error.message }
+    logFailure($, 'a call failed', error)
+    return { deny: `plan outline failed: ${error instanceof Error ? error.message : String(error)}` }
   }
-  // The first poll is awaited, so the tree is drawn before the first prompt.
-  await tick()
-  // A goal still active at start shows again where the layout docks the pane. After a reload the
-  // layout is unknown until the next drawing: the first footer drawn in the fullscreen layout opens it.
-  if ((await read($, planGoal)) !== null) await openAtStart($)
-  $.clock.every(POLL_MS, () => void tick())
+}
+
+/**
+ * One poll, unless one is already waiting its turn: the heartbeat, then the redraw. An adapter with a
+ * timer calls it every POLL_MS; one whose process serves one event calls it once per event. A poll
+ * that fails has no one to tell: the next one tries again.
+ */
+export async function tickPlan($: Host): Promise<void> {
+  const v = vars($)
+  if (v.isPollQueued) return
+  v.isPollQueued = true
+  await serial($, () => poll($))
+    .catch(() => undefined)
+    .finally(() => {
+      v.isPollQueued = false
+    })
+}
+
+/**
+ * The session started: the first poll is awaited, so the tree is drawn before the first prompt, and a
+ * goal still active tells the view.
+ */
+export async function startPlan($: Host): Promise<void> {
+  await tickPlan($)
+  if ((await $.state.get('planGoal')) !== null) await $.view.planActive('start')
 }

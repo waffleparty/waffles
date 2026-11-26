@@ -2,6 +2,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, On, PaneCloseInput, RenderInput } from 'claude-code'
 
 import type { PlanGoal, PlanStep } from '../types'
+import { ELSEWHERE } from '../core/plan.ts'
 import { MARKER, pathOf, SHOWN, shownState } from '../core/plan-tree.ts'
 import type { Shown } from '../core/plan-tree.ts'
 
@@ -294,8 +295,7 @@ const TREE_ROW = new RegExp(`^(?: {2})*[${Object.values(SHOWN).join('')}] \\S`)
 const NO_GOALS = 'No active goal and no open goals.'
 const OPEN_GOALS = 'No active goal. Open goals:\n'
 const OTHER_GOALS = 'Other open goals:\n'
-/** Opens the result of a call made while the active goal has no file in the shell's repo; its row draws only {@link ELSEWHERE_ROW}, dim. */
-export const ELSEWHERE = 'Nothing changed:'
+// The result of a call made while the active goal has no file in the shell's repo draws only this row, dim.
 const ELSEWHERE_ROW = "not changed: the shell is outside the goal's repo"
 
 /** Whether the text is a result plan.ts returns, which the call's row draws: a refusal, a change, or a `show`. */

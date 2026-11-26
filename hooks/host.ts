@@ -1,0 +1,115 @@
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface } from 'claude-code'
+
+import type { Host, Memory, SessionState } from '../core/host.ts'
+import { openAtStart, openUnlessClosed } from './plan-ui'
+
+// The session's values are `$.state` atoms, so a drawing that reads one is drawn again when the core
+// writes it. A file that draws declares its own copy of the atoms it reads. The engine lists the values a
+// module reads and writes from its source, so each atom is a const here and each key names its own.
+const mode = atom({ plugin: 'waffles', key: 'mode' } as const, 'production')
+const rapidBase = atom({ plugin: 'waffles', key: 'rapidBase' } as const, null)
+const run = atom({ plugin: 'waffles', key: 'run' } as const, false)
+const planGoal = atom({ plugin: 'waffles', key: 'planGoal' } as const, null)
+const planTree = atom({ plugin: 'waffles', key: 'planTree' } as const, null)
+const planKept = atom({ plugin: 'waffles', key: 'planKept' } as const, null)
+const planKeptIssue = atom({ plugin: 'waffles', key: 'planKeptIssue' } as const, null)
+const planError = atom({ plugin: 'waffles', key: 'planError' } as const, null)
+const planOthers = atom({ plugin: 'waffles', key: 'planOthers' } as const, [])
+const planChanged = atom({ plugin: 'waffles', key: 'planChanged' } as const, [])
+
+type Key = keyof SessionState
+
+async function getState($: EngineInterface, key: Key): Promise<SessionState[Key]> {
+  switch (key) {
+    case 'mode':
+      return read($, mode)
+    case 'rapidBase':
+      return read($, rapidBase)
+    case 'run':
+      return read($, run)
+    case 'planGoal':
+      return read($, planGoal)
+    case 'planTree':
+      return read($, planTree)
+    case 'planKept':
+      return read($, planKept)
+    case 'planKeptIssue':
+      return read($, planKeptIssue)
+    case 'planError':
+      return read($, planError)
+    case 'planOthers':
+      return read($, planOthers)
+    case 'planChanged':
+      return read($, planChanged)
+  }
+}
+
+async function setState($: EngineInterface, key: Key, value: SessionState[Key]): Promise<void> {
+  switch (key) {
+    case 'mode':
+      await update($, mode, () => value as SessionState['mode'])
+      return
+    case 'rapidBase':
+      await update($, rapidBase, () => value as SessionState['rapidBase'])
+      return
+    case 'run':
+      await update($, run, () => value as SessionState['run'])
+      return
+    case 'planGoal':
+      await update($, planGoal, () => value as SessionState['planGoal'])
+      return
+    case 'planTree':
+      await update($, planTree, () => value as SessionState['planTree'])
+      return
+    case 'planKept':
+      await update($, planKept, () => value as SessionState['planKept'])
+      return
+    case 'planKeptIssue':
+      await update($, planKeptIssue, () => value as SessionState['planKeptIssue'])
+      return
+    case 'planError':
+      await update($, planError, () => value as SessionState['planError'])
+      return
+    case 'planOthers':
+      await update($, planOthers, () => value as SessionState['planOthers'])
+      return
+    case 'planChanged':
+      await update($, planChanged, () => value as SessionState['planChanged'])
+      return
+  }
+}
+
+// One Claude Code process serves one session, so one object holds what the core keeps in memory. It
+// starts over on a reload, as the module does.
+const memory: Memory = {}
+
+/** The core's host on Claude Code: each call goes to `$`. */
+export function hostOf($: EngineInterface): Host {
+  return {
+    fs: {
+      read: path => $.fs.read(path),
+      write: (path, text) => $.fs.write(path, text),
+      exists: path => $.fs.exists(path),
+      list: path => $.fs.list(path),
+      stat: path => $.fs.stat(path),
+      // `$.fs` removes nothing; `rm -f` leaves a file that isn't there alone.
+      remove: async path => {
+        await $.process.run(['rm', '-f', path])
+      },
+    },
+    process: { run: (argv, init) => $.process.run(argv, init) },
+    session: { id: () => $.session.id(), cwd: () => $.session.cwd() },
+    clock: { now: () => $.clock.now() },
+    home: () => $.env.get('HOME'),
+    state: {
+      get: key => getState($, key) as Promise<SessionState[typeof key]>,
+      set: (key, value) => setState($, key, value),
+    },
+    store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
+    memory,
+    agents: { list: () => $.agent.list() },
+    view: { planActive: when => (when === 'start' ? openAtStart($) : openUnlessClosed($)) },
+    log: message => $.ui.log(message, { to: 'debug' }),
+  }
+}

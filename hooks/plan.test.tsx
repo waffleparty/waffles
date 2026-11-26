@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { STALE_MS } from './plan-store'
+import { STALE_MS } from '../core/plan-store.ts'
 import { fakeDisk, inRepo } from './plan-testing'
 import { newGoal, parseGoal, serializeGoal } from '../core/plan-tree.ts'
 
