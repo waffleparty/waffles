@@ -23,7 +23,7 @@ To let runs act without you, write auto mode rules in your own `~/.claude/settin
 
 **Each rule you add grants every run the power it names, without asking you.** The classifier stops checking the action once a rule allows it. Include only the rules you want, narrow each one to the repos you trust, and read the text of each before you copy it.
 
-Placeholders: `<TRUSTED_ORGS>` is the list of GitHub organizations or users whose repos a run may change, such as `github.com/acme`. `<FLAG_SYSTEM>` is how your team marks a feature flag as off for customers.
+Placeholders: `<TRUSTED_ORGS>` is the list of GitHub organizations or users whose repos a run may change, such as `github.com/example`. `<FLAG_SYSTEM>` is how your team marks a feature flag as off for customers.
 
 ```json
 {
@@ -133,8 +133,8 @@ The run ends with a short message that links each pull request and counts the st
 
 ```
 Run finished. Task not finished. 2 steps are left for you.
-- infra: https://github.com/acme/infra/pull/14 · open · 2 steps for you
-- widget: https://github.com/acme/widget/pull/42 · merged
+- infra: https://github.com/example/infra/pull/14 · open · 2 steps for you
+- widget: https://github.com/example/widget/pull/42 · merged
 ```
 
 The skill's `SKILL.md` stays short, so a compaction keeps all of it. Its detailed procedures are in `start.md`, `plan-outline.md`, `commits.md`, `denials.md`, `posting.md`, `pieces.md`, `deciding.md`, and `pull-requests.md` beside it, and the run reads each one at the step that needs it.

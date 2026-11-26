@@ -31,7 +31,7 @@ class BuildersTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         base = os.path.realpath(self.tmp.name)
-        self.origin = os.path.join(base, "remote", "acme", "widget.git")
+        self.origin = os.path.join(base, "remote", "example", "widget.git")
         os.makedirs(self.origin)
         sh(self.origin, "git", "init", "-q", "--bare", "-b", "main")
         self.main = os.path.join(base, "widget")
@@ -65,8 +65,8 @@ class BuildersTest(unittest.TestCase):
     def test_two_builders_in_one_repo_never_touch_the_same_checkout(self):
         a = self.clone("ITEM-1", "feat/ITEM-1")
         b = self.clone("ITEM-2", "feat/ITEM-2-other")
-        self.assertEqual(a["path"], os.path.join(self.root, "acme", "widget", "ITEM-1"))
-        self.assertEqual(b["path"], os.path.join(self.root, "acme", "widget", "ITEM-2"))
+        self.assertEqual(a["path"], os.path.join(self.root, "example", "widget", "ITEM-1"))
+        self.assertEqual(b["path"], os.path.join(self.root, "example", "widget", "ITEM-2"))
         checkouts = {self.main, a["path"], b["path"]}
         git_dirs = {sh(p, "git", "rev-parse", "--absolute-git-dir") for p in checkouts}
         self.assertEqual(len(checkouts), 3)
@@ -102,7 +102,7 @@ class BuildersTest(unittest.TestCase):
         code, text = self.run_script("clone", "--repo", self.main, "--item", "ITEM-3", "--branch", "feat/ITEM-3", "--base", "feat/ITEM-9")
         self.assertEqual(code, 3)
         self.assertIn("origin has no branch feat/ITEM-9", text)
-        self.assertFalse(os.path.exists(os.path.join(self.root, "acme", "widget", "ITEM-3")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "example", "widget", "ITEM-3")))
 
     def test_a_branch_on_origin_is_checked_out_as_it_is(self):
         a = self.clone("ITEM-1", "feat/ITEM-1")
@@ -147,14 +147,14 @@ class BuildersTest(unittest.TestCase):
         self.assertIn("Add d.txt", text)
         sh(a["path"], "git", "switch", "-q", "feat/ITEM-1")
         self.assertEqual(self.run_script("remove", "--path", a["path"])[0], 0)
-        self.assertFalse(os.path.exists(os.path.join(self.root, "acme")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "example")))
 
     def test_clone_uses_root_when_no_variable_is_set_and_refuses_with_neither(self):
         os.environ.pop("WAFFLES_BUILDERS_ROOT", None)
         other = os.path.join(os.path.dirname(self.root), "scratch")
         out = io.StringIO()
         self.assertEqual(builders.main(["clone", "--root", other, "--repo", self.main, "--item", "ITEM-9", "--branch", "feat/ITEM-9"], out=out), 0)
-        self.assertEqual(json.loads(out.getvalue())["path"], os.path.join(os.path.realpath(other), "acme", "widget", "ITEM-9"))
+        self.assertEqual(json.loads(out.getvalue())["path"], os.path.join(os.path.realpath(other), "example", "widget", "ITEM-9"))
         out = io.StringIO()
         self.assertEqual(builders.main(["clone", "--repo", self.main, "--item", "ITEM-8", "--branch", "feat/ITEM-8"], out=out), 3)
         self.assertIn("--root", out.getvalue())
@@ -166,8 +166,8 @@ class BuildersTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(self.main))
 
     def test_owner_and_repo_come_from_any_form_of_url(self):
-        for url in ("git@github.com:acme/widget.git", "https://github.com/acme/widget", "ssh://git@github.com/acme/widget.git", "/srv/acme/widget.git/"):
-            self.assertEqual(builders.owner_repo(url), ("acme", "widget"), url)
+        for url in ("git@github.com:example/widget.git", "https://github.com/example/widget", "ssh://git@github.com/example/widget.git", "/srv/example/widget.git/"):
+            self.assertEqual(builders.owner_repo(url), ("example", "widget"), url)
 
 
 
@@ -207,7 +207,7 @@ print(json.dumps(state["prs"]))
 
 
 def pr(number, draft=False, requested=True):
-    return {"number": number, "title": f"Item {number}", "url": f"https://github.com/acme/widget/pull/{number}", "isDraft": draft, "reviewRequests": [{"login": "octocat"}] if requested else []}
+    return {"number": number, "title": f"Item {number}", "url": f"https://github.com/example/widget/pull/{number}", "isDraft": draft, "reviewRequests": [{"login": "octocat"}] if requested else []}
 
 
 class LimitsTest(unittest.TestCase):
@@ -250,7 +250,7 @@ class LimitsTest(unittest.TestCase):
         code, out = self.limits()
         self.assertEqual(code, 3)
         self.assertIn("Refused: 10 open pull requests in widget wait for human review (ready, with a review requested), and the cap is 10.", out)
-        self.assertIn("- #10 Item 10: https://github.com/acme/widget/pull/10", out)
+        self.assertIn("- #10 Item 10: https://github.com/example/widget/pull/10", out)
 
     def test_drafts_and_pull_requests_with_no_review_requested_do_not_count(self):
         self.prs([pr(n) for n in range(1, 10)] + [pr(20, draft=True), pr(21, requested=False)])

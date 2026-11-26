@@ -211,8 +211,8 @@ ways, or you're guessing at the user's intent.
 
    ```
    Run finished. Task not finished. 2 steps are left for you.
-   - infra: https://github.com/acme/infra/pull/14 · open · 2 steps for you
-   - widget: https://github.com/acme/widget/pull/42 · merged
+   - infra: https://github.com/example/infra/pull/14 · open · 2 steps for you
+   - widget: https://github.com/example/widget/pull/42 · merged
    ```
 
    - Line 1: `Run finished.`, then `Task finished.` or `Task not finished.`,

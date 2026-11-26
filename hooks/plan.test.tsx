@@ -181,13 +181,13 @@ test('an op other than goal or show needs an active goal', async ($, on) => {
 test('with the shell in a submodule, a call on the active goal is a quiet result that names the folder; back in the repo it applies', async ($, on) => {
   const { disk } = world(on)
   await call($, OAUTH)
-  // A cd into the submodule /repo/.meta: git answers its top level and git dir.
+  // A cd into the submodule /repo/sub: git answers its top level and git dir.
   disk.git = argv =>
-    argv.includes('--git-dir') ? { exitCode: 0, stdout: '/repo/.meta\n/repo/.git/modules/.meta\n/repo/.git/modules/.meta\n' } : { exitCode: 0, stdout: '' }
+    argv.includes('--git-dir') ? { exitCode: 0, stdout: '/repo/sub\n/repo/.git/modules/sub\n/repo/.git/modules/sub\n' } : { exitCode: 0, stdout: '' }
   const writes = disk.writes.length
   const quiet = {
     result:
-      "Nothing changed: .tmp/plan/ship-oauth-login.md isn't in /repo/.meta, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again.",
+      "Nothing changed: .tmp/plan/ship-oauth-login.md isn't in /repo/sub, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again.",
   }
 
   expect(await call($, { op: 'done', ids: ['1'] })).toEqual(quiet)
@@ -430,7 +430,7 @@ A step is work with its own outcome that its parent depends on: a phase (spec, d
 
 A step with 2 or more parts gets a child step for each part as soon as the parts are known, whoever names them. A step has 1 outcome: never list parts in its title. Before you report what is left of a step, add its parts as child steps.
 
-When you start a background subagent for a step, begin the Agent call's description with the step's ID and a colon, such as "8.1: Merge the PRD fixes". The plan outline then shows that step as the subagent's while it works, and focus moving on doesn't park it. When the subagent finishes, the step shows ◐: read its report, then close the step, or focus it to take the work over.
+When you start a background subagent for a step, begin the Agent call's description with the step's ID and a colon, such as "8.1: Merge the API fixes". The plan outline then shows that step as the subagent's while it works, and focus moving on doesn't park it. When the subagent finishes, the step shows ◐: read its report, then close the step, or focus it to take the work over.
 
 The person steers by step ID in plain language. "drop 1.1": drop with cascade. "close out 1.1.1–1.1.3": done with the IDs listed out. "move on to 2" or "skip ahead to 2.1.3": focus. "that's a detour under 4": move. "backlog 3.4": the waffles:backlog skill writes the item, then defer with its file. Set cascade only when the person asks to close a step with its children.
 

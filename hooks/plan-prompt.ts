@@ -20,7 +20,7 @@ A step is work with its own outcome that its parent depends on: a phase (spec, d
 
 A step with 2 or more parts gets a child step for each part as soon as the parts are known, whoever names them. A step has 1 outcome: never list parts in its title. Before you report what is left of a step, add its parts as child steps.
 
-When you start a background subagent for a step, begin the Agent call's description with the step's ID and a colon, such as "8.1: Merge the PRD fixes". The plan outline then shows that step as the subagent's while it works, and focus moving on doesn't park it. When the subagent finishes, the step shows ◐: read its report, then close the step, or focus it to take the work over.
+When you start a background subagent for a step, begin the Agent call's description with the step's ID and a colon, such as "8.1: Merge the API fixes". The plan outline then shows that step as the subagent's while it works, and focus moving on doesn't park it. When the subagent finishes, the step shows ◐: read its report, then close the step, or focus it to take the work over.
 
 The person steers by step ID in plain language. "drop 1.1": drop with cascade. "close out 1.1.1–1.1.3": done with the IDs listed out. "move on to 2" or "skip ahead to 2.1.3": focus. "that's a detour under 4": move. "backlog 3.4": the waffles:backlog skill writes the item, then defer with its file. Set cascade only when the person asks to close a step with its children.
 

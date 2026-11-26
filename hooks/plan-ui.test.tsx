@@ -398,7 +398,7 @@ test('every result shape a plan call returns draws once: in the row, not again i
 
 test('a call made outside the goal’s repo draws one dim row, not a refusal, and no result block', async ($, on) => {
   world(on)
-  const output = "Nothing changed: .tmp/plan/ship.md isn't in /repo/.meta, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again."
+  const output = "Nothing changed: .tmp/plan/ship.md isn't in /repo/sub, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again."
 
   const row = await drawCall($, { output })
   expect(row.texts.map(t => t.text)).toEqual(['⏺', ' plan outline', "not changed: the shell is outside the goal's repo"])
@@ -906,31 +906,31 @@ test('a new goal does not open the pane when /waffles:plan closes it while the o
 test('a subagent’s step is bold magenta, a step whose report waits bold yellow, and their parents bold', async ($, on) => {
   const { disk } = world(on)
   on('agent.list', () => ({ value: [{ id: 'agent-1', status: 'running', description: '2.1 Merge', type: 'general-purpose' }] }) as never)
-  disk.files.set(file('ship-prds'), `---
-goal: Ship the PRDs
+  disk.files.set(file('ship-apis'), `---
+goal: Ship the APIs
 status: open
 current: 1
 created: ${ISO}
 updated: ${ISO}
 ---
 - [ ] 1 Survey the queue
-- [ ] 2 Fix the PRDs
-  - [ ] 2.1 Merge the 2 PRD fixes <!-- agent=agent-1 -->
+- [ ] 2 Fix the APIs
+  - [ ] 2.1 Merge the 2 API fixes <!-- agent=agent-1 -->
   - [r] 2.2 Archive ITEM-91
   - [ ] 2.3 Close the epic
 `)
-  await call($, { op: 'goal', switch: 'ship-prds' })
+  await call($, { op: 'goal', switch: 'ship-apis' })
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toEqual(['Ship the PRDs', '▶ 1 Survey the queue', '▶ 2 Fix the PRDs', '  ▶ 2.1 Merge the 2 PRD fixes', '  ◐ 2.2 Archive ITEM-91', '  ○ 2.3 Close the epic'])
+  expect(rows).toEqual(['Ship the APIs', '▶ 1 Survey the queue', '▶ 2 Fix the APIs', '  ▶ 2.1 Merge the 2 API fixes', '  ◐ 2.2 Archive ITEM-91', '  ○ 2.3 Close the epic'])
   const style = (text: string) => {
     const props = texts.find(t => t.text === text)?.props ?? {}
     return [props.color, props.bold]
   }
   expect(style(' 1 Survey the queue')).toEqual(['cyan', undefined])
-  expect(style(' 2 Fix the PRDs')).toEqual([undefined, true])
-  expect(style(' 2.1 Merge the 2 PRD fixes')).toEqual(['magenta', undefined])
+  expect(style(' 2 Fix the APIs')).toEqual([undefined, true])
+  expect(style(' 2.1 Merge the 2 API fixes')).toEqual(['magenta', undefined])
   expect(style(' 2.2 Archive ITEM-91')).toEqual(['yellow', undefined])
   expect(texts.filter(t => t.text === '▶').map(t => [t.props.color, t.props.bold])).toEqual([['cyan', true], [undefined, true], ['magenta', true]])
   expect(style('◐')).toEqual(['yellow', true])

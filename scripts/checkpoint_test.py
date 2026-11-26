@@ -46,14 +46,14 @@ GH = textwrap.dedent(
 GOAL = textwrap.dedent(
     """\
     ---
-    goal: Show the parent ID
+    goal: Show the order total
     status: open
     current: 2
     created: 2026-11-23T10:00:00.000Z
     updated: 2026-11-23T10:00:00.000Z
     ---
-    - [x] 1 Add the parent ID to the resource detail query
-    - [ ] 2 Show the parent ID on the resource detail screen
+    - [x] 1 Add the order total to the order detail query
+    - [ ] 2 Show the order total on the order detail screen
       - [x] 2.1 ? Check the empty state <!-- aliases=3.1 -->
     - [ ] 3 Remove the working files
     """
@@ -62,7 +62,7 @@ GOAL = textwrap.dedent(
 BODY = textwrap.dedent(
     """\
     ## Summary
-    Display the parent resource ID (PRJ-42).
+    Display the order total (ITEM-42).
 
     ## Prerequisites
     None"""
@@ -86,8 +86,8 @@ ASSUMED_LIST = [
 ]
 
 CHECKLIST = [
-    "- [x] 1. Add the parent ID to the resource detail query",
-    "- [ ] 2. Show the parent ID on the resource detail screen",
+    "- [x] 1. Add the order total to the order detail query",
+    "- [ ] 2. Show the order total on the order detail screen",
     "  - [x] 2.1. Check the empty state",
     "- [ ] 3. Remove the working files",
 ]
@@ -187,7 +187,7 @@ class CheckpointTest(unittest.TestCase):
         pr["body"] = f"Intro text\n\n{pr['body']}\n\n## Notes\nKept as written."
         self.co.set_pr(pr)
         self.co.write(".tmp/plan/show-the-parent-id.md", GOAL.replace("- [ ] 2 Show", "- [x] 2 Show"))
-        self.co.git("commit", "-q", "-am", "Show the parent ID")
+        self.co.git("commit", "-q", "-am", "Show the order total")
         self.co.git("push", "-q")
 
         code, _ = self.co.checkpoint()
@@ -358,9 +358,9 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(checkpoint.render([("a.md", GOAL), ("assumed-for-you.md", "# Assumed for you\n\n")], False), CHECKLIST)
 
     def test_several_goals_each_get_a_heading(self):
-        other = GOAL.replace("goal: Show the parent ID", "goal: Fix the date").replace("\n  - [x] 2.1 ? Check the empty state <!-- aliases=3.1 -->", "")
+        other = GOAL.replace("goal: Show the order total", "goal: Fix the date").replace("\n  - [x] 2.1 ? Check the empty state <!-- aliases=3.1 -->", "")
         lines = checkpoint.render([("a.md", GOAL), ("b.md", other)], False)
-        self.assertEqual(lines[:2], ["### Show the parent ID", ""])
+        self.assertEqual(lines[:2], ["### Show the order total", ""])
         self.assertEqual(lines[6:9], ["", "### Fix the date", ""])
 
     def test_a_body_with_crlf_line_ends_keeps_them(self):

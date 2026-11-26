@@ -26,9 +26,9 @@ test('a repo that names its backlog adapter in AGENTS.md asks for the initializa
 })
 
 test('CLAUDE.md names the adapter only when the repo has no AGENTS.md', async ($, on) => {
-  const disk = repo(on, { 'CLAUDE.md': 'Backlog adapter: acme:tracker-adapter\n' })
+  const disk = repo(on, { 'CLAUDE.md': 'Backlog adapter: example:tracker-adapter\n' })
 
-  expect((await adapterBlock($))?.text).toMatch(/^backlog adapter: this repo names `acme:tracker-adapter` in CLAUDE\.md\./)
+  expect((await adapterBlock($))?.text).toMatch(/^backlog adapter: this repo names `example:tracker-adapter` in CLAUDE\.md\./)
 
   disk.files.set('/repo/AGENTS.md', '# Agents\n')
   expect(await adapterBlock($)).toBeUndefined()

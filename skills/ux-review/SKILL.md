@@ -93,7 +93,7 @@ the run directory, `run.json`, and this:
   `.ux-review/` that have an `outcome.json` and overlap this scope, newest
   first. List them; don't summarise them.
 - Propose **areas**: 2–5 groups of surfaces, each built around one job the
-  persona does ("decide on a pending approval", "check the agents' work"), not
+  persona does ("pay an invoice", "find an order"), not
   around tabs or components. A surface can appear in two areas when two jobs use
   it. When the areas share chrome (a page header, a section shell, the type
   scale), add an area named "Across the page" for it; the other areas leave that
@@ -296,7 +296,7 @@ the before at a glance:
 - Before and after show the same content, so they compare directly.
 - Every option in a suggestion is drawn at the same width as the before crop.
   Only a difference in content may change an option's height.
-- Each should read as a finished screen that would sit comfortably in Linear:
+- Each should read as a finished screen of a well-made product:
   one type scale, one spacing rhythm, shared edges, nothing cramped. If an
   option looks worse than the before, fix it or drop it. Fewer finished
   mockups beat more rough ones.

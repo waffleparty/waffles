@@ -273,8 +273,8 @@ links block so they can cmd+click (ctrl+click) straight to it from the prompt:
 ```
 Dev:   http://localhost:5174/settings/billing
        http://localhost:5174/
-PR:    https://github.com/acme/app/pull/42
-Diff:  https://github.com/acme/app/pull/42/files
+PR:    https://github.com/example/app/pull/42
+Diff:  https://github.com/example/app/pull/42/files
 ```
 
 - **Dev** — the running server's base URL joined with each path from the

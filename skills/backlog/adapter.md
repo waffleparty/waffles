@@ -20,7 +20,7 @@ Backlog adapter: `tracker-adapter`
 
 The line starts with `Backlog adapter:`, then the name of a skill that the
 session can load, with or without backticks. A plugin's skill is named with its
-plugin, such as `acme:tracker-adapter`. Find it with:
+plugin, such as `example:tracker-adapter`. Find it with:
 
 ```sh
 f=AGENTS.md; [ -f "$f" ] || f=CLAUDE.md; grep -m1 -E '^Backlog adapter:' "$f"

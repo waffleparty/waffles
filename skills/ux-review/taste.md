@@ -4,11 +4,11 @@ Use this when you diagnose a screen and when you draw an "after" state. The proj
 design system decides specific values (tokens, components, sizes). This file decides the
 judgment calls the design system leaves open.
 
-**Style north star: Linear.** Refined, tight type, quiet metadata, subtle contrast between
+**Style north star:** refined, tight type, quiet metadata, subtle contrast between
 surfaces, nothing decorative. **Interaction north star: tools the user already knows.** Model a
-new pattern on GitHub (reviews, PRs, reviewers), VS Code or Cursor (panes, status bar,
-Problems, composer), Notion (table headers, icon-led entries), Google Drive (sources as
-folders), or macOS settings rather than inventing one, and say which one you modelled.
+new pattern on an established product that the persona already uses (a code review tool, a
+code editor, a document editor, a file browser, the operating system's settings) rather than
+inventing one, and say which one you modelled.
 
 ## Content: less, and the right thing first
 
@@ -61,7 +61,7 @@ folders), or macOS settings rather than inventing one, and say which one you mod
 ## Colour and surfaces
 
 - Every colour comes from the theme (or is derived from a theme colour). No hex, no
-  library defaults such as MUI blue.
+  library defaults such as a component library's stock blue.
 - Colour carries meaning and is used sparingly. Red only when there is something to act on
   (non-zero, late, blocked). Grey for "just a note". Minor inline actions use the text
   colour, not the accent. Yellow is a real yellow, clearly apart from orange and red.

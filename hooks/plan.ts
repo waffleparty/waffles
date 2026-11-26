@@ -67,7 +67,7 @@ const BEAT_MS = 30_000
 // A slug the model names must look like one `slug()` makes: no path separators or dots.
 const SLUG = /^[\p{L}\p{M}\p{N}]+(-[\p{L}\p{M}\p{N}]+)*$/u
 // A background subagent's Agent call names its step first in its description, with a colon:
-// `8.1: Merge the PRD fixes`. The colon tells it from a count: `2 parallel searches` names no step.
+// `8.1: Merge the API fixes`. The colon tells it from a count: `2 parallel searches` names no step.
 const STEP_FIRST = /^(\d+(?:\.\d+)*):\s/
 // An agent ID goes in the step's note, `agent=<id>`: no space, `;`, `=` or `<!--` may break it.
 const AGENT_ID = /^[\w.:-]+$/
