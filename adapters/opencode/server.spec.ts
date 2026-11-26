@@ -10,19 +10,39 @@ import plugin, { NAMES, pluginRoot, readSkills, sessionState, skillHeader } from
 
 type Json = Record<string, unknown>
 
+type Tool = { name: string; description?: string; input?: unknown; execute: (input: unknown, context: Json) => Promise<{ content: string }> }
+
 // A stand-in for OpenCode's plugin context: it keeps what the plugin registers, and a session record per ID.
+// `emit` sends an event to the plugin's subscription; `question` is OpenCode's built-in question tool,
+// which answers `answer` unless its signal aborts first.
 async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = { s1: {} }) {
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'waffles-opencode-')))
   const sessions = new Map<string, { id: string; parentID?: string; metadata?: Json; location: { directory: string } }>()
   for (const [id, info] of Object.entries(sessionInfo)) sessions.set(id, { id, ...info, location: { directory: root } })
   const entries = new Map<string, Map<string, unknown>>()
   const registered = {
-    tools: [] as { name: string; description: string; input: unknown; execute: (input: unknown, context: Json) => Promise<{ content: string }> }[],
+    tools: [] as Tool[],
     commands: [] as { name: string; description?: string; execute: (input: Json) => Promise<void> }[],
     skills: [] as { id: string }[],
     hooks: {} as Record<string, (event: never) => unknown>,
     prompts: [] as Json[],
     storage: new Map<string, unknown>(),
+  }
+  const question: Tool & { answer: Promise<{ content: string }> | null } = {
+    name: 'question',
+    answer: null,
+    execute: (_input, context) =>
+      question.answer ??
+      new Promise((_, reject) => (context.signal as AbortSignal).addEventListener('abort', () => reject(new Error('The user dismissed this question')))),
+  }
+  const builtins: Tool[] = [question]
+  const queue: Json[] = []
+  let wake: (() => void) | null = null
+  const emit = async (event: Json) => {
+    queue.push(event)
+    wake?.()
+    // The plugin's loop handles the event before the test goes on.
+    await new Promise(resolve => setTimeout(resolve, 20))
   }
   const hook = (domain: string) => async (name: string, callback: (event: never) => unknown) => {
     registered.hooks[`${domain}.${name}`] = callback
@@ -55,19 +75,37 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string }> = 
       set: async (key: string, value: unknown) => void registered.storage.set(key, value),
     },
     skill: { transform: async (edit: (editor: Json) => void) => edit({ add: (skill: { id: string }) => registered.skills.push(skill) }) },
-    tool: { transform: async (edit: (editor: Json) => void) => edit({ add: (tool: never) => registered.tools.push(tool) }), hook: hook('tool') },
+    tool: {
+      transform: async (edit: (editor: Json) => void) =>
+        edit({
+          add: (tool: Tool) => registered.tools.push(tool),
+          update: (id: string, change: (tool: Tool) => void) => {
+            const tool = [...registered.tools, ...builtins].find(t => t.name === id)
+            if (tool) change(tool)
+          },
+        }),
+      hook: hook('tool'),
+    },
     command: { transform: async (edit: (editor: Json) => void) => edit({ add: (command: never) => registered.commands.push(command) }) },
     permission: { hook: hook('permission') },
     event: {
       subscribe: ({ signal }: { signal: AbortSignal }) => ({
         async *[Symbol.asyncIterator]() {
-          await new Promise(resolve => signal.addEventListener('abort', resolve))
+          while (!signal.aborted) {
+            const next = queue.shift()
+            if (next) yield next
+            else
+              await new Promise<void>(resolve => {
+                wake = resolve
+                signal.addEventListener('abort', () => resolve())
+              })
+          }
         },
       }),
     },
   }
   const cleanup = await plugin.setup(ctx as never)
-  return { root, sessions, entries, registered, cleanup: cleanup as () => Promise<void> }
+  return { root, sessions, entries, registered, question, emit, cleanup: cleanup as () => Promise<void> }
 }
 
 test('a skill file names itself in its front matter', () => {
@@ -160,6 +198,57 @@ test('a permission request is left alone outside an unattended run', async () =>
   const event = { sessionID: 's1', action: 'edit', resources: ['a.ts'], effect: 'ask' as string, message: undefined as string | undefined }
   await registered.hooks['permission.evaluate']!(event as never)
   assert.equal(event.effect, 'ask')
+  await cleanup()
+})
+
+const prompt = (sessionID: string, text: string, skills: string[] = []) => ({ sessionID, prompt: { text, skills: skills.map(id => ({ id })) }, delivery: 'steer' })
+const signal = () => new AbortController().signal
+
+test('a prompt that names the non-interactive skill starts a run, and the next prompt typed between turns ends it', async () => {
+  const { registered, sessions, emit, cleanup } = await fakeContext()
+  const runOf = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.run
+  await registered.hooks['session.prompt']!(prompt('s1', '@non-interactive finish the work', ['non-interactive']) as never)
+  assert.equal(runOf(), true)
+  // A prompt delivered into the running turn leaves the run on.
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await registered.hooks['session.prompt']!(prompt('s1', 'also this') as never)
+  assert.equal(runOf(), true)
+  // Another skill named between turns is a command, not a run.
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await registered.hooks['session.prompt']!(prompt('s1', '@ask', ['ask']) as never)
+  assert.equal(runOf(), false)
+  await cleanup()
+})
+
+test('during a run, the start question reaches the person and every later question is refused', async () => {
+  const { registered, question, cleanup } = await fakeContext()
+  const ask = () => question.execute({ questions: [] }, { sessionID: 's1', signal: signal() })
+  question.answer = Promise.resolve({ content: 'A' })
+  // Outside a run a question goes through.
+  assert.deepEqual(await ask(), { content: 'A' })
+  await registered.hooks['session.prompt']!(prompt('s1', 'go', ['non-interactive']) as never)
+  assert.deepEqual(await ask(), { content: 'A' })
+  await assert.rejects(ask(), /^Error: Denied: The user is away .* can't answer\. A run asks 1 question/)
+  // A permission request during a run is denied rather than left waiting.
+  const event = { sessionID: 's1', action: 'edit', resources: ['a.ts'], effect: 'ask' as string, message: undefined as string | undefined }
+  await registered.hooks['permission.evaluate']!(event as never)
+  assert.equal(event.effect, 'deny')
+  assert.match(event.message ?? '', /^Denied: The user is away/)
+  await cleanup()
+})
+
+test("a subagent asks under its main session's run", async () => {
+  const { registered, question, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  question.answer = Promise.resolve({ content: 'A' })
+  const ask = () => question.execute({ questions: [] }, { sessionID: 'child', signal: signal() })
+  assert.deepEqual(await ask(), { content: 'A' })
+  await registered.hooks['session.prompt']!(prompt('s1', 'go', ['non-interactive']) as never)
+  // Even the run's first question: a subagent reports its question in its result.
+  await assert.rejects(ask(), /Report the question in your result/)
+  const event = { sessionID: 'child', action: 'shell', resources: ['rm'], effect: 'ask' as string, message: undefined as string | undefined }
+  await registered.hooks['permission.evaluate']!(event as never)
+  assert.equal(event.effect, 'deny')
+  assert.match(event.message ?? '', /report it in your result/)
   await cleanup()
 })
 

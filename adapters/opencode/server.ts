@@ -22,8 +22,9 @@ import {
 } from '../../core/modes.ts'
 import { callPlan, endPlan, PLAN_TOOL, POLL_MS, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
-import { permissionAsked, startUnattended, submitUnattended } from '../../core/unattended.ts'
+import { isRunCommand, permissionAsked, startUnattended, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
+import { guardQuestion, QUESTION_TOOL } from './unattended.ts'
 
 /**
  * The waffles plugin's server part for OpenCode 2: the plan outline tool, the modes and their commands,
@@ -32,8 +33,13 @@ import { nodeHost } from '../node/host.ts'
  *
  * A push runs the checkpoint.
  *
- * Not here yet: the plan outline's view and the footer (the TUI part), auto effort, the marking of a
- * step by its subagent, and the start of an unattended run.
+ * An unattended run starts when the person names the `non-interactive` skill in a prompt (`@non-interactive`,
+ * which OpenCode sends as the prompt's skill attachment), and ends at the next prompt they type between
+ * turns. During a run, permission requests are denied and questions refused with the texts the core
+ * gives; the run's start question waits START_ANSWER_MS for the person, and is then taken off the screen.
+ *
+ * Not here yet: auto effort, and the marking of a step by its subagent. The plan outline's view and the
+ * footer are the terminal UI part's (tui.tsx).
  */
 
 /** What OpenCode calls its own things. */
@@ -59,6 +65,8 @@ const ADAPTER_ENTRY = 'waffles-backlog-adapter'
 
 type Session = {
   $: Host
+  /** The session whose child this session is, when it is a subagent's. */
+  parentID: string | null
   /** Whether the session is another session's child: a subagent. */
   isChild: boolean
   /** Set once the session's first prompt has started the core for it. */
@@ -136,6 +144,8 @@ const plugin: Plugin.Plugin = {
   id: 'waffles',
   async setup(ctx) {
     const sessions = new Map<string, Promise<Session>>()
+    // The sessions whose turn is running: a prompt typed into one is delivered into that turn.
+    const busy = new Set<string>()
 
     // One host per session, made at the session's first event and kept until the session is removed.
     const sessionOf = (sessionID: string): Promise<Session> => {
@@ -163,7 +173,8 @@ const plugin: Plugin.Plugin = {
             log: message => console.debug(`waffles: ${message}`),
           },
         })
-        return { $, isChild: info.parentID !== undefined && info.parentID !== null, started: null }
+        const parentID = info.parentID ?? null
+        return { $, parentID, isChild: parentID !== null, started: null }
       })()
       sessions.set(sessionID, made)
       // A session that can't be read is looked up again at its next event.
@@ -186,6 +197,21 @@ const plugin: Plugin.Plugin = {
         await put(ADAPTER_ENTRY, await adapterContext($))
       })())
 
+    // The host that holds a session's unattended run: a run belongs to the main session, and a subagent's
+    // session, at any depth, asks under its rules. Null when the session can't be read.
+    const runOf = async (sessionID: string): Promise<{ $: Host; isChild: boolean } | null> => {
+      const session = await sessionOf(sessionID).catch(() => null)
+      if (!session) return null
+      let [id, root] = [sessionID, session]
+      for (let depth = 0; root.parentID !== null && depth < 8; depth++) {
+        const parent = await sessionOf(root.parentID).catch(() => null)
+        if (!parent) break
+        ;[id, root] = [root.parentID, parent]
+      }
+      await started(id, root)
+      return { $: root.$, isChild: session.isChild }
+    }
+
     const skills = await readSkills(pluginRoot())
     await ctx.skill.transform(editor => {
       for (const skill of skills) editor.add(skill as never)
@@ -205,6 +231,10 @@ const plugin: Plugin.Plugin = {
           if ('deny' in answer) throw new Error(answer.deny)
           return { content: answer.result }
         },
+      })
+      // During an unattended run the question tool asks only the run's start question.
+      editor.update(QUESTION_TOOL, tool => {
+        tool.execute = guardQuestion(tool.execute, runOf)
       })
     })
 
@@ -241,8 +271,12 @@ const plugin: Plugin.Plugin = {
       if (session.isChild) return
       await started(event.sessionID, session)
       const { $ } = session
-      // OpenCode hands this hook the prompts a person or a command sends, not synthetic messages.
-      const typed = { isPerson: true, isTyped: true, command: undefined, isMeta: false, text: event.prompt.text }
+      // OpenCode hands this hook the prompts a person or a command sends, not synthetic messages. A skill
+      // named in the prompt is what a slash command is on Claude Code; a prompt typed while a turn runs is
+      // delivered into that turn, and neither starts nor ends a run.
+      const skills = (event.prompt.skills ?? []).map(skill => skill.id as string)
+      const command = skills.find(isRunCommand) ?? skills[0]
+      const typed = { isPerson: true, isTyped: !busy.has(event.sessionID), command, isMeta: false, text: event.prompt.text }
       const before = await wafflesMode($)
       await submitUnattended($, typed)
       submitPlan($)
@@ -253,7 +287,7 @@ const plugin: Plugin.Plugin = {
     // During an unattended run nobody can answer a permission request, so it is denied with what to do next.
     const permission = await ctx.permission.hook('evaluate', async event => {
       if (event.effect !== 'ask') return
-      const session = await sessionOf(event.sessionID).catch(() => null)
+      const session = await runOf(event.sessionID)
       if (!session) return
       const message = permissionAsked(session.$, { isQuestion: event.action === NAMES.ask, isAgent: session.isChild })
       if (message === null) return
@@ -276,17 +310,25 @@ const plugin: Plugin.Plugin = {
       if (typeof content === 'string') event.result = { ...event.result, content: `${content}\n\n${line}` }
     })
 
-    // A turn's end, a session's removal, and the heartbeat that keeps each session's lock on its goal.
+    // A turn's start and end, a session's removal, and the heartbeat that keeps each session's lock on its
+    // goal. A turn ends when the session's execution settles: OpenCode 2.4 sends plugins no session.idle.
+    const TURN_ENDS: readonly string[] = ['session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.idle']
+    const types = ['session.execution.started', 'session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted', 'session.idle', 'session.deleted'] as const
+    const turnEnded = async (session: Session) => {
+      if (!session.isChild) await completeMode(session.$).catch(() => undefined)
+    }
     const events = new AbortController()
     void (async () => {
-      for await (const event of ctx.event.subscribe({ types: ['session.idle', 'session.deleted'], signal: events.signal })) {
-        const sessionID = (event as { properties?: { sessionID?: string }; sessionID?: string }).properties?.sessionID ?? (event as { sessionID?: string }).sessionID
-        const known = sessionID === undefined ? undefined : sessions.get(sessionID)
-        if (sessionID === undefined || known === undefined) continue
-        const session = await known.catch(() => null)
+      for await (const event of ctx.event.subscribe({ types: [...types], signal: events.signal })) {
+        const sessionID = (event as { data?: { sessionID?: string } }).data?.sessionID
+        if (sessionID === undefined) continue
+        if (event.type === 'session.execution.started') busy.add(sessionID)
+        else busy.delete(sessionID)
+        const known = sessions.get(sessionID)
+        const session = known === undefined ? null : await known.catch(() => null)
         if (!session) continue
-        if (event.type === 'session.idle') await completeMode(session.$).catch(() => undefined)
-        else {
+        if (TURN_ENDS.includes(event.type)) await turnEnded(session)
+        else if (event.type === 'session.deleted') {
           await endPlan(session.$, sessionID, false).catch(() => undefined)
           sessions.delete(sessionID)
         }
