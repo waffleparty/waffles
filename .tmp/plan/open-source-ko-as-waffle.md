@@ -1,9 +1,9 @@
 ---
 goal: Open-source ko as waffle
 status: open
-current: 6
+current: 6.6
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T17:02:18.878Z
+updated: 2026-11-26T17:10:13.863Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -54,11 +54,18 @@ updated: 2026-11-26T17:02:18.878Z
   - [ ] 6.4 Serve the plan outline tool from an MCP server
   - [ ] 6.5 Add command-hook adapters for Cursor, Codex, and Antigravity
   - [ ] 6.6 Add an in-process adapter for OpenCode
+    - [x] 6.6.1 Add the server part: the plan outline tool, the mode commands, the rules, and the skills
+    - [ ] 6.6.2 Add the terminal UI part: the plan outline view and the footer
+    - [ ] 6.6.3 Run the checkpoint after a push on OpenCode
+    - [ ] 6.6.4 Start unattended runs on OpenCode and refuse their questions
+    - [ ] 6.6.5 Pick the effort for each prompt on OpenCode
+    - [ ] 6.6.6 Mark a step by its subagent on OpenCode
+    - [ ] 6.6.7 Document how to install waffles on OpenCode
   - [ ] 6.7 Add an Antigravity manifest
   - [ ] 6.8 Move the Codex manifest to a root plugin.json
   - [ ] 6.9 Port the Python scripts to TypeScript
     - [ ] 6.9.1 Port backlog_queue.py and builders.py <!-- agent=a27da9eeec4ebe39a -->
     - [ ] 6.9.2 Port merge_queue.py, review_branch.py, and watch.py <!-- agent=ab3a54263ad6c0d36 -->
-    - [ ] 6.9.3 Port checkpoint.py into the core
+    - [ ] 6.9.3 Port checkpoint.py into the core <!-- agent=a7a8623fc595804a9 -->
     - [ ] 6.9.4 Point the skills, agents, docs, and CI at the TypeScript scripts and remove the Python files
   - [x] 6.10 Add the Node.js host that the command adapter, the MCP server, and OpenCode share

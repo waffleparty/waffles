@@ -2,6 +2,9 @@
   "name": "waffles",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./adapters/opencode/server.ts"
+  },
   "description": "Development and release tooling for the waffles plugin. This file does not publish a package.",
   "license": "MIT",
   "engines": {
@@ -14,6 +17,7 @@
     "test:node": "node --test \"adapters/**/*_test.ts\" \"core/**/*_test.ts\" \"scripts/**/*_test.ts\" \"skills/**/*_test.ts\""
   },
   "devDependencies": {
+    "@opencode/plugin": "2.4.2",
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "11.0.1",
     "@semantic-release/github": "12.0.11",
