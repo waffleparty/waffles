@@ -1,0 +1,129 @@
+import type { Goal } from './plan-tree.ts'
+
+/**
+ * What the core needs from the platform it runs on. The core imports nothing else from outside
+ * `core/`: no platform API, no Node.js module. Each adapter hands it a Host: Claude Code's wraps its
+ * `$`, the others wrap Node.js. A core function takes the Host as its first parameter, named `$`.
+ */
+export type Host = {
+  fs: {
+    read(path: string): Promise<string>
+    /** Makes the folders above the file. */
+    write(path: string, text: string): Promise<void>
+    exists(path: string): Promise<boolean>
+    list(path: string): Promise<FileEntry[]>
+    stat(path: string): Promise<FileStat>
+    /** Removes a file; one that isn't there is nothing to remove. */
+    remove(path: string): Promise<void>
+  }
+  process: {
+    /** Runs a command to its end. Rejects when it can't start. */
+    run(argv: readonly string[], init?: { cwd?: string; timeoutMs?: number }): Promise<RunResult>
+  }
+  session: {
+    id(): Promise<string>
+    /** The shell's working directory. */
+    cwd(): Promise<string>
+  }
+  clock: {
+    /** Milliseconds since the epoch. */
+    now(): Promise<number>
+  }
+  /** The person's home folder, where the platform knows it. */
+  home(): Promise<string | undefined>
+  /**
+   * The session's values: they last as long as the session, come back when it is resumed, and never
+   * reach another session. A key never set reads as `INITIAL` has it.
+   */
+  state: {
+    get<K extends keyof SessionState>(key: K): Promise<SessionState[K]>
+    set<K extends keyof SessionState>(key: K, value: SessionState[K]): Promise<void>
+  }
+  /** The person's values: they hold for every session on the machine until changed. A key never set reads as undefined. */
+  store: {
+    get(key: string): Promise<unknown>
+    set(key: string, value: unknown): Promise<void>
+  }
+  /**
+   * What lives only in this process, one object per session: timers' bookkeeping and caches. An adapter
+   * whose process serves one event starts each event with an empty one, which every module allows for.
+   */
+  memory: Memory
+  /** The subagents the session knows; a platform that lists none answers with none. */
+  agents: {
+    list(): Promise<readonly AgentInfo[]>
+  }
+  /** What the plan outline asks of a platform that draws it; a platform with no view does nothing. */
+  view: {
+    /** A goal became active: at the session's start, or by a call. */
+    planActive(when: 'start' | 'call'): Promise<void>
+  }
+  /** A line for the platform's debug log. */
+  log(message: string): void
+}
+
+export type FileKind = 'file' | 'dir' | 'other'
+export type FileEntry = { name: string; kind: FileKind; size: number; mtimeMs: number }
+export type FileStat = { kind: FileKind; size: number; mtimeMs: number }
+export type RunResult = { exitCode: number; stdout: string; stderr: string }
+export type AgentInfo = { id: string; status: string }
+
+export type InteractionMode = 'production' | 'rapid' | 'backlog'
+/** Where rapid work started: HEAD then, and the paths already changed then, relative to the repository root. */
+export type RapidBase = { head: string; dirty: string[] }
+/** A goal file other than the session's active goal. */
+export type OtherGoal = {
+  slug: string
+  title: string
+  /** The goal's current step, `<id> <title>`; null when it has none. */
+  current: string | null
+  /** Another session that is still running has it active. */
+  inUse: boolean
+}
+
+/** The session's values, by key. types/index.d.ts states the same contract for Claude Code's `$.state`. */
+export type SessionState = {
+  /** /prod (the default), /rapid or /backlog-entry, until another of them or /clear. */
+  mode: InteractionMode
+  /** The base of rapid work not yet handed to the model in production mode; null when none is pending. */
+  rapidBase: RapidBase | null
+  /** An unattended run is active. */
+  run: boolean
+  /** The slug of the session's active goal; null when it has none. */
+  planGoal: string | null
+  /** The active goal as last read, for drawing; with none active, the kept goal's. */
+  planTree: Goal | null
+  /** The slug of the goal a view keeps drawn after it ended or stopped being active here. */
+  planKept: string | null
+  /** Why the kept goal's file can't be drawn from; null when it reads, or no goal is kept. */
+  planKeptIssue: 'missing' | 'unreadable' | null
+  /** The active goal's parse error, for drawing. */
+  planError: string | null
+  /** The open goals other than the active one. */
+  planOthers: OtherGoal[]
+  /** Step IDs changed since the person's last prompt. */
+  planChanged: string[]
+}
+
+/** What each key reads as before it is set. */
+export const INITIAL: SessionState = {
+  mode: 'production',
+  rapidBase: null,
+  run: false,
+  planGoal: null,
+  planTree: null,
+  planKept: null,
+  planKeptIssue: null,
+  planError: null,
+  planOthers: [],
+  planChanged: [],
+}
+
+/** Each module's in-process values, under its own key; a module makes its entry at first use. */
+export type Memory = Record<string, unknown>
+
+/** The module's entry in the host's memory, made by `make` at first use. */
+export function memoryOf<T>($: Pick<Host, 'memory'>, key: string, make: () => T): T {
+  if (!(key in $.memory)) $.memory[key] = make()
+  return $.memory[key] as T
+}

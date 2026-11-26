@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.3
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T16:47:34.703Z
+updated: 2026-11-26T16:55:23.380Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -47,7 +47,7 @@ updated: 2026-11-26T16:47:34.703Z
   - [ ] 6.3 Move the hook logic into the core library
     - [x] 6.3.1 Design the boundary between the core library and the adapters
     - [x] 6.3.2 Confirm that Claude Code's hook runtime loads imports with a .ts extension
-    - [ ] 6.3.3 Define the host interface and its store
+    - [x] 6.3.3 Define the host interface and its store
     - [ ] 6.3.4 Move the plan outline into the core
     - [ ] 6.3.5 Move the modes and the unattended-run rules into the core
     - [ ] 6.3.6 Move the effort choice, the dev-server scan, and the backlog adapter notice into the core
@@ -57,3 +57,7 @@ updated: 2026-11-26T16:47:34.703Z
   - [ ] 6.7 Add an Antigravity manifest
   - [ ] 6.8 Move the Codex manifest to a root plugin.json
   - [ ] 6.9 Port the Python scripts to TypeScript
+    - [ ] 6.9.1 Port backlog_queue.py and builders.py <!-- agent=a27da9eeec4ebe39a -->
+    - [ ] 6.9.2 Port merge_queue.py, review_branch.py, and watch.py <!-- agent=ab3a54263ad6c0d36 -->
+    - [ ] 6.9.3 Port checkpoint.py into the core
+    - [ ] 6.9.4 Point the skills, agents, docs, and CI at the TypeScript scripts and remove the Python files
