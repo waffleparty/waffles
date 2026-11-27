@@ -11,7 +11,7 @@ act on the result: report success and stop, or debug and fix a failure. You can
 be invoked by the user or by another agent, usually right after a push.
 
 The order matters: **map the whole pipeline first, then start one watcher.** The
-watcher (`watch.py` in this skill's base directory) only polls the targets in the
+watcher (`watch.ts` in this skill's base directory) only polls the targets in the
 map. It never decides what to watch next.
 
 ```
@@ -98,7 +98,8 @@ when another one finishes.
 ### Map file
 
 Write it to `$(git rev-parse --git-dir)/watch-ci/<short-sha>.json` (create the
-directory). List targets in dependency order: upstream before downstream.
+directory). List targets in dependency order: upstream before downstream. Give
+each target its own `id`: the watcher refuses a map where 2 targets share one.
 
 ```json
 {
@@ -148,28 +149,34 @@ abc1234 → feature/x (PR #12)
 
 ## 4. Snapshot
 
-Run `python3 -I <skill-dir>/watch.py <map> --once`. It polls each target one
+Run `node <skill-dir>/watch.ts <map> --once`. It polls each target one
 time and prints its state.
 
 - Ends with `ALL_DONE`: everything already finished. Don't start a watcher. Report
   (step 6), and fix if anything failed.
 - Ends with `PENDING`: start the watcher (step 5). If the snapshot already shows
-  a `FAIL`, start on that failure (step 6) at the same time.
+  a `FAIL`, start on that failure (step 6) at the same time. The snapshot
+  writes no state, so the watcher reports that `FAIL` again: it is the same
+  failure, not a new one.
 
 ## 5. Watch
 
-Start the `waffles:ci-watcher` agent in the background (Agent tool,
-`run_in_background: true`, `description`: `Watch CI/CD for <short-sha>`), with
-this brief:
+Start the CI watcher in the background: an agent that runs the script below
+and returns what it printed. On Claude Code it is the `waffles:ci-watcher`
+agent (Agent tool, `run_in_background: true`, `description`:
+`Watch CI/CD for <short-sha>`); on another platform, start its own background
+agent for the role, and where the platform has no background subagents, run
+the script yourself as a shell command: it prints the same report. The brief:
 
 ```
-Run: python3 -I <skill-dir>/watch.py <map> --until-actionable
+Run: node <skill-dir>/watch.ts <map> --until-actionable
 ```
 
-Don't use the Monitor tool, and don't poll the runs yourself. Every Monitor event
-wakes you for a turn, and every turn pings the user. The watcher agent blocks on
+Don't use a background watch that wakes you on each line (Claude Code's Monitor
+tool), and don't poll the runs yourself. Every such event wakes you for a turn,
+and every turn pings the user. The watcher agent blocks on
 the script and returns only when you must act, so you wake once per decision. It
-also keeps the session marked as busy while CI runs. Its current Bash
+also keeps the session marked as busy while CI runs. On Claude Code, its current Bash
 description shows the live progress (`CI 3/5 jobs · now "Run tests"`) in the
 background-task panel, so you don't need to report progress.
 
@@ -191,15 +198,17 @@ is the event lines since it started, then `RETURN` or `ALL_DONE <result>`:
 
 After `RETURN`, start the watcher again with the same brief if targets are still
 in flight. The watcher keeps its state in `<map>.state.json`, so it never
-repeats an event. If the user asks for status while it runs, run
-`watch.py <map> --once`.
+repeats an event, except `ERROR`: a new watcher prints it again at its first
+poll of that target that still fails. If the user asks for status while it
+runs, run `watch.ts <map> --once`. It changes no state, so the watcher still
+reports every event.
 
 ## 6. Act
 
 ### Success
 
 Report it in one line and stop: `CI/CD green for abc1234: CI ✓ · Deploy preview ✓ · Vercel ✓`.
-Stop any watcher agent still running (TaskStop).
+Stop any watcher agent still running (TaskStop on Claude Code).
 
 ### Failure
 

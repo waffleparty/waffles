@@ -1,0 +1,49 @@
+{
+  "waffles": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./adapters/command/cli.ts antigravity SessionStart",
+        "timeout": 30
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./adapters/command/cli.ts antigravity PreInvocation",
+        "timeout": 30
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./adapters/command/cli.ts antigravity PreToolUse",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "run_command|ask_question",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./adapters/command/cli.ts antigravity PostToolUse",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./adapters/command/cli.ts antigravity Stop",
+        "timeout": 30
+      }
+    ]
+  }
+}

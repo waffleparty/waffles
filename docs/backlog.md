@@ -45,7 +45,7 @@ finished:
 
 Each builder works in its own full clone of the repo, on its own branch, with its own draft pull request. The clone is at `<session scratchpad>/builders/<owner>/<repo>/<item>`, or under `$WAFFLES_BUILDERS_ROOT` when you set it. An item that depends on one not merged yet starts from that item's branch, as a stacked pull request.
 
-You review the pull request. **Merge** squash-merges it, restacks the items stacked on it, and removes the clone with `scripts/builders.py`, which refuses a clone that holds work origin lacks. **Revise** sends your changes to the builder's clone. **Drop** closes the pull request and deletes the clone and the item. A clone borrows the main checkout's objects while it clones, then lets go of them, so the clone is fast and needs nothing of the main checkout afterwards.
+You review the pull request. **Merge** squash-merges it, restacks the items stacked on it, and removes the clone with the builders tool (`builders`, or `scripts/builders.ts` where the tool is missing), which refuses a clone that holds work origin lacks. **Revise** sends your changes to the builder's clone. **Drop** closes the pull request and deletes the clone and the item. A clone borrows the main checkout's objects while it clones, then lets go of them, so the clone is fast and needs nothing of the main checkout afterwards.
 
 ```
 backlog item ─► builder: clone, branch, draft pull request ─► checks ─► ready for review
@@ -59,13 +59,13 @@ backlog item ─► builder: clone, branch, draft pull request ─► checks ─
 
 | Limit | How it is counted |
 | --- | --- |
-| At most 10 open pull requests per repo that wait for human review | From GitHub, across every developer (`builders.py limits`): marked ready, with a review requested. At 10 it says why and lists them. |
+| A cap on the open pull requests per repo that wait for human review, when `WAFFLES_REVIEW_CAP` sets one (unset, there is no cap) | From GitHub, across every developer (the builders tool's `limits`, or `builders.ts limits`): marked ready, with a review requested. At the cap it says why and lists them. |
 | One item at a time per component | From an item's claim until its pull request merges. A stacked item counts with the one below it. The component comes from the adapter; a repo with no adapter has one component, the repo. |
-| At most 3 builders running tests at once on this machine | Each builder runs its tests through `builders.py test-slot -- <command>`, which waits for a free slot. The slots are lock files in `$WAFFLES_TEST_SLOTS`, or in `/tmp/waffles-test-slots-<uid>` when it is unset, shared by every session of your user. `--slots` sets another count. |
+| At most 3 builders running tests at once on this machine | Each builder runs its tests through the shell command `builders.ts test-slot -- <command>`, which waits for a free slot and holds it while the tests run; it is no tool, since a tool call may not last that long. The slots are lock files in `$WAFFLES_TEST_SLOTS`, or in `/tmp/waffles-test-slots-<uid>` when it is unset, shared by every session of your user. `--slots`, or `WAFFLES_MAX_CONCURRENT_TEST_SUITES` for every run, sets another count. |
 
 ### Several UI items at once
 
-`scripts/review_branch.py build --waiting` makes a local branch, `waffles-review`, in your main checkout. It holds the default branch with every pull request that asks you for a review merged into it. A pull request that conflicts is left out and named. One dev server serves the branch. It is never pushed, it is rebuilt when a waiting pull request changes, and `done` switches your checkout back and deletes it. The build refuses a checkout with changes to tracked files.
+The review branch tool (`review_branch` with `{"op": "build", "repo": "<main checkout>", "waiting": true}`, or `scripts/review-branch.ts build --waiting` where the tool is missing) makes a local branch, `waffles-review`, in your main checkout. It holds the default branch with every pull request that asks you for a review merged into it. A pull request that conflicts is left out and named. One dev server serves the branch. It is never pushed, it is rebuilt when a waiting pull request changes, and `done` switches your checkout back and deletes it. The build refuses a checkout with changes to tracked files.
 
 ## Backlog adapter
 
@@ -99,12 +99,12 @@ Each check reports pass, fail with the fix, or could not check. A failure never 
 
 ## Tracker fallback
 
-When a repo's tracker cannot be reached, `scripts/backlog_queue.py` holds the tracker writes in `.backlog/queue.json` until the next call that succeeds replays them, oldest first. The queue stays out of git, through `.git/info/exclude`. The script never calls the tracker.
+When a repo's tracker cannot be reached, the backlog queue tool (`backlog_queue`) holds the tracker writes in `.backlog/queue.json` until the next call that succeeds replays them, oldest first. Where the tool is missing, `scripts/backlog-queue.ts` does the same, with the op as its command. The queue stays out of git, through `.git/info/exclude`. It never calls the tracker. Its lock is `.backlog/.queue-lock`, there only while a session holds it; a lock left more than 15 seconds is taken over.
 
-| Command | Purpose |
-| --- | --- |
-| `add <step> <item> --why <cause> [--data JSON]` | Queue one call. |
-| `list` | Print the queued calls, oldest first. |
-| `done <seq> [--id <new id>]` | Remove one call once the tracker answered it. |
+| `op` | Script | Purpose |
+| --- | --- | --- |
+| `add` | `add <step> <item> --why <cause> [--data JSON]` | Queue one call. |
+| `list` | `list` | The queued calls, oldest first. |
+| `done` | `done <seq> [--id <new id>]` | Remove one call once the tracker answered it. |
 
-For a queued `raise`, `--id` names the new ID in the calls after it and in other items' `depends:`, and deletes the item file, or renames it to `<id>.md` when its work already started. Each call that falls back gets 1 line saying so, with the cause. `skills/backlog/adapter.md` says when the skills use the queue.
+For a queued `raise`, `id` (the script's `--id`) puts the new ID in the calls after it and in other items' `depends:`, and deletes the item file, or renames it to `<id>.md` when its work already started. Each call that falls back gets 1 line saying so, with the cause. `skills/backlog/adapter.md` says when the skills use the queue.

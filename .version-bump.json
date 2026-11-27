@@ -5,11 +5,15 @@
       "field": "version"
     },
     {
-      "path": ".codex-plugin/plugin.json",
+      "path": "plugin.json",
       "field": "version"
     },
     {
       "path": ".cursor-plugin/plugin.json",
+      "field": "version"
+    },
+    {
+      "path": ".antigravity-plugin/plugin.json",
       "field": "version"
     }
   ]

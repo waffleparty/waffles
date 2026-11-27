@@ -3,14 +3,14 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { fakeDisk } from './plan-testing'
-import { newGoal, serializeGoal } from './plan-tree'
+import { newGoal, serializeGoal } from '../core/plan-tree.ts'
 import { cut, paneClosed, width } from './plan-ui'
 
 const TOOL = 'mcp__waffles__plan'
 const NOW = Date.parse('2026-11-15T12:00:00Z')
 const ISO = new Date(NOW).toISOString()
 const ME = 'session-me'
-const ROOT = '/repo/.tmp/plan'
+const ROOT = '/repo/.git/waffles/plan'
 const STATE = '/repo/.git/waffles'
 const file = (slug: string) => `${ROOT}/${slug}.md`
 const SURFACES = ['terminal', 'desktop'] as const
@@ -254,7 +254,7 @@ test('the pane shows a parse error instead of a tree', async ($, on) => {
   disk.files.set(file('ship-oauth-login'), '---\ngoal: Ship OAuth login\nnonsense\n')
   await start($)
 
-  expect((await drawPane($, 60)).rows).toEqual(["Can't read .tmp/plan/ship-oauth-login.md: line 3"])
+  expect((await drawPane($, 80)).rows).toEqual(["Can't read /repo/.git/waffles/plan/ship-oauth-login.md: line 3"])
 })
 
 test('the pane says so when there is no active goal, and counts goals in use by another session', async ($, on) => {
@@ -398,7 +398,7 @@ test('every result shape a plan call returns draws once: in the row, not again i
 
 test('a call made outside the goal’s repo draws one dim row, not a refusal, and no result block', async ($, on) => {
   world(on)
-  const output = "Nothing changed: .tmp/plan/ship.md isn't in /repo/sub, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again."
+  const output = "Nothing changed: the active goal ship has no goal file in /repo/sub, the repo of the shell's working directory. If the shell moved to another repo, cd back to the active goal's repo and call again."
 
   const row = await drawCall($, { output })
   expect(row.texts.map(t => t.text)).toEqual(['⏺', ' plan outline', "not changed: the shell is outside the goal's repo"])

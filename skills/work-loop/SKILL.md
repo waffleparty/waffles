@@ -30,7 +30,7 @@ never poll.
 
 ## Items
 
-Each item is one `.md` file in `.backlog/`. `/waffles:backlog` writes items already in
+Each item is one `.md` file in `.backlog/`. The waffles backlog skill writes items already in
 this format; the user may also drop in free-form text. The first time you see a file
 without frontmatter, normalize it:
 
@@ -65,14 +65,14 @@ one of them is not built yet: its file exists and is not `review`. An item whose
 dependency is `review` (its pull request is ready but not merged) is stacked on
 that item's branch (see Background agents). `clone:`, `branch:`, and `pr:` are
 the builder's checkout, its branch, and its pull request's URL. When `clone:` names a folder that is gone (it was in an earlier session's scratchpad), clone again with the same branch (see Clone, below): the new clone checks out the branch as origin has it. `## Clarifications` holds the user's answers
-to questions asked ahead of time by `/waffles:backlog-review`, which may write to `new`
+to questions asked ahead of time by the waffles backlog-review skill, which may write to `new`
 items from another session.
 
 Statuses:
 
 | Status | Meaning | Owner |
 | --- | --- | --- |
-| `new` | Triaged, not started | main thread (`/waffles:backlog-review` may add clarifications) |
+| `new` | Triaged, not started | main thread (the backlog-review skill may add clarifications) |
 | `running` | A builder is building it in its clone | that builder |
 | `review` | Built; its pull request is marked ready and waits for review | main thread |
 | `escalated` | Agent stopped and needs the user; question is in Progress | main thread |
@@ -108,8 +108,8 @@ Each pass:
 2. Order the candidates. Choose recommendations that keep concurrent builders
    from touching the same areas — hold back a background item that overlaps one
    already `running` or the interactive item you're recommending.
-3. Ask with AskUserQuestion (the tool can't preselect, and allows 4 options per
-   question):
+3. Ask the user multiple-choice questions (`AskUserQuestion` on Claude Code,
+   which can't preselect, and allows 4 options per question):
    - **Q1, multiSelect: "Run in background?"** — `new` background items. Label
      `[bg] <title>`, description `<summary>`. Append ` (Recommended)` to each one
      you'd run now, up to the target (see Background agents). A question
@@ -133,7 +133,8 @@ Each pass:
    say what's running and stop until an agent finishes or they re-invoke.
 
 When nothing is `new`, `review`, `escalated`, or `stale`, and no agents are
-running, report briefly and stop. The user re-runs `/waffles:work-loop` after adding items.
+running, report briefly and stop. The user runs this skill again
+(`/waffles:work-loop` on Claude Code) after adding items.
 
 ## Background agents
 
@@ -141,19 +142,27 @@ Each background item gets a builder: a background agent with its own full
 clone of the repo, its own branch, and its own draft pull request. Builders
 never share a checkout, not even with the main checkout, and nothing comes back
 from a clone: the work reaches the repo as a pull request, and is reviewed and
-merged there.
+merged there. Where the platform has no background agents, leave out Q1: every
+item is worked on the main thread.
 
 ### Limits
 
 3 limits decide how many builders run. Check them before each dispatch, also
 for an item the user picked in Q1. When one holds, start no builder for that
-item, leave it `new`, and say in 1 line which limit held and why:
+item, leave it `new`, and say in 1 line which limit held and why.
+
+The clones and the pull request limit go through the waffles builders tool
+(`builders`; each platform adds its own prefix to the name, such as
+`mcp__waffles__builders`). Where that tool is missing, run
+`node <skill-dir>/../../scripts/builders.ts` with the same op and its inputs
+as flags; each step below gives the command. The script prints the tool's
+answer as JSON, and exits 3 where the tool refuses and 1 where it fails.
 
 | Limit | What it guards | How it is counted |
 | --- | --- | --- |
-| At most 10 open pull requests per repo that wait for human review | The pile of work that waits for people | From GitHub, across every developer: `python3 -I <skill-dir>/../../scripts/builders.py limits --repo <main>`. A pull request waits for review when it is marked ready and a review is requested; one that an agent merges itself has none requested. At 10 it refuses, and its reason lists them: start no builder in this repo. When it cannot count (exit code 1), start none either, and say why. |
+| A cap on the open pull requests per repo that wait for human review, when the person set one in `WAFFLES_REVIEW_CAP` (unset, the tool only counts, and never refuses) | The pile of work that waits for people | From GitHub, across every developer: the builders tool with `{"op": "limits", "repo": "<main>"}`, or where it is missing `node <skill-dir>/../../scripts/builders.ts limits --repo <main>`. A pull request waits for review when it is marked ready and a review is requested; one that an agent merges itself has none requested. At the cap it refuses (its reason starts `Refused:`), and the reason lists them: start no builder in this repo. When it cannot count (any other failure), start none either, and say why. |
 | One item at a time per component | Overlap in the code | An item holds its component from its claim until its pull request merges: `running`, `escalated`, `stale`, `active`, or `review`. Start no item whose component has another one, unless it depends on that one: it is then stacked on it, and the stack counts as 1. The component is the item's `component` through the adapter; a `.backlog/` file's is the repo, so one item at a time per repo. |
-| 3 builders running tests at once on this machine | The machine | Each builder runs its tests, linters, and type checks through `builders.py test-slot -- <command>`, which waits for 1 of 3 slots, shared by every session. On a typical workstation, test runs at once stop adding throughput at about 3: past that, each one only slows the others. |
+| 3 builders running tests at once on this machine | The machine | Each builder runs its tests, linters, and type checks through the shell command `node <scripts>/builders.ts test-slot -- <command>` (`<scripts>` is `<skill-dir>/../../scripts`, as an absolute path), which waits for 1 of 3 slots, shared by every session. It stays a shell command, not a tool: it wraps the builder's own command and holds the slot for as long as that runs. On a typical workstation, test runs at once stop adding throughput at about 3: past that, each one only slows the others. |
 
 Within them, recommend up to 5 in Q1. One item may fan out into its own
 subagents (e.g. repetitive work split across files) in its builder's clone;
@@ -167,16 +176,18 @@ that still counts as one.
 2. **Base.** The default branch. Where `depends:` names an item that is not
    merged (status `review`), its `branch:` instead: the item is stacked on it,
    and its pull request's base is that branch.
-3. **Clone.** In the main checkout, run
-   `python3 -I <skill-dir>/../../scripts/builders.py clone --root <scratchpad>/builders --repo <main> --item <item filename stem> --branch <branch> [--base <base>]`.
-   It prints the clone's `path` (under `<scratchpad>/builders/<owner>/<repo>/`, or `$WAFFLES_BUILDERS_ROOT` when it is set; `<scratchpad>` is this session's scratchpad directory, as an absolute path). It
+3. **Clone.** Call the builders tool with
+   `{"op": "clone", "root": "<scratchpad>/builders", "repo": "<main>", "item": "<item filename stem>", "branch": "<branch>"}`,
+   and `"base": "<base>"` for a stacked item; where the tool is missing, run
+   `node <skill-dir>/../../scripts/builders.ts clone --root <scratchpad>/builders --repo <main> --item <item filename stem> --branch <branch> [--base <base>]`.
+   It answers with the clone's `path` (under `<scratchpad>/builders/<owner>/<repo>/`, or `$WAFFLES_BUILDERS_ROOT` when it is set; `<scratchpad>` is this session's scratchpad directory, as an absolute path). A clone takes minutes for a large repo: a call that the platform ends before the answer can be made again, and a finished clone on its branch is reused. It
    refuses an existing clone of the item that is on another branch, and a base
    that is not on origin; say why in 1 line and leave the item `new`. Record
    `clone:` and `branch:` in the item's frontmatter.
-4. Set `status: running`, then launch the Agent tool in the background, with
-   no `isolation`, and a prompt with the item file's absolute path, the clone,
-   the branch, the base, `<scripts>` (`<skill-dir>/../../scripts`, as an
-   absolute path), and these instructions:
+4. Set `status: running`, then start a background agent (on Claude Code, the
+   Agent tool in the background, with no `isolation`) with a prompt with the
+   item file's absolute path, the clone, the branch, the base, `<scripts>`
+   (`<skill-dir>/../../scripts`, as an absolute path), and these instructions:
 
 > You're the builder of one backlog item. Work only in your clone,
 > `<clone path>`, on branch `<branch>`: a full clone of the repo that no other
@@ -184,12 +195,14 @@ that still counts as one.
 > checkout. It's yours to edit while you work; touch no other file under
 > `.backlog/` and nothing else in the main checkout.
 >
-> 1. Commit and push as the `waffles:commit-prep` skill's rules for work with a
->    plan outline say. Write the item's plan outline in `.tmp/plan/` and
->    commit it alone. Push it with `git push -u origin <branch>`, open a draft
->    pull request with `gh pr create --draft --base <base>`, titled as the
->    repo's convention says, and record its URL in `pr:`. Then make one commit
->    per outline step, with its checks passing, and push at each milestone.
+> 1. Commit and push as the waffles commit-prep skill's rules for work with a
+>    plan outline say. Write the item's plan outline in your clone's plan
+>    folder, `<git dir>/waffles/plan/` (`git rev-parse --git-dir` prints the
+>    git dir): it is not in the working tree and is never committed. Make one
+>    commit per outline step, with its checks passing. After the first, push
+>    with `git push -u origin <branch>`, open a draft pull request with
+>    `gh pr create --draft --base <base>`, titled as the repo's convention
+>    says, and record its URL in `pr:`. Then push at each milestone.
 >    Nothing may wait for a passphrase. When git signs commits with GPG
 >    (`git config commit.gpgsign` prints `true`, and `git config gpg.format`
 >    prints nothing or `openpgp`), run, before each commit,
@@ -197,8 +210,10 @@ that still counts as one.
 >    exit code 0, commit as usual; otherwise commit with `--no-gpg-sign`.
 > 2. Implement the Request, following the answers under `## Clarifications`.
 >    Run the repo's tests, linters, and type checks in your clone, each through
->    `python3 -I <scripts>/builders.py test-slot -- <command>`, which waits
->    while 3 test runs already run on this machine.
+>    the shell command `node <scripts>/builders.ts test-slot -- <command>`,
+>    which waits while 3 test runs already run on this machine. It is a shell
+>    command, not a tool, since it wraps your command and holds its slot for as
+>    long as that runs.
 > 3. If the change has a dev server or stack, pick a free port, start it in
 >    your clone, and record the exact start command (including port and
 >    folder) in `dev:`. It may not outlive you, so the command must be enough
@@ -213,9 +228,7 @@ that still counts as one.
 > 6. When done and verified, write a short summary of the change and how you
 >    verified it under `## Progress`, plus a `Pages:` line listing the URL
 >    paths (e.g. `/settings/billing`) where the change can be seen, if any.
->    Take the outline's last step ("Remove the working files":
->    `git rm -r .tmp` in its own commit), push, and mark the pull request ready
->    with `gh pr ready`. Set `status: review` and `finished:` to the current
+>    Push, and mark the pull request ready with `gh pr ready`. Set `status: review` and `finished:` to the current
 >    UTC time (ISO 8601), and finish.
 >
 > You may split repetitive work across your own subagents, in your clone. Your
@@ -224,9 +237,10 @@ that still counts as one.
 
 ### The finish queue
 
-Claude Code delivers each finished agent's notification between turns, never in
-the middle of one, so agents that finish close together arrive together. The
-item files are the queue, not the notifications:
+Finished agents' notifications can arrive together: Claude Code, for one,
+delivers each between turns, never in the middle of one, so agents that finish
+close together arrive together. The item files are the queue, not the
+notifications:
 
 - Handle every notification that has arrived in one pass, not a pass each.
   Read all statuses with one command
@@ -252,11 +266,11 @@ Set the item `status: active` and work it with the user. Read its
   below.
 - **review** — the review is of the item's pull request. If the item has
   `dev:`, find the clone's dev server: usually the builder's is still running.
-  Look for a listener that passes `/waffles:dev-server`'s ownership check against
+  Look for a listener that passes the waffles dev-server skill's ownership check against
   the clone and use it. Only if none is running, start one from `dev:` the way
-  `/waffles:dev-server` does; if its port is taken, use a free one and update `dev:`.
+  the dev-server skill does; if its port is taken, use a free one and update `dev:`.
   Never run two servers for one clone. Summarize the change, print the review
-  links block in chat, then ask with AskUserQuestion:
+  links block in chat, then ask with the question tool:
   **Merge** ("Merge the pull request"), **Revise** ("Tell me what to
   change"), **Drop** ("Close the pull request and delete the clone and the
   item"). Every option's preview is the review links block. On Revise, make the
@@ -294,35 +308,46 @@ To look at several finished UI items at once, build 1 throwaway local branch
 in the main checkout that merges every pull request waiting for the user, and
 serve it with 1 dev server:
 
-1. `python3 -I <skill-dir>/../../scripts/review_branch.py build --repo <main> --waiting`
-   (or `--pr <number>…` for the items the user named). It refuses a main
+1. Call the waffles review branch tool (`review_branch`; each platform adds
+   its own prefix to the name, such as `mcp__waffles__review_branch`) with
+   `{"op": "build", "repo": "<main>", "waiting": true}`, or
+   `{"op": "build", "repo": "<main>", "prs": [<number>, …]}` for the items the
+   user named. Where that tool is missing, run
+   `node <skill-dir>/../../scripts/review-branch.ts build --repo <main> --waiting`
+   (or `--pr <number>…`), which prints the same answer as JSON. It refuses a main
    checkout with changes to tracked files: say so, and offer the items one by
    one instead. It switches the checkout to the local branch `waffles-review`:
-   origin's default branch with each pull request merged into it. Its output
+   origin's default branch with each pull request merged into it. Its answer
    names each pull request that conflicted with the ones before it and was
-   left out: review those one by one.
-2. Serve it with `/waffles:dev-server` in the main checkout: one server for all the
+   left out (`conflicts`): review those one by one.
+2. Serve it with the waffles dev-server skill in the main checkout: one server for all the
    items. Stop the builders' own servers for those items first, if you
    started them.
 3. Print one review links block: the server's URL joined with the `Pages:` of
    each item, under its title, and each pull request's link. Then ask per item,
    as for a single item: **Merge**, **Revise**, **Drop**. Revise is made in
-   the item's clone and pushed; then run `build` again, which rebuilds
+   the item's clone and pushed; then build again, which rebuilds
    `waffles-review` from the new heads, and the server reloads or restarts.
 4. Never push `waffles-review`, and never commit on it: it has no upstream, and it
    is rebuilt whenever a waiting pull request changes.
-5. When the review ends, run
-   `python3 -I <skill-dir>/../../scripts/review_branch.py done --repo <main>`.
+5. When the review ends, call the review branch tool with
+   `{"op": "done", "repo": "<main>"}`; where it is missing, run
+   `node <skill-dir>/../../scripts/review-branch.ts done --repo <main>`.
    It switches the checkout back to the branch it was on and deletes
    `waffles-review`. Merge the items the user picked as below.
 
 ### Merging a pull request
 
 1. If you started the clone's dev server yourself, stop it.
-2. Merge as `python3 -I <skill-dir>/../../scripts/merge_queue.py mode <number>`
-   says. Without a merge queue:
+2. Find how the pull request merges: call the waffles merge queue tool
+   (`merge_queue`; each platform adds its own prefix to the name, such as
+   `mcp__waffles__merge_queue`) with `{"op": "mode", "pr": "<number>"}`, and
+   add `"repo": "<owner>/<name>"` when the session's folder is not a checkout
+   of the repo. Where that tool is missing, run
+   `node <skill-dir>/../../scripts/merge-queue.ts mode <number>`, which prints
+   the same answer as JSON. Merge as the answer says. Without a merge queue:
    `gh pr merge <number> --squash --subject <subject> --body <digest>`, with
-   the subject and digest that the `waffles:commit-prep` skill describes. When it
+   the subject and digest that the waffles commit-prep skill describes. When it
    is refused (a check failed, a review is required), say why and leave the
    item in `review`. With a merge queue, merging is adding to the queue, and
    GitHub adds a pull request only when it has a valid approval (its
@@ -332,15 +357,21 @@ serve it with 1 dev server:
    for a reviewer's approval, and leave the item in `review`. With one, put
    the digest in the pull request's body, run `gh pr merge <number>` (no
    merge method, no `--auto`), and write under `## Progress` that it is in
-   the queue. Then start Monitor with an until-loop that runs
-   `merge_queue.py state <number>` every 60 seconds and ends at `merged`,
+   the queue. Then start a background watch (Claude Code's Monitor tool) with
+   an until-loop that runs
+   `node <skill-dir>/../../scripts/merge-queue.ts state <number>` every 60
+   seconds (a shell loop, so the script and not the tool) and ends at `merged`,
    `removed`, or `closed`; its notification starts the next pass, and the
-   item stays `review` until then. Go on with steps 3 to 5 once it is
+   item stays `review` until then. Where the platform has no background watch,
+   read the state with the merge queue tool (`{"op": "state", "pr": "<number>"}`)
+   at the start of each pass instead. Go on with steps 3 to 5 once it is
    `merged`. When the queue removed it, set `status: escalated`, write
    GitHub's reason under `## Progress`, and offer it in Q2: its fix is made in
    the clone, pushed, and added to the queue again.
-3. Remove the clone:
-   `python3 -I <skill-dir>/../../scripts/builders.py remove --root <scratchpad>/builders --path <clone>`.
+3. Remove the clone: call the builders tool with
+   `{"op": "remove", "root": "<scratchpad>/builders", "path": "<clone>"}`;
+   where it is missing, run
+   `node <skill-dir>/../../scripts/builders.ts remove --root <scratchpad>/builders --path <clone>`.
    It refuses a clone that holds work origin lacks; then say what it holds and
    keep the clone.
 4. Restack the items stacked on this one (their `depends:` names it). The squash
@@ -348,7 +379,8 @@ serve it with 1 dev server:
    `git rebase --onto origin/<default branch> <this item's branch tip> <branch>`,
    push with `--force-with-lease`, and set its base with
    `gh pr edit <number> --base <default branch>`. Where that item's builder is
-   still running, send it these steps with SendMessage instead.
+   still running, send it these steps as a message instead (SendMessage on
+   Claude Code); where the platform can't, do them once it has finished.
 5. Delete the item file. When the main checkout is on the default branch with
    no changes, `git pull --ff-only`; otherwise say in 1 line that it is behind.
 
@@ -365,7 +397,8 @@ works on, and the items that fell back.
   item that is neither `done`, `waiting for deploy`, nor `in review` (an item
   whose blocker is `in review` is stacked on the blocker's branch, its `work`);
   an item with no `actor`, which was not adopted yet (say how many in 1 line,
-  and that `/waffles:backlog <id>` adopts one); and an item whose `component` holds
+  and that the waffles backlog skill adopts one by its ID, `/waffles:backlog <id>`
+  on Claude Code); and an item whose `component` holds
   another item of this loop (see Limits). Keep `pull`'s order: it is the order
   of `due`. `actor: agent` items are the background items; `actor: human` and
   `actor: assignee` items are interactive.

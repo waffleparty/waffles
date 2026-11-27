@@ -1,6 +1,7 @@
 import type { FsEntry, FsStat, On, ProcessRunResult } from 'claude-code'
 
-import type { StoreEngine } from './plan-store'
+import type { StoreEngine } from '../core/plan-store.ts'
+import { CREATE_SCRIPT } from './create'
 
 // Every set of a file gives it a modification time no file had before, in this test or another, as a
 // write on disk does: the store's cache, which outlives a test, then never takes one file for another.
@@ -15,9 +16,16 @@ class Stamped extends Map<string, string> {
 
 export type GitAnswer = { exitCode: number; stdout: string }
 
-/** What git answers in a checkout at /repo: its top level and git dir to the plan outline's query, `/repo/.git` to any other. */
+/**
+ * What git answers in a checkout at /repo: its top level and git dir to the plan outline's query, a
+ * detached HEAD to `symbolic-ref` (so no copy on a remote is looked for), `/repo/.git` to any other.
+ */
 export const inRepo = (argv: readonly string[]): GitAnswer =>
-  argv.includes('--git-dir') ? { exitCode: 0, stdout: '/repo\n/repo/.git\n' } : { exitCode: 0, stdout: '/repo/.git\n' }
+  argv.includes('--git-dir')
+    ? { exitCode: 0, stdout: '/repo\n/repo/.git\n' }
+    : argv[1] === 'symbolic-ref'
+      ? { exitCode: 1, stdout: '' }
+      : { exitCode: 0, stdout: '/repo/.git\n' }
 
 export type Disk = {
   /** Path to text: every file there is, each with its modification time. */
@@ -28,6 +36,8 @@ export type Disk = {
   writes: string[]
   /** Paths `rm -f` removed, in order. */
   removed: string[]
+  /** Paths the exclusive create (hooks/create.ts) wrote, in order. */
+  created: string[]
   /** Every argv run that wasn't `rm`. */
   ran: string[][]
   /** `rm` is refused, as a run that fails to start is. */
@@ -51,6 +61,7 @@ function newDisk(): Disk {
     reads: [],
     writes: [],
     removed: [],
+    created: [],
     ran: [],
     isRmBroken: false,
     isReadBroken: false,
@@ -64,8 +75,9 @@ function newDisk(): Disk {
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-// The disk's answers, one implementation behind both fakes: `rm -f` is recorded and drops the file, `git`
-// answers `disk.git`, and anything else (lsof) finds nothing. A missing file is refused, as a read of
+// The disk's answers, one implementation behind both fakes: `rm -f` is recorded and drops the file, the
+// exclusive create's shell script writes the file only when nothing is there, `git` answers `disk.git`, and
+// anything else (lsof) finds nothing. A missing file is refused, as a read of
 // one fails. A path with no file at it stats as a folder, there or not.
 function answers(disk: Disk) {
   const under = (dir: string) => [...disk.files.keys()].filter(p => p.startsWith(`${dir}/`))
@@ -96,13 +108,35 @@ function answers(disk: Disk) {
       const stat: FsStat = text === undefined ? { kind: 'dir', size: 0, mtimeMs: 0, isLink: false } : { kind: 'file', size: text.length, mtimeMs: disk.files.stamps.get(path) ?? 0, isLink: false }
       return resolve ? { ...stat, realPath: path } : stat
     },
-    async run(argv: readonly string[]): Promise<ProcessRunResult> {
+    create(path: string, text: string): boolean {
+      if (disk.files.has(path) || under(path).length > 0) return false
+      this.write(path, text)
+      disk.created.push(path)
+      return true
+    },
+    async run(argv: readonly string[], stdin = ''): Promise<ProcessRunResult> {
       const done = (exitCode: number, stdout: string): ProcessRunResult => ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
+      if (argv[0] === 'sh' && argv[2] === CREATE_SCRIPT) {
+        try {
+          return done(this.create(argv[4] ?? '', stdin) ? 0 : 3, '')
+        } catch (error) {
+          return { ...done(1, ''), stderr: messageOf(error) }
+        }
+      }
       if (argv[0] === 'rm') {
         if (disk.isRmBroken) throw new Error(`EPERM ${argv.join(' ')}`)
         const path = argv[argv.length - 1] ?? ''
         disk.removed.push(path)
         disk.files.delete(path)
+        if (argv[1] === '-rf') for (const file of under(path)) disk.files.delete(file)
+        return done(0, '')
+      }
+      if (argv[0] === 'mv') {
+        const [from = '', to = ''] = argv.slice(-2)
+        const text = disk.files.get(from)
+        if (text === undefined) return { ...done(1, ''), stderr: `mv: ${from}: No such file or directory` }
+        this.write(to, text)
+        disk.files.delete(from)
         return done(0, '')
       }
       disk.ran.push([...argv])
@@ -142,7 +176,7 @@ export function fakeDisk(on: On): Disk {
   on('session.cwd', () => ({ value: disk.cwd }))
   on('process.run', async ($, e) => {
     try {
-      return { value: await at.run(e.argv) }
+      return { value: await at.run(e.argv, e.init?.stdin) }
     } catch (error) {
       return refused(error)
     }
@@ -163,9 +197,17 @@ export function fakeStoreDisk(): Disk & { $: StoreEngine } {
         return text
       },
       write: async (path, text) => at.write(path, text),
+      create: async (path, text) => at.create(path, text),
       exists: async path => at.exists(path),
-      list: async (path = '') => at.list(path),
-      stat: async (path, options) => at.stat(path, options?.resolve ?? false),
+      list: async path => at.list(path),
+      stat: async path => at.stat(path, false),
+      remove: async (path, options) => {
+        await at.run(['rm', options?.recursive ? '-rf' : '-f', path])
+      },
+      rename: async (from, to) => {
+        await at.run(['mv', '-f', from, to])
+      },
+      realPath: async path => path,
     },
     process: { run: argv => at.run(argv) },
     session: { cwd: async () => disk.cwd },

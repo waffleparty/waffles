@@ -1,6 +1,18 @@
 # Skills
 
-Skills that are not part of the backlog or unattended-run workflows. Each runs as `/waffles:<name>`.
+Skills that are not part of the backlog or unattended-run workflows. Each runs as `/waffles:<name>` on Claude Code; the other platforms' pages say how they run a skill.
+
+A skill's text is the same on every platform, so it names things in a form true on all of them:
+
+| Thing | How a skill names it |
+| --- | --- |
+| A tool of the plugin | Its core name, such as `builders`, with the note that each platform adds its own prefix (`mcp__waffles__builders`) |
+| The question tool | "ask the user a multiple-choice question (`AskUserQuestion` on Claude Code)" at its first use in a file, then "the question tool" |
+| Another skill of the plugin | By its name, such as "the waffles backlog skill"; `/waffles:backlog` on Claude Code only where the person types it |
+| A capability only some platforms have | What is needed in plain words, then Claude Code's tool as the example (the Agent tool with `model` and `effort`, SendMessage, Monitor, auto mode), and what to do where the platform lacks it |
+| An agent in `agents/` | Its Claude Code name, such as `waffles:implementer`, with the role it stands for, so another platform starts its own agent for the role |
+
+The texts the hooks write, such as the modes' rules and a run's refusals, take the platform's own forms from the adapter's names (`Names` in `core/host.ts`).
 
 ## Commit prep
 
@@ -14,16 +26,17 @@ Skills that are not part of the backlog or unattended-run workflows. Each runs a
 The skill also holds the commit and push rules for work with a plan outline. The modes' system prompt section states them, so they hold in production mode and during a run:
 
 ```
-outline ─► commit 1: the outline alone ─► push ─► draft pull request
-step ─► checks pass ─► commit (the step, and its box ticked) ─► milestone or stop? ─► push
-last step: "Remove the working files" ─► git rm -r .tmp ─► commit ─► push ─► gh pr ready
+step ─► checks pass ─► commit ─► first commit? ─► push ─► draft pull request
+                                 milestone or stop? ─► push
+last commit ─► push ─► gh pr ready
 ```
 
-- The first commit is the outline alone, and its push opens a draft pull request.
-- Each outline step is one commit, made once the checks pass, with its box ticked in it.
+- The plan outline is not in the working tree and is never committed.
+- The push of the first commit opens a draft pull request.
+- Each outline step is one commit, made once the checks pass.
 - The branch is pushed at each milestone (a top-level step done with all its children, or the last commit before review), and whenever work stops short of one.
 - No commit message holds a skip tag such as `[skip ci]`.
-- The last step of every outline, "Remove the working files", deletes `.tmp/` in its own commit before `gh pr ready`.
+- Once the last commit is pushed, `gh pr ready` marks the pull request ready.
 - The squash commit's body is a digest: the essence of the change in about 10 lines, then the pull request's link.
 
 ## Dev server
@@ -47,14 +60,14 @@ While a dev server runs from the project, the footer shows `⎔ 2`, the count of
 
 It finds the toolchain (GitHub Actions, GitLab CI, CircleCI, Buildkite, Azure Pipelines, Bitbucket Pipelines, Jenkins, CD platforms that report to the forge, and others), and maps the whole pipeline before it starts: the runs that exist and the ones that start later, such as a deploy that runs after CI. A run counts only if its commit and its trigger event match this context's work, so other people's runs on the same branch are left out.
 
-The map then goes to a background `waffles:ci-watcher` agent that runs `skills/watch-ci/watch.py`. The agent wakes the main agent only when it must act: a failure, an approval, a stall, or the end. Progress shows silently in the background-task panel, for example `CI 3/5 jobs · now "Run tests"`, and the session stays marked as busy while CI runs.
+The map then goes to a background `waffles:ci-watcher` agent that runs `skills/watch-ci/watch.ts`. The agent wakes the main agent only when it must act: a failure, an approval, a stall, or the end. Progress shows silently in the background-task panel, for example `CI 3/5 jobs · now "Run tests"`, and the session stays marked as busy while CI runs.
 
 - On success it reports and stops.
 - On a failure it reads the logs, reruns transient failures once, and fixes failures the change caused, without weakening CI. It pushes the fix only if the context already pushed to that branch, then watches the new run.
 - It never approves deploys.
 - If the runs already finished, it reports the result, and fixes failures, without starting a watcher.
 
-Claude also runs it on its own after a push. It requires `python3`, and an authenticated `gh` for GitHub-hosted CI. The plugin does not install them.
+Claude also runs it on its own after a push. It requires Node.js 22.18 or later, and an authenticated `gh` for GitHub-hosted CI. The plugin does not install them.
 
 ## Debate
 

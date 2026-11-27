@@ -7,22 +7,52 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Agent | Command |
 | --- | --- |
 | Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
-| Codex | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. |
-| Cursor | Not in a marketplace yet. Skills only: hooks and agents are Claude Code only. For local use, link this repo to `~/.cursor/plugins/local/waffles` and reload the window. |
+| OpenCode 2 | Clone this repo and add its absolute path to `plugins` in `~/.config/opencode/opencode.jsonc`. See [OpenCode](docs/opencode.md). |
+| Codex | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/codex.md](docs/codex.md). |
+| Cursor | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/cursor.md](docs/cursor.md). For local use, put this repo at `~/.cursor/plugins/local/waffles` and reload the window. |
+| Antigravity | Not in a marketplace yet. `agy plugin install https://github.com/waffleparty/waffles`. Skills, the modes, unattended runs, the plan outline tool, and the checkpoint: see [docs/antigravity.md](docs/antigravity.md). |
 
-Skills follow the open Agent Skills format. The hooks (modes, plan outline, auto effort, checkpoint, dev servers pane) and the agents load only in Claude Code. Skills that depend on a hook or an agent, such as `/waffles:non-interactive`, need Claude Code.
+Skills follow the open Agent Skills format, so they load on any agent that reads it. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter.
+
+### Features by platform
+
+| Feature | Claude Code | OpenCode 2 | Codex | Cursor | Antigravity |
+| --- | --- | --- | --- | --- | --- |
+| Skills | Yes | Yes, except `plan` | Yes | Yes | Yes |
+| Modes (`/prod`, `/rapid`, `/backlog-entry`) | Yes | Yes | Yes | Yes | Yes |
+| Plan outline tool | Yes | Yes | Yes, through the MCP server | Yes, through the MCP server | Yes, through the MCP server |
+| Plan outline view | Pane and footer | Panel and footer | No | No | No |
+| Pull request checklist after a push | Yes | Yes | Yes | Yes | Yes |
+| Unattended runs | Yes | Yes | Where its plugin hooks run | No: a hook can't refuse a permission prompt or a question | Yes |
+| Auto effort | Yes | Yes | No | No | No |
+| Dev servers menu | Yes | No | No | No | No |
+| `waffles:*` agents | Yes | No: its own agents take their place | No | No | No |
+
+Each platform's page states its limits: [OpenCode](docs/opencode.md), [Codex](docs/codex.md), [Cursor](docs/cursor.md), [Antigravity](docs/antigravity.md). The Codex CLI runs a plugin's hooks only from your own hooks file; its page says how. Cursor and Antigravity are built from their documentation and not yet run on a real install. On any other platform only the skills load, and a platform that speaks MCP can add the [MCP server](docs/mcp.md) by hand.
 
 ## Requirements
 
 | Requirement | Needed for |
 | --- | --- |
-| Claude Code | The hooks and the agents. |
+| Claude Code 2.1.332 or later, or OpenCode 2 | Claude Code 2.1.332 is the version the hooks are tested with in CI; an earlier one may not load hook modules. The hooks: modes, the plan outline, the checkpoint, unattended runs, and auto effort. The agents and the dev servers pane need Claude Code. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
-| `python3` | The scripts in `scripts/`: the checkpoint, builders, the merge queue, the review branch, the backlog queue, and the CI watcher. They use the standard library only. |
+| Node.js 22.18 or later, on the model's shell path | What skills still run from the shell: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts`), and the CI watcher of `/waffles:watch-ci`. Builders, the merge queue, the review branch, the backlog queue, and the checkpoint are tools; their scripts in `scripts/` are the fallback where a platform has no tools, and a person can run them by hand. The MCP server needs Node.js too. All use Node.js built-ins only and run with no build step. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
 Run `/waffles:init-check` to check the session for these.
+
+## Settings
+
+Nothing needs to be set. Each of these is an environment variable of the agent's process.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WAFFLES_REMOTE` | `origin` | The git remote of your checkout that holds the project's pull requests. Builders clone from it, the review branch fetches from it, and the plan outline is copied to it when the branch names no remote of its own. |
+| `WAFFLES_REVIEW_CAP` | Unset: no cap | The open pull requests per repo that may wait for human review. At this count no builder starts. |
+| `WAFFLES_MAX_CONCURRENT_TEST_SUITES` | `3` | The builders that may run their test suites at once on this machine. |
+| `WAFFLES_TEST_SLOTS` | `/tmp/waffles-test-slots-<uid>` | The folder of the test slots' lock files. |
+| `WAFFLES_BUILDERS_ROOT` | `<session scratchpad>/builders` | The folder that holds builders' clones. |
 
 ## Skills
 
@@ -65,6 +95,7 @@ The agents load with the plugin and are available outside the skills that start 
 | --- | --- | --- |
 | Modes | `/prod`, `/rapid`, and `/backlog-entry`, and a statement of the current mode in every conversation. | [Modes](docs/modes.md) |
 | Plan outline | The `mcp__waffles__plan` tool, the pane, the footer item, and the pull request checklist. | [Plan outline](docs/plan-outline.md) |
+| Tools | `mcp__waffles__merge_queue` (how a pull request merges, and where it stands in its base branch's merge queue), `mcp__waffles__checkpoint` (the plan outline into the pull request), `mcp__waffles__review_branch` (one local branch with every pull request that waits for your review), `mcp__waffles__backlog_queue` (tracker writes held while the tracker cannot be reached), and `mcp__waffles__builders` (builders' clones and the open pull request limit). | [MCP server](docs/mcp.md#what-it-offers) |
 | Auto effort | A per-prompt effort pick, and the footer row. | [Modes](docs/modes.md#auto-effort) |
 | Checkpoint | After `git push` and `gh pr create`, the plan outline is rendered into the pull request. | [Plan outline](docs/plan-outline.md#the-checklist-in-the-pull-request) |
 | Dev servers | A footer item that lists the dev servers running from the project, and opens one in the browser. | [Skills](docs/skills.md#dev-server) |
@@ -77,20 +108,28 @@ The agents load with the plugin and are available outside the skills that start 
 - [Plan outline](docs/plan-outline.md): the tree of goals and steps, the pane, and the pull request checklist.
 - [Unattended runs](docs/unattended-runs.md): what a run does, what stays with you, and the permissions you grant it.
 - [Skills](docs/skills.md): commit prep, dev server, watch CI, debate, ask, and UX review.
+- [OpenCode](docs/opencode.md): installing waffles in OpenCode 2, and what works there.
 
 ## Layout
 
 ```text
 waffles/
 ├── .claude-plugin/plugin.json   Claude Code manifest
-├── .codex-plugin/plugin.json    Codex manifest
+├── plugin.json                  Codex manifest, with mcp.json for its MCP server
 ├── .cursor-plugin/plugin.json   Cursor manifest
+├── .antigravity-plugin/plugin.json  Antigravity manifest, with hooks.json and mcp_config.json at the root
 ├── skills/<name>/SKILL.md       Agent Skills (https://agentskills.io/specification)
 ├── agents/                      Claude Code subagents
-├── hooks/                       Claude Code hooks: modes, plan outline, auto effort, checkpoint, dev servers
+├── core/                        The logic, with no platform imports: plan outline, modes, runs, checkpoint
+│   └── tools.ts                 The tools every adapter offers, defined once
+├── hooks/                       The Claude Code adapter: hooks, pane, footer, auto effort, dev servers
 │   ├── hooks.json               Names the module that registers the hooks
-│   └── *.test.ts(x)             Hook tests, run by `claude plugin test`
-├── scripts/                     Python scripts the skills and hooks call, with their tests (*_test.py)
+│   └── *.test.ts(x)             Its tests, run by `claude plugin test`
+├── adapters/node/               The core's host on plain Node.js
+├── adapters/opencode/           The OpenCode 2 adapter: server part and terminal UI part
+├── adapters/command/            The adapter for platforms whose hooks run a command per event, with a table per platform
+├── adapters/mcp/                The MCP server that offers the plan outline tool and the core's tools
+├── scripts/                     Command-line wrappers over the core's tools, test-slot, and their tests (*.spec.ts)
 │   └── bump-version.sh          Writes or checks the version in every manifest
 ├── types/                       Type declarations for the hooks
 ├── docs/                        User documentation
@@ -116,7 +155,7 @@ Do not edit `version` fields by hand. To add a file that holds the version, add 
 
 ## Development
 
-Requirements: Node.js 26.13 or later, `jq`, `python3`, [Claude Code](https://claude.com/claude-code), and [pre-commit](https://pre-commit.com/).
+Requirements: Node.js 26.13 or later, `jq`, [Claude Code](https://claude.com/claude-code), and [pre-commit](https://pre-commit.com/).
 
 ```sh
 npm ci
@@ -129,8 +168,9 @@ Check a change before you push it:
 
 ```sh
 claude plugin validate .                                     # the manifests, skills, agents, and hooks
-claude plugin test                                           # the hooks' tests
-python3 -m unittest discover -s scripts -p '*_test.py'       # the scripts' tests
+claude plugin test                                           # the Claude Code adapter's tests
+npm run typecheck                                            # the core, the adapters, and the scripts
+npm run test:node                                            # their tests, on Node.js
 claude --plugin-dir .                                        # try the plugin from this checkout
 ```
 

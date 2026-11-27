@@ -8,7 +8,8 @@ import { completeMode, endMode, interactionMode, modeContext, MODES_SECTION, reg
 import { completePlan, endPlan, registerPlan, startPlan, submitPlan } from './plan'
 import { RULES, planContext } from './plan-prompt'
 import { footerItem, registerPlanUi } from './plan-ui'
-import { isRunning, registerUnattended, startUnattended, submitUnattended } from './unattended'
+import { registerTools, startTools } from './tools'
+import { isRunning, registerUnattended, submitUnattended } from './unattended'
 
 const RUN = '#f97316'
 const IDLE = '#6495ed'
@@ -23,6 +24,7 @@ export const register: Register = on => {
   registerPlanUi(on)
   registerCheckpoint(on)
   registerDevServers(on)
+  registerTools(on)
 
   // The validator allows one unmatched hook per event per module, so the prompt.submit,
   // prompt.compose, prompt.context, session.start, session.end and turn.complete hooks below call
@@ -71,10 +73,11 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     await startEffort($)
-    await startUnattended($)
     await startMode($)
     // A plan outline that fails to start leaves the dev-server poll to start.
     await startPlan($).catch(() => undefined)
+    // The core's other tools, which the model may call from turn one. A failure leaves the dev-server poll to start.
+    await startTools($).catch(() => undefined)
     await startDevServers($)
     return next(e)
   })

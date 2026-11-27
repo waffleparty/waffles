@@ -5,7 +5,7 @@ description: Add items to the repo's backlog — splits a body of text into indi
 
 # Backlog
 
-Turn the user's text into backlog items for `/waffles:work-loop` to build. Be quick:
+Turn the user's text into backlog items for the waffles work-loop skill to build. Be quick:
 write the items, list what you wrote, and stop. Don't start working on them.
 
 ## Setup
@@ -80,7 +80,7 @@ line naming the sibling items it was split from.>
 the user anything: intent is unambiguous, scope is contained, and there's an obvious
 way to verify it. Anything needing a decision, a judgment call on design or UX,
 credentials, or authorization for something risky is `interactive`. When in
-doubt, `interactive` — `/waffles:backlog-review` can promote it later.
+doubt, `interactive` — the waffles backlog-review skill can promote it later.
 
 `kind: story` when the item builds behavior that a person who uses the
 product sees; `bug` when it fixes behavior that is wrong; otherwise `task`.

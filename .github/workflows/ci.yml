@@ -34,6 +34,10 @@ jobs:
       # Runs every hooks/**/*.test.ts(x) in Claude Code's hook environment.
       - name: Test the hooks
         run: npx --yes "$CLAUDE_CODE" plugin test
-      # Standard library only; python3 is preinstalled on ubuntu-latest.
-      - name: Test the scripts
-        run: python3 -m unittest discover -s scripts -p '*_test.py'
+      # The core, the adapters that run on plain Node.js, and the scripts: the type check, then their tests.
+      - name: Install the development tools
+        run: npm ci
+      - name: Type-check the core, the adapters, and the scripts
+        run: npm run typecheck
+      - name: Test on Node.js
+        run: npm run test:node

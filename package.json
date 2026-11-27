@@ -1,20 +1,30 @@
 {
   "name": "waffles",
   "private": true,
-  "description": "Release tooling for the waffles plugin. This file does not publish a package.",
+  "type": "module",
+  "exports": {
+    ".": "./adapters/opencode/server.ts",
+    "./tui": "./adapters/opencode/tui.tsx"
+  },
+  "description": "Development and release tooling for the waffles plugin. This file does not publish a package.",
   "license": "MIT",
   "engines": {
     "node": ">=26.13"
   },
   "scripts": {
     "release": "semantic-release",
-    "version:check": "scripts/bump-version.sh --check"
+    "version:check": "scripts/bump-version.sh --check",
+    "typecheck": "tsc -p .",
+    "test:node": "node --test \"adapters/**/*.spec.ts\" \"core/**/*.spec.ts\" \"scripts/**/*.spec.ts\" \"skills/**/*.spec.ts\""
   },
   "devDependencies": {
+    "@opencode/plugin": "2.4.2",
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "11.0.1",
     "@semantic-release/github": "12.0.11",
+    "@types/node": "24.19.4",
     "conventional-changelog-conventionalcommits": "10.4.1",
-    "semantic-release": "26.0.1"
+    "semantic-release": "26.0.1",
+    "typescript": "5.9.3"
   }
 }

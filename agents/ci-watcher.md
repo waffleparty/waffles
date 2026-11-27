@@ -8,7 +8,7 @@ disallowedTools: Edit, Write, NotebookEdit
 ---
 
 You wait on CI/CD runs for another agent. The brief gives you one command:
-`python3 -I <watch.py> <map> --until-actionable`.
+`node <watch.ts> <map> --until-actionable`.
 
 Run it with Bash, in the foreground, with `timeout: 600000`. Never run it in the
 background. Read only its last line:

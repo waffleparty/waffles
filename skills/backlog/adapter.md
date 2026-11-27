@@ -184,12 +184,17 @@ Adds an answer or a note to an item, or marks that it waits for a person.
 ## Fallback
 
 In a repo that names an adapter, `.backlog/` is a temporary queue for the time
-the tracker cannot be reached. The queue is `scripts/backlog_queue.py` of the
-waffles plugin (`${CLAUDE_PLUGIN_ROOT}/scripts/backlog_queue.py`, which is
-`<skill-dir>/../../scripts/backlog_queue.py` from a skill's base directory). It keeps the calls in `.backlog/queue.json` of the main
-checkout, and never calls the tracker itself. The queue belongs to 1 machine:
-the script keeps it out of git (a line in `.git/info/exclude`), so another
-clone never replays it again.
+the tracker cannot be reached. The queue is the waffles backlog queue tool
+(`backlog_queue`; each platform adds its own prefix to the name, such as
+`mcp__waffles__backlog_queue`). Where that tool is missing, the queue is
+`scripts/backlog-queue.ts` of the waffles plugin
+(`${CLAUDE_PLUGIN_ROOT}/scripts/backlog-queue.ts`, which is
+`<skill-dir>/../../scripts/backlog-queue.ts` from a skill's base directory;
+`<queue>` below), with the same commands as the tool's `op`, the item as an
+argument, and the other inputs as flags. It keeps the calls in
+`.backlog/queue.json` of the main checkout, and never calls the tracker
+itself. The queue belongs to 1 machine: it keeps the file out of git (a line in
+`.git/info/exclude`), so another clone never replays it again.
 
 ```
 adapter call ─► queue empty? ─no─► replay the queue first ─► unreachable ─► queue this call too
@@ -214,32 +219,36 @@ adapter call ─► queue empty? ─no─► replay the queue first ─► unrea
   It queues nothing.
 - **raise** falls back by writing the item as a `.backlog/` file, as in a repo
   with no tracker, then queuing the raise with the file's name:
-  `python3 -I <queue> add raise <file> --why "<cause>" --data '{"actor": "<actor>"}'`.
+  `{"op": "add", "step": "raise", "item": "<file>", "why": "<cause>", "data": {"actor": "<actor>"}}`
+  (or `node <queue> add raise <file> --why "<cause>" --data '{"actor": "<actor>"}'`).
+  The answer is the entry, with its `seq`.
   The file stays a local item until the raise is replayed: the other skills can
   groom it and work it.
-- **claim, ship, note** fall back by queuing the call with the item's `id`, or
-  with its file name when it has no `id` yet, and the call's other inputs in
-  `--data` (`{"event": "merged", "url": "<pull request>"}`,
+- **claim, ship, note** fall back by queuing the call (`"op": "add"`) with the
+  item's `id`, or with its file name when it has no `id` yet, and the call's
+  other inputs in `data` (`{"event": "merged", "url": "<pull request>"}`,
   `{"text": "<note>", "needs_person": "set"}`). The local file of an item with no
   `id` takes the change too, as in a repo with no tracker. A note's `files` go
-  in `--data` as paths; when the replay finds one gone from the checkout (the
-  working files were removed), the note links it at the last commit that held
-  it instead.
+  in `data` as paths; when the replay finds one gone from the checkout (a
+  later commit removed it), the note links it at the last commit that held it
+  instead.
 - **A claim that fell back holds no lock.** `in work` is the lock across
   machines and people only once the tracker holds it. Say so in the line:
   `… Queued as call <seq>. The tracker does not show <item> as started, so someone else can claim it.`
 - **Replay** at the start of the next call to the adapter, before the call
-  itself: list the queue (`python3 -I <queue> list`), make its first call
-  through the adapter, then remove it (`python3 -I <queue> done <seq>`). For a
-  raise, pass `--id <new id>`: the script names the new `id` in the calls after
-  it and in the `depends:` of the other item files, and deletes the item file,
+  itself: list the queue (`{"op": "list"}`, or `node <queue> list`; the tool
+  answers with `entries`), make its first call through the adapter, then
+  remove it (`{"op": "done", "seq": <seq>}`, or `node <queue> done <seq>`). For a
+  raise, pass the new ID (`"id": "<new id>"`, or `--id <new id>`): the queue
+  names the new `id` in the calls after it and in the `depends:` of the other
+  item files, and deletes the item file,
   or, when work on it already started, renames it to `<id>.md` with an `id:`
   line, as the work-loop's record of the work. List again and repeat until the
   queue is empty. Stop at the first call that is unreachable again, and queue
   the new call after the rest; a call that needs a person is the one exception
   (see below).
 - **A refused call** in the replay is removed and reported, never queued again.
-  `done` of a raise with no `--id` means it was refused: the script removes the
+  `done` of a raise with no `id` means it was refused: the queue removes the
   later calls for its file too, and the file stays a local item.
 - **A call that needs a person**, in a replay with nobody present: leave it,
   and every later call for the same item, in the queue, and replay the calls

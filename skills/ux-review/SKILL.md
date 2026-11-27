@@ -20,6 +20,16 @@ each agent, passes paths between them, asks the user what only they can decide,
 publishes, and handles wake-ups. It does not do the planning, gathering or
 analysis itself.
 
+The pipeline needs subagents that take a model and an effort, messages to a
+running subagent, and Claude's artifacts with their comments (the review page,
+steps 8 to 10). The tools named below are Claude Code's: the Agent tool,
+SendMessage, Artifact, and ArtifactComments. Where the platform's subagents
+take no model or effort, start them as they are. Where it can't send a running
+subagent a message, start a new planner with the run directory and that
+step's brief. Where it has no artifacts, stop after step 7, give the user the
+path of the analysis's `index.html`, and say that the review page needs
+Claude Code.
+
 | Step | Agent | Model / effort | Output in the run directory |
 | --- | --- | --- | --- |
 | 3. Plan | planner | `opus` / `high` | `plan.md`, `areas.json` |
@@ -68,7 +78,7 @@ If nothing in scope renders UI, say so and stop.
    already; don't edit the project's `.gitignore`. The run lives in the repo, not
    the scratchpad, so a later session can re-run it.
 2. Write `run.json`: `{"runId", "createdAt", "scope": <the argument or the changed files>, "appUrl"}`.
-3. Start the app, or reuse the one already running (waffles:dev-server). Do it
+3. Start the app, or reuse the one already running (the waffles dev-server skill). Do it
    here, once, so every agent shares one server instead of each starting its own.
 
 ## 3. Plan
@@ -111,8 +121,8 @@ the run directory, `run.json`, and this:
 
 ## 4. Areas
 
-Ask the user with AskUserQuestion, giving each option a preview that lists the
-areas and their surfaces:
+Ask the user multiple-choice questions (`AskUserQuestion` on Claude Code), giving
+each option a preview that lists the areas and their surfaces:
 
 1. **Partition:** the proposed areas (recommended), the alternative, or "by
    page section" (one area per tab or panel).
@@ -124,8 +134,8 @@ to `areas.json` as `"confirmed": [...]`.
 
 ## 5. Gather
 
-Continue the planner (SendMessage to its ID) with the confirmed areas. It writes
-`tasks.json`: an array of independent gathering tasks,
+Continue the planner with a message to its ID (SendMessage on Claude Code) with
+the confirmed areas. It writes `tasks.json`: an array of independent gathering tasks,
 `{"id", "kind", "area", "brief", "output"}`. Each brief is self-contained and
 mechanical, and its output is a path under `gather/<id>/`. Kinds:
 

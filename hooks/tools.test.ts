@@ -1,0 +1,175 @@
+import { expect, mock, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
+import type { On } from 'claude-code'
+
+import { fakeHost } from '../core/testing.ts'
+import { fakeDisk } from './plan-testing'
+import { textOf, TOOLS } from '../core/tools.ts'
+
+const MERGED = { state: 'MERGED', merged: true, isInMergeQueue: false, mergeQueueEntry: null, autoMergeRequest: null, timelineItems: { nodes: [] } }
+
+// What gh answers in a checkout at /repo for pull request 12 of o/r, merged; any other command finds nothing.
+// Every command is recorded as `[argv, cwd]`.
+function world(on: On) {
+  const runs: [string[], string | undefined][] = []
+  const done = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('clock.now', () => ({ value: 1000 }))
+  on('process.run', ($, e) => {
+    runs.push([[...e.argv], e.init?.cwd])
+    const [command, ...args] = e.argv
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'view') return done(JSON.stringify({ number: 12, url: 'https://github.com/o/r/pull/12', baseRefName: 'main', reviewDecision: '' }))
+    if (command === 'gh' && args[1] === 'graphql') return done(JSON.stringify({ data: { repository: { pullRequest: MERGED } } }))
+    return { value: { exitCode: 1, stdout: '', stderr: 'not here', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  return { runs }
+}
+
+// Starts the session as the engine does, answering what the plugin's other modules ask of it at start.
+async function start($: Engine, on: On) {
+  const tools: { name: string; description: string; inputSchema?: unknown }[] = []
+  on('tool.register', ($, e) => (tools.push(e as never), { value: { tool: `mcp__waffles__${e.name}` } }) as never)
+  on('command.register', ($, e) => ({ value: { command: e.name } }) as never)
+  on('settings.read', () => ({ value: {} }) as never)
+  on('session.start', ($, e) => ({ cwd: e.cwd }) as never)
+  on('fs.exists', () => ({ value: false }))
+  on('fs.list', () => ({ value: [] }))
+  mock.store(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  return tools
+}
+
+test('every core tool is registered with its description and input schema', async ($, on) => {
+  world(on)
+  const tools = await start($, on)
+
+  for (const tool of TOOLS) {
+    expect(tools.find(t => t.name === tool.name)).toEqual(expect.objectContaining({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema }))
+  }
+})
+
+// The hooks module writes each tool's hook out by name: a core tool with no hook here fails this test. Every
+// tool refuses an input it does not take before it runs a command, so the answer is the same on both hosts.
+test("every core tool's calls are answered by the core tool itself", async ($, on) => {
+  world(on)
+  for (const tool of TOOLS) {
+    const said = textOf(await tool.call(fakeHost(), { notAnInput: 1 }))
+    const expected = 'refusal' in said ? { deny: said.refusal } : { result: said.text }
+    expect(await $.tool.call({ tool: `mcp__waffles__${tool.name}`, notAnInput: 1 } as never)).toEqual(expected)
+  }
+})
+
+test('the merge queue answers the main thread and a subagent alike, running gh in the session’s folder', async ($, on) => {
+  const { runs } = world(on)
+  const call = (extra: object) => $.tool.call({ tool: 'mcp__waffles__merge_queue', op: 'state', pr: '12', ...extra } as never)
+
+  expect(await call({})).toEqual({ result: '{"state":"merged","number":12}' })
+  expect(await call({ agentId: 'a1' })).toEqual({ result: '{"state":"merged","number":12}' })
+  expect(runs.map(([argv, cwd]) => [argv.slice(0, 3), cwd])).toEqual([
+    [['gh', 'pr', 'view'], '/repo'],
+    [['gh', 'api', 'graphql'], '/repo'],
+    [['gh', 'pr', 'view'], '/repo'],
+    [['gh', 'api', 'graphql'], '/repo'],
+  ])
+})
+
+test('a tool that fails is a deny with a short reason', async ($, on) => {
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: 'not json', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.log', () => ({ value: undefined }))
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__merge_queue', op: 'mode', pr: '12' } as never)
+  expect(r.deny).toMatch(/^The merge_queue tool failed: /)
+})
+
+test("a failure of gh is a deny with gh's message", async ($, on) => {
+  world(on)
+
+  expect(await $.tool.call({ tool: 'mcp__waffles__merge_queue', op: 'mode', pr: '12' } as never)).toEqual({ deny: 'gh api rules/branches/main failed: not here' })
+})
+
+test('the checkpoint runs in the folder it is given, from the session’s folder, and a failure of git is a deny', async ($, on) => {
+  const { runs } = world(on)
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__checkpoint', folder: 'app', agentId: 'a1' } as never)
+
+  expect(r).toEqual({ deny: 'checkpoint: git rev-parse --path-format=absolute failed: not here' })
+  expect(runs).toEqual([[['git', 'rev-parse', '--path-format=absolute', '--git-dir'], '/repo/app']])
+})
+
+test('the review branch runs git in the main checkout it names', async ($, on) => {
+  const { runs } = world(on)
+  on('fs.exists', () => ({ value: true }))
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__review_branch', op: 'done', repo: 'app' } as never)
+
+  expect(r).toEqual({ deny: 'git rev-parse --show-toplevel failed: not here' })
+  expect(runs).toEqual([[['git', 'rev-parse', '--show-toplevel'], '/repo/app']])
+})
+
+test('2 backlog queue calls at once both land, each holding the lock that the shell create made', async ($, on) => {
+  const disk = fakeDisk(on)
+  disk.cwd = '/repo'
+  disk.files.set('/repo/.backlog/fix-cors.md', '---\nstatus: new\n---\n')
+  on('clock.now', () => ({ value: 1_700_000_000_000 }))
+  on('clock.sleep', () => ({ value: undefined }))
+  on('session.id', () => ({ value: 's1' }))
+  const add = (item: string) => $.tool.call({ tool: 'mcp__waffles__backlog_queue', op: 'add', step: 'note', item, why: 'no network', backlog: '.backlog' } as never)
+
+  const [one, two] = await Promise.all([add('ITEM-1'), add('fix-cors.md')])
+
+  expect([one.deny, two.deny]).toEqual([undefined, undefined])
+  const queue = JSON.parse(disk.files.get('/repo/.backlog/queue.json') ?? '[]') as { seq: number; item: string }[]
+  expect(queue.map(e => e.item).sort()).toEqual(['ITEM-1', 'fix-cors.md'])
+  expect(new Set(queue.map(e => e.seq)).size).toBe(2)
+  // Each call made the lock with the shell create and removed it after.
+  expect(disk.created.filter(path => path === '/repo/.backlog/.queue-lock').length).toBeGreaterThanOrEqual(2)
+  expect(disk.files.has('/repo/.backlog/.queue-lock')).toBe(false)
+  const listed = await $.tool.call({ tool: 'mcp__waffles__backlog_queue', op: 'list', backlog: '/repo/.backlog' } as never)
+  expect(JSON.parse(listed.result ?? '{}').entries.length).toBe(2)
+})
+
+test('builders limits refuses a list of pull requests that Claude Code cut, and names the cap otherwise', async ($, on) => {
+  const runs: [string[], number | undefined][] = []
+  let isCut = true
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('clock.now', () => ({ value: 1000 }))
+  on('fs.exists', () => ({ value: true }))
+  on('fs.stat', ($, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } }) as never)
+  on('process.run', ($, e) => {
+    runs.push([[...e.argv], e.init?.timeoutMs])
+    const stdout = e.argv[0] === 'git' ? '/repo\n' : JSON.stringify([{ number: 1, isDraft: false, reviewRequests: [{}] }])
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: e.argv[0] === 'gh' && isCut, isStderrTruncated: false } }
+  })
+  const limits = () => $.tool.call({ tool: 'mcp__waffles__builders', op: 'limits', repo: '.', cap: 1 } as never)
+
+  expect(await limits()).toEqual({ deny: 'gh pr list printed more than the platform passes on, so nothing is answered from a part of it' })
+  isCut = false
+  expect((await limits()).deny).toMatch(/^Refused: 1 open pull requests in repo wait for human review/)
+  expect(runs.map(([argv, ms]) => [argv[0], ms])).toEqual([['git', 30_000], ['gh', 45_000], ['git', 30_000], ['gh', 45_000]])
+})
+
+test('builders takes WAFFLES_BUILDERS_ROOT over root, as the script does', async ($, on) => {
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.stat', ($, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } }) as never)
+  on('clock.now', () => ({ value: 1000 }))
+  mock.env(on, { WAFFLES_BUILDERS_ROOT: '/clones' })
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__builders', op: 'remove', root: '/scratch/builders', path: '/scratch/builders/o/r/ITEM-1' } as never)
+
+  expect(r).toEqual({ deny: "Refused: /scratch/builders/o/r/ITEM-1 is not a builder's clone under /clones." })
+})
+
+test('a stdout that Claude Code cut is refused, not read in part', async ($, on) => {
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('clock.now', () => ({ value: 1000 }))
+  on('process.run', ($, e) => {
+    const [command, ...args] = e.argv
+    const stdout = command === 'git' ? (args.includes('--git-dir') ? '/repo/.git\n' : 'feat\n') : '{"number": 7, "body": "'
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: command === 'gh', isStderrTruncated: false } }
+  })
+
+  const r = await $.tool.call({ tool: 'mcp__waffles__checkpoint' } as never)
+
+  expect(r).toEqual({ deny: 'checkpoint: gh pr view printed more than the platform passes on, so the checkpoint does not go on from a part of it' })
+})

@@ -55,8 +55,8 @@ Order the questions so that ones whose answers change other questions come first
 Start with one short chat message: how many open items you found and their headers, so the user
 can orient before the dialog opens.
 
-Ask with AskUserQuestion, up to 4 questions per call. Put questions in the same call only when
-they're independent; a question whose options or relevance depend on another's answer goes in a
+Ask the user multiple-choice questions (`AskUserQuestion` on Claude Code), up to 4 questions per
+call. Put questions in the same call only when they're independent; a question whose options or relevance depend on another's answer goes in a
 later call, rewritten in light of that answer. Drop questions an answer made moot.
 
 After each call, record its answers (step 4) before the next call. Keep, for each question: the
