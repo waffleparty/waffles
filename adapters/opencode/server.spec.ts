@@ -8,10 +8,13 @@ import type { Entry } from '../../core/backlog-queue.ts'
 import { MERGE_QUEUE_TOOL } from '../../core/merge-queue.ts'
 import { modesText } from '../../core/modes.ts'
 import { SUBAGENT } from '../../core/plan.ts'
+import { addSteps, newGoal, serializeGoal } from '../../core/plan-tree.ts'
 import { TOOLS } from '../../core/tools.ts'
 import plugin, { NAMES, pluginRoot, readSkills, sessionState, skillHeader } from './server.ts'
 
 type Json = Record<string, unknown>
+
+const NOW = '2026-11-15T12:00:00.000Z'
 
 type Tool = {
   name: string
@@ -24,7 +27,7 @@ type Tool = {
 // A stand-in for OpenCode's plugin context: it keeps what the plugin registers, and a session record per ID.
 // `emit` sends an event to the plugin's subscription; `question` is OpenCode's built-in question tool,
 // which answers `answer` unless its signal aborts first.
-async function fakeContext(sessionInfo: Record<string, { parentID?: string; time?: { busy?: number; idle?: number } }> = { s1: {} }) {
+async function fakeContext(sessionInfo: Record<string, { parentID?: string; time?: { busy?: number; idle?: number }; metadata?: Json }> = { s1: {} }) {
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'waffles-opencode-')))
   const sessions = new Map<string, { id: string; parentID?: string; metadata?: Json; time: { busy?: number; idle?: number }; location: { directory: string } }>()
   for (const [id, info] of Object.entries(sessionInfo)) sessions.set(id, { id, time: {}, ...info, location: { directory: root } })
@@ -167,12 +170,12 @@ test('the session keeps its mode on its record, and the values a view draws from
   await state.set('planChanged', ['1'])
   // Another plugin's metadata stays, and only the kept values are written.
   assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid' } })
-  // The plan outline's tree and its collapsed steps are written for the terminal UI part, and not read back.
+  // The plan outline's tree is written for the terminal UI part, and not read back; its collapsed steps are read back.
   await state.set('planTree', null)
   await state.set('planCollapsed', { goal: 'g', ids: ['2'] })
-  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planTree: null, planCollapsed: { goal: 'g', ids: ['2'] } } })
+  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planCollapsed: { goal: 'g', ids: ['2'] }, planTree: null } })
   assert.equal(await sessionState(ctx as never, 's1').get('planTree'), null)
-  assert.equal(await sessionState(ctx as never, 's1').get('planCollapsed'), null)
+  assert.deepEqual(await sessionState(ctx as never, 's1').get('planCollapsed'), { goal: 'g', ids: ['2'] })
   assert.deepEqual(await state.get('planChanged'), ['1'])
   // A reopened session reads its mode back from the record.
   assert.equal(await sessionState(ctx as never, 's1').get('mode'), 'rapid')
@@ -464,6 +467,21 @@ test('a prompt typed during a running turn, or a skill command, ends no turn of 
   await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
   await tool.execute({ op: 'show' }, { sessionID: 's1' })
   // 2.1 was added this turn, so 2 stays expanded.
+  assert.equal(collapsed(), null)
+  await cleanup()
+})
+
+test('after a restart the collapsed steps are read back from the record, so a first click toggles what the panel shows', async () => {
+  // What the server part wrote before the restart: 2 collapsed.
+  const { root, registered, sessions, cleanup } = await fakeContext({ s1: { metadata: { waffles: { planCollapsed: { goal: 'ship-it', ids: ['2'] } } } } })
+  const goal = addSteps(newGoal('Ship it', [{ title: 'Build' }, { title: 'Test' }], NOW), '2', 'planned', ['Unit'], NOW).goal
+  await fs.mkdir(join(root, '.waffles', 'plan'), { recursive: true })
+  await fs.writeFile(join(root, '.waffles', 'plan', 'ship-it.md'), serializeGoal(goal))
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+
+  await registered.tools[0]!.execute({ op: 'goal', switch: 'ship-it' }, { sessionID: 's1' })
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
+  await registered.rpcs['waffles.plan']!.press!({ sessionID: 's1', id: '2' })
   assert.equal(collapsed(), null)
   await cleanup()
 })

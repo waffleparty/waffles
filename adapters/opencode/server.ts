@@ -69,11 +69,13 @@ export const NAMES: Names = {
 
 // The session's metadata key that holds the values a session must get back when it is reopened.
 const METADATA = 'waffles'
-// The values written to the session's record and read back when the session is reopened.
-const KEPT: readonly (keyof SessionState)[] = ['mode', 'rapidBase', 'run']
+// The values written to the session's record and read back when the session is reopened, or the server
+// restarts. The plan outline's collapsed steps are the terminal UI part's to draw too: read back, a click
+// after a restart toggles from what the panel shows.
+const KEPT: readonly (keyof SessionState)[] = ['mode', 'rapidBase', 'run', 'planCollapsed']
 // The values written to the record for the terminal UI part to draw, and never read back: the plan
 // outline is redrawn from its files.
-const SHOWN: readonly (keyof SessionState)[] = ['planTree', 'planCollapsed']
+const SHOWN: readonly (keyof SessionState)[] = ['planTree']
 // The keys of the session's instruction entries: the blocks the model reads beside the instructions.
 const MODE_ENTRY = 'waffles-mode'
 const PLAN_ENTRY = 'waffles-plan-outline'
