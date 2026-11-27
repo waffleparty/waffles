@@ -41,6 +41,8 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string; time
     answer: '{"level": "low", "why": "a lookup"}',
     // The session's messages, as session.context gives them.
     messages: [] as Json[],
+    // The RPCs registered, by ID: their methods.
+    rpcs: {} as Record<string, Record<string, (input: unknown) => Promise<unknown>>>,
   }
   const question: Tool & { answer: Promise<{ content: string }> | null } = {
     name: 'question',
@@ -111,6 +113,12 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string; time
     },
     command: { transform: async (edit: (editor: Json) => void) => edit({ add: (command: never) => registered.commands.push(command) }) },
     permission: { hook: hook('permission') },
+    rpc: {
+      register: async (definition: { id: string }, handlers: Record<string, (input: unknown) => Promise<unknown>>) => {
+        registered.rpcs[definition.id] = handlers
+        return { dispose: async () => undefined, events: { emit: async () => undefined } }
+      },
+    },
     event: {
       subscribe: ({ signal }: { signal: AbortSignal }) => ({
         async *[Symbol.asyncIterator]() {
@@ -159,10 +167,12 @@ test('the session keeps its mode on its record, and the values a view draws from
   await state.set('planChanged', ['1'])
   // Another plugin's metadata stays, and only the kept values are written.
   assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid' } })
-  // The plan outline's tree is written for the terminal UI part, and not read back.
+  // The plan outline's tree and its collapsed steps are written for the terminal UI part, and not read back.
   await state.set('planTree', null)
-  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planTree: null } })
+  await state.set('planCollapsed', { goal: 'g', ids: ['2'] })
+  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planTree: null, planCollapsed: { goal: 'g', ids: ['2'] } } })
   assert.equal(await sessionState(ctx as never, 's1').get('planTree'), null)
+  assert.equal(await sessionState(ctx as never, 's1').get('planCollapsed'), null)
   assert.deepEqual(await state.get('planChanged'), ['1'])
   // A reopened session reads its mode back from the record.
   assert.equal(await sessionState(ctx as never, 's1').get('mode'), 'rapid')
@@ -419,6 +429,24 @@ test("the core's sweep sees each child session, running while its last turn has 
   const steps = await treeWhen(sessions, all => all[0]?.agent === undefined)
   assert.equal(steps[0]?.state, 'review')
   assert.equal(steps[1]?.agent, 'working')
+  await cleanup()
+})
+
+test("a click on a parent step's row, through the server part's RPC, collapses and expands it in the session's metadata", async () => {
+  const { registered, sessions, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  const tool = registered.tools[0]!
+  await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+  const press = registered.rpcs['waffles.plan']!.press!
+
+  assert.deepEqual(await press({ sessionID: 's1', id: '2' }), {})
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
+  await press({ sessionID: 's1', id: '2' })
+  assert.equal(collapsed(), null)
+  // A subagent's session, an unknown session, and no press change nothing.
+  for (const input of [{ sessionID: 'child', id: '2' }, { sessionID: 'none', id: '2' }, { id: '2' }]) assert.deepEqual(await press(input), {})
+  assert.equal(collapsed(), null)
   await cleanup()
 })
 

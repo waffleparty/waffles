@@ -1,3 +1,5 @@
+import type { Rpc } from '@opencode/plugin'
+
 import type { SessionState } from '../../core/host.ts'
 import { currentOf } from '../../core/plan.ts'
 import type { Goal } from '../../core/plan-tree.ts'
@@ -7,7 +9,7 @@ import { cut, paneRows, width, type Piece } from '../../core/plan-view.ts'
  * What the terminal UI part draws, from the `waffles` value the server part keeps in a session's
  * metadata. The terminal UI can run on another machine than the server, so it reads nothing else.
  */
-type Kept = Partial<Pick<SessionState, 'mode' | 'run' | 'planTree'>>
+type Kept = Partial<Pick<SessionState, 'mode' | 'run' | 'planTree' | 'planCollapsed'>>
 
 const keptOf = (metadata: unknown): Kept => {
   const kept = (metadata as { waffles?: unknown } | null | undefined)?.waffles
@@ -15,6 +17,12 @@ const keptOf = (metadata: unknown): Kept => {
 }
 
 const goalOf = (kept: Kept): Goal | null => (kept.planTree && Array.isArray(kept.planTree.steps) ? kept.planTree : null)
+
+// The server part keeps the collapsed steps of the tree it keeps, so they are the drawn goal's.
+const collapsedOf = (kept: Kept): string[] => {
+  const ids = kept.planCollapsed?.ids
+  return Array.isArray(ids) ? ids.filter(id => typeof id === 'string') : []
+}
 
 // The mark's color for each mode, as on Claude Code: a run, production, backlog, rapid.
 const RUN = '#f97316'
@@ -74,6 +82,36 @@ export function noticeOf(metadata: unknown, seen: number | null): { text: string
 
 /** The plan outline's rows for a panel `room` columns wide, as on Claude Code; empty with no goal drawn. */
 export function outlineRows(metadata: unknown, room: number): Piece[][] {
-  const goal = goalOf(keptOf(metadata))
-  return goal ? paneRows(goal, true, false, null, null, [], [], [], room) : []
+  const kept = keptOf(metadata)
+  const goal = goalOf(kept)
+  return goal ? paneRows(goal, true, false, null, null, [], [], collapsedOf(kept), room) : []
+}
+
+/** The ID of the step a click on the row collapses or expands; undefined for a row of no parent step. */
+export const toggleOf = (row: readonly Piece[]): string | undefined => row.find(piece => piece.toggle !== undefined)?.toggle
+
+/**
+ * The server part's RPC that the terminal UI part calls on a click on a parent step's row: `press`
+ * collapses or expands the step in the session's plan outline, as a press does on Claude Code.
+ */
+export const PLAN_RPC = {
+  id: 'waffles.plan',
+  methods: {
+    press: {
+      input: {
+        type: 'object',
+        properties: { sessionID: { type: 'string' }, id: { type: 'string' } },
+        required: ['sessionID', 'id'],
+        additionalProperties: false,
+      },
+      output: { type: 'object' },
+    },
+  },
+  events: {},
+} as const satisfies Rpc.PortableDefinition
+
+/** The input of a `press`, or null when it is not one. */
+export function pressOf(input: unknown): { sessionID: string; id: string } | null {
+  const { sessionID, id } = (input ?? {}) as { sessionID?: unknown; id?: unknown }
+  return typeof sessionID === 'string' && typeof id === 'string' ? { sessionID, id } : null
 }

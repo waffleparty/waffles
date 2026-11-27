@@ -21,14 +21,14 @@ import {
   submitMode,
   wafflesMode,
 } from '../../core/modes.ts'
-import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, spawnPlan, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
+import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, pressPlan, spawnPlan, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
 import { textOf, TOOLS } from '../../core/tools.ts'
 import { isRunCommand, permissionAsked, submitUnattended } from '../../core/unattended.ts'
 import { nodeHost } from '../node/host.ts'
 import { autoEffort, EFFORT_COMMAND, EFFORT_DESCRIPTION, type ModelRef, type Variant } from './effort.ts'
 import { guardQuestion, QUESTION_TOOL } from './unattended.ts'
-import { NOTICE } from './view.ts'
+import { NOTICE, PLAN_RPC, pressOf } from './view.ts'
 
 /**
  * The waffles plugin's server part for OpenCode 2: the plan outline tool, the core's other tools, the
@@ -73,7 +73,7 @@ const METADATA = 'waffles'
 const KEPT: readonly (keyof SessionState)[] = ['mode', 'rapidBase', 'run']
 // The values written to the record for the terminal UI part to draw, and never read back: the plan
 // outline is redrawn from its files.
-const SHOWN: readonly (keyof SessionState)[] = ['planTree']
+const SHOWN: readonly (keyof SessionState)[] = ['planTree', 'planCollapsed']
 // The keys of the session's instruction entries: the blocks the model reads beside the instructions.
 const MODE_ENTRY = 'waffles-mode'
 const PLAN_ENTRY = 'waffles-plan-outline'
@@ -367,6 +367,21 @@ const plugin: Plugin.Plugin = {
       }
     })
 
+    // A click on a parent step's row in the terminal UI part's panel collapses or expands the step. Where
+    // OpenCode registers no RPC, the panel takes no clicks and the automatic rules alone decide.
+    const rpc = await Promise.resolve()
+      .then(() =>
+        ctx.rpc.register(PLAN_RPC, {
+          press: async input => {
+            const press = pressOf(input)
+            const session = press ? await sessionOf(press.sessionID).catch(() => null) : null
+            if (press && session && !session.isChild && session.started) await pressPlan(session.$, press.id)
+            return {}
+          },
+        }),
+      )
+      .catch(() => null)
+
     // The rules go last in the system prompt, with the same bytes in every request, so the prompt cache holds.
     const modes = modesText(NAMES)
     const rules = planRules(NAMES)
@@ -482,7 +497,7 @@ const plugin: Plugin.Plugin = {
     return async () => {
       clearInterval(timer)
       events.abort()
-      await Promise.all([context.dispose(), prompt.dispose(), permission.dispose(), after.dispose()].map(done => Promise.resolve(done).catch(() => undefined)))
+      await Promise.all([context.dispose(), prompt.dispose(), permission.dispose(), after.dispose(), rpc?.dispose()].map(done => Promise.resolve(done).catch(() => undefined)))
     }
   },
 }

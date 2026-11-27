@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { addSteps, closeSteps, newGoal } from '../../core/plan-tree.ts'
-import { footerParts, noticeOf, outlineRows, PIECE_COLORS } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS, pressOf, toggleOf } from './view.ts'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 const goal = () => newGoal('Ship it', [{ title: 'Build', kind: 'planned' }, { title: 'Test', kind: 'planned' }], NOW)
@@ -60,4 +60,22 @@ test("a command's line shows once, by the time it was left", () => {
 
 test('a tree that is not a goal draws nothing', () => {
   assert.deepEqual(outlineRows({ waffles: { planTree: { title: 'x' } } }, 40), [])
+})
+
+test('the panel draws the collapsed steps the server part keeps, and a parent row names the step a click toggles', () => {
+  const planTree = addSteps(addSteps(goal(), '2', 'work', ['Fix', 'Lint'], NOW).goal, '1', 'planned', ['Parse'], NOW).goal
+  const rows = outlineRows({ waffles: { planTree, planCollapsed: { goal: 'ship-it', ids: ['2'] } } }, 40)
+  assert.deepEqual(textOf(rows), ['Ship it', '⌄ ▶ 1 Build', '    ○ 1.1 Parse', '› ○ 2 Test (2)'])
+  assert.deepEqual(rows.map(toggleOf), [undefined, '1', undefined, '2'])
+  // The current step's row stays cyan, for the panel's scroll to find.
+  assert.ok(rows.some(row => row.some(piece => piece.color === 'cyan')))
+  // Collapsed steps that are not a list of IDs are none.
+  for (const planCollapsed of [null, {}, { ids: 'x' }, { ids: [2] }]) {
+    assert.deepEqual(textOf(outlineRows({ waffles: { planTree, planCollapsed } }, 40)).at(-1), '    ○ 2.2 ⤷ Lint')
+  }
+})
+
+test('a press names its session and its step, or is no press', () => {
+  assert.deepEqual(pressOf({ sessionID: 's1', id: '2' }), { sessionID: 's1', id: '2' })
+  for (const input of [undefined, null, {}, { sessionID: 's1' }, { sessionID: 1, id: '2' }]) assert.equal(pressOf(input), null)
 })
