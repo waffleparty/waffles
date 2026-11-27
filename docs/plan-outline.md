@@ -130,9 +130,30 @@ A turn that Claude starts with no prompt of yours (after a background subagent f
 
 Work in progress is always visible: the main thread's current step, a step a background subagent works on, and a step waiting for review. No step above them stays collapsed, and work that starts during a turn shows at once. Steps collapse only at the end of a turn, or by a click.
 
-A click on a parent step's row collapses or expands it at once. In Claude Code's pane, Tab to the row and Enter does the same while the pane has the keyboard. A click made during a turn holds through that turn's end; at the end of the next turn, the rules decide again. A click made between turns holds until the end of the next turn, where the rules decide again. When they do, a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
+A click on a parent step's row collapses or expands it at once. In Claude Code's pane, the keyboard does the same (see [Keys](#keys)). A click made during a turn holds through that turn's end; at the end of the next turn, the rules decide again. A click made between turns holds until the end of the next turn, where the rules decide again. When they do, a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
 
 The collapsed steps are view state: each session keeps its own, and no goal file holds them. `/clear` and `/resume` start the new conversation with every step expanded. A step that is not known is expanded. A moved step keeps its state under its new ID. Another goal starts with every step expanded.
+
+### Keys
+
+The keys are the harness's defaults. The plugin cannot add or change key bindings; you change them in the harness's own configuration.
+
+**Claude Code** (context and action names are for `~/.claude/keybindings.json`):
+
+| Key | Does | Action | Context |
+| --- | --- | --- | --- |
+| `ctrl+x tab` | Moves the keyboard from the prompt to the pane | `abovePrompt:focus` | `Chat` |
+| `tab`, `right` | Next parent row | `abovePrompt:next` | `AbovePrompt` |
+| `shift+tab`, `left` | Previous parent row | `abovePrompt:previous` | `AbovePrompt` |
+| `enter`, `space` | Collapses or expands the selected row | `abovePrompt:press` | `AbovePrompt` |
+| `up`, `down`, `pageup`, `pagedown`, `home`, `end` | Scroll the pane | `pane:scrollUp` and the others | `AbovePrompt` |
+| `escape` | Gives the keyboard back to the prompt | `abovePrompt:leave` | `AbovePrompt` |
+| `ctrl+x left`, `ctrl+x right` | Widens or narrows the pane | `pane:grow`, `pane:shrink` | `Pane` |
+| `ctrl+x x` | Closes the pane | `pane:close` | `Pane` |
+
+Only parent rows take the keyboard; a leaf row has nothing to press. To move between rows with `up` and `down`, bind them to `abovePrompt:next` and `abovePrompt:previous` in the `AbovePrompt` context. The pane still scrolls with `pageup`, `pagedown`, `home`, and `end`. That binding applies to every plugin's pane and panel above the prompt.
+
+**OpenCode:** the panel's rows take the mouse only. A click on a parent row collapses or expands it, and the wheel scrolls. While the panel has the focus, OpenCode's scroll keys scroll it. `/plan-outline` opens or closes the panel; its command ID `waffles.plan` can be bound to a key in OpenCode's keybind configuration.
 
 ## Sessions and locks
 
