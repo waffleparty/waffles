@@ -15,7 +15,8 @@
     "release": "semantic-release",
     "version:check": "scripts/bump-version.sh --check",
     "typecheck": "tsc -p .",
-    "test:node": "node --test \"adapters/**/*.spec.ts\" \"core/**/*.spec.ts\" \"scripts/**/*.spec.ts\" \"skills/**/*.spec.ts\""
+    "test:node": "node --test \"adapters/**/*.spec.ts\" \"core/**/*.spec.ts\" \"scripts/**/*.spec.ts\" \"skills/**/*.spec.ts\"",
+    "build:npm": "node scripts/build-npm.ts"
   },
   "devDependencies": {
     "@opencode/plugin": "2.4.2",
