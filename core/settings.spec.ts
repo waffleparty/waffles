@@ -8,10 +8,10 @@ const host = (env: Record<string, string>) => {
   return { env: async (name: string) => env[name], log: (message: string) => void logged.push(message), logged }
 }
 
-test('with nothing set, the remote is origin and the cap is 10', async () => {
+test('with nothing set, the remote is origin and there is no cap', async () => {
   const $ = host({})
   assert.equal(await remoteName($), 'origin')
-  assert.equal(await reviewCap($), 10)
+  assert.equal(await reviewCap($), null)
   assert.deepEqual($.logged, [])
 })
 
@@ -24,9 +24,9 @@ test('the environment names another remote and another cap', async () => {
 test('a value that cannot be used is logged, and the default holds', async () => {
   const $ = host({ WAFFLES_REMOTE: '--upload-pack=x', WAFFLES_REVIEW_CAP: '0' })
   assert.equal(await remoteName($), 'origin')
-  assert.equal(await reviewCap($), 10)
+  assert.equal(await reviewCap($), null)
   assert.deepEqual($.logged, [
     'WAFFLES_REMOTE is "--upload-pack=x", which names no git remote: origin is used.',
-    'WAFFLES_REVIEW_CAP is "0", which is no count from 1 up: 10 is used.',
+    'WAFFLES_REVIEW_CAP is "0", which is no count from 1 up: no cap is used.',
   ])
 })

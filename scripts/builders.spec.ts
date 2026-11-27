@@ -8,7 +8,7 @@ import { delimiter, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { REVIEW_CAP, TEST_SLOTS, main, ownerRepo, type Out } from './builders.ts'
+import { TEST_SLOTS, main, ownerRepo, type Out } from './builders.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -223,7 +223,7 @@ describe('no patch recipes', () => {
 
   test("the limits in work-loop are the script's", () => {
     const text = readFileSync(join(SKILLS, 'work-loop', 'SKILL.md'), 'utf8').split(/\s+/).filter(Boolean).join(' ')
-    assert.ok(text.includes(`At most ${REVIEW_CAP} open pull requests per repo that wait for human review`))
+    assert.ok(text.includes('A cap on the open pull requests per repo that wait for human review, when the person set one in `WAFFLES_REVIEW_CAP`'))
     assert.ok(text.includes(`${TEST_SLOTS} builders running tests at once on this machine`))
     assert.ok(text.includes('builders.ts limits --repo <main>'))
   })
@@ -284,17 +284,24 @@ describe('limits', () => {
   }
 
   // stdout when it counted; stderr, with nothing on stdout, when it refused or could not count.
-  async function limits(): Promise<[number, string]> {
+  async function limits(...cap: string[]): Promise<[number, string]> {
     const [out, err] = [new Capture(), new Capture()]
-    const code = await main(['limits', '--repo', repo], out, err)
+    const code = await main(['limits', '--repo', repo, ...cap], out, err)
     if (code === 0) return [code, out.text]
     assert.equal(out.text, '')
     return [code, err.text]
   }
 
-  test('with 10 pull requests waiting for review no builder starts, and the reason lists them', async () => {
+  test('with no cap set, 10 pull requests waiting for review are counted and nothing is refused', async () => {
     prs(Array.from({ length: 10 }, (_, i) => pr(i + 1)))
     const [code, out] = await limits()
+    assert.equal(code, 0, out)
+    assert.deepEqual(JSON.parse(out), { waiting: 10, cap: null, numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] })
+  })
+
+  test('at a cap of 10, with 10 pull requests waiting for review no builder starts, and the reason lists them', async () => {
+    prs(Array.from({ length: 10 }, (_, i) => pr(i + 1)))
+    const [code, out] = await limits('--cap', '10')
     assert.equal(code, 3)
     assert.ok(out.includes('Refused: 10 open pull requests in widget wait for human review (ready, with a review requested), and the cap is 10.'))
     assert.ok(out.includes('- #10 Item 10: https://github.com/example/widget/pull/10'))
@@ -307,7 +314,7 @@ describe('limits', () => {
     delete list[2]!.url
     for (const key of ['number', 'title', 'url'] as const) delete list[3]![key]
     prs(list as ReturnType<typeof pr>[])
-    const [code, out] = await limits()
+    const [code, out] = await limits('--cap', '10')
     assert.equal(code, 3)
     assert.doesNotMatch(out, /undefined/)
     const lines = out.split('\n').filter((line) => line.startsWith('- '))
@@ -323,7 +330,7 @@ describe('limits', () => {
     prs([...Array.from({ length: 9 }, (_, i) => pr(i + 1)), pr(20, true), pr(21, false, false)])
     const [code, out] = await limits()
     assert.equal(code, 0, out)
-    assert.deepEqual(JSON.parse(out), { waiting: 9, cap: 10, numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9] })
+    assert.deepEqual(JSON.parse(out), { waiting: 9, cap: null, numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9] })
   })
 
   test('when gh cannot count, the reason says so', async () => {

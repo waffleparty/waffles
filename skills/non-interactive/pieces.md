@@ -47,8 +47,9 @@ missing, run `node <skill-dir>/../../scripts/builders.ts` with the same op and
 its inputs as flags, as each step below gives it; the script prints the same
 answer as JSON.
 
-- **10 open pull requests per repo that wait for human review** (the tool
-  reads another count from `WAFFLES_REVIEW_CAP`). Call the
+- **A cap on the open pull requests per repo that wait for human review**,
+  when the person set one in `WAFFLES_REVIEW_CAP` (unset, the tool only
+  counts, and never refuses). Call the
   builders tool with `{"op": "limits", "repo": "<main checkout>"}`; where it
   is missing, run
   `node <skill-dir>/../../scripts/builders.ts limits --repo <main checkout>`.

@@ -1,6 +1,6 @@
 import { answerOf, deadlineIn, Failed, outcomeOf, Refused, run, type Outcome } from './commands.ts'
 import type { Host } from './host.ts'
-import { DEFAULT_REVIEW_CAP, remoteName, reviewCap } from './settings.ts'
+import { remoteName, reviewCap } from './settings.ts'
 import { absolute, basename, dirname, inside, join, normalize } from './paths.ts'
 import type { CoreTool, Json } from './tools.ts'
 
@@ -29,16 +29,13 @@ import type { CoreTool, Json } from './tools.ts'
  * branch or a detached HEAD), and the folders above it that it leaves empty.
  *
  * limits counts, from GitHub, the open pull requests of the repo that wait for human review: marked ready (not a
- * draft), with a review requested from a person or a team. It counts every developer's. At the cap (the call's, else $WAFFLES_REVIEW_CAP, else 10) it refuses:
+ * draft), with a review requested from a person or a team. It counts every developer's. At the cap (the call's, else $WAFFLES_REVIEW_CAP; with neither there is no cap, and it only counts) it refuses:
  * waffles starts no builder in that repo until one is reviewed, and the reason lists them. A pull request that an
  * agent will merge itself has no review requested, so it is not counted. A list that the platform cut is refused.
  *
  * Time limits: 30 s for each local git command, 60 s for gh, 2 minutes for a fetch, 5 minutes for the clone itself.
  * A clone call takes at most 6 minutes in all, a remove 3, and limits 45 s.
  */
-
-// At most this many open pull requests per repo that wait for human review, unless $WAFFLES_REVIEW_CAP or the call says another.
-export const REVIEW_CAP = DEFAULT_REVIEW_CAP
 
 const LOCAL_MS = 30_000
 const GH_MS = 60_000
@@ -51,7 +48,8 @@ const REMOTE = /[:/]([^/:]+)\/([^/]+?)(?:\.git)?\/?$/
 
 export type Clone = { path: string; branch: string; base: unknown; reused: boolean }
 export type Removed = { path: string; removed: true }
-export type Limits = { waiting: number; cap: number; numbers: number[] }
+/** cap is null when neither the call nor $WAFFLES_REVIEW_CAP sets one. */
+export type Limits = { waiting: number; cap: number | null; numbers: number[] }
 export type BuildersInput =
   | { op: 'clone'; root?: string; repo: string; item: string; branch: string; base?: string }
   | { op: 'remove'; root?: string; path: string }
@@ -218,10 +216,10 @@ function listLine(pr: PullRequest): string {
   return `- ${[name, pr.url || ''].filter(Boolean).join(': ') || 'a pull request that gh gave no number, title, or URL for'}`
 }
 
-async function limits(c: Call, repo: string, cap: number): Promise<Limits> {
+async function limits(c: Call, repo: string, cap: number | null): Promise<Limits> {
   const main = await mainOf(c, repo)
   const waiting = (await waitingForReview(c, main)).sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-  if (waiting.length >= cap) {
+  if (cap !== null && waiting.length >= cap) {
     const listed = waiting.map(listLine).join('\n')
     throw new Refused(
       `${waiting.length} open pull requests in ${basename(main)} wait for human review (ready, with a review ` +
@@ -285,7 +283,7 @@ const LIMITS_ANSWER = {
   required: ['waiting', 'cap', 'numbers'],
   properties: {
     waiting: { type: 'integer', description: 'The open pull requests that wait for human review.' },
-    cap: { type: 'integer' },
+    cap: { type: ['integer', 'null'], description: 'The cap in force; null when none is set.' },
     numbers: { type: 'array', items: { type: 'integer' }, description: 'Their numbers.' },
   },
   additionalProperties: false,
@@ -295,7 +293,7 @@ export const BUILDERS_TOOL: CoreTool = {
   name: 'builders',
   title: 'Builders',
   description:
-    "Gives a builder (an agent that builds one item) its own full clone of the repo, removes it once merged, and checks the open pull request limit. op clone makes <root>/<owner>/<repo>/<item> from the main checkout repo's remote ($WAFFLES_REMOTE, else origin), on branch (checked out from origin when it is there, else started from origin's base, the default branch when left out), and answers with its path; a clone of the item on the same branch is reused, and one on another branch is refused. op remove deletes the clone at path, under root, and refuses one that holds changes, a stash, or commits that origin lacks. op limits counts the open pull requests of repo that wait for human review (ready, with a review requested), and refuses at cap (left out: $WAFFLES_REVIEW_CAP, else 10), listing them: then start no builder in that repo. $WAFFLES_BUILDERS_ROOT, when set, takes the place of root. Test runs are not this tool: run each through the shell command `node <scripts>/builders.ts test-slot -- <command>`, which holds 1 of the machine's test slots for as long as the command runs, longer than a tool call may take.",
+    "Gives a builder (an agent that builds one item) its own full clone of the repo, removes it once merged, and checks the open pull request limit. op clone makes <root>/<owner>/<repo>/<item> from the main checkout repo's remote ($WAFFLES_REMOTE, else origin), on branch (checked out from origin when it is there, else started from origin's base, the default branch when left out), and answers with its path; a clone of the item on the same branch is reused, and one on another branch is refused. op remove deletes the clone at path, under root, and refuses one that holds changes, a stash, or commits that origin lacks. op limits counts the open pull requests of repo that wait for human review (ready, with a review requested), and, when a cap is set (cap, else $WAFFLES_REVIEW_CAP; with neither there is none), refuses at it, listing them: then start no builder in that repo. $WAFFLES_BUILDERS_ROOT, when set, takes the place of root. Test runs are not this tool: run each through the shell command `node <scripts>/builders.ts test-slot -- <command>`, which holds 1 of the machine's test slots for as long as the command runs, longer than a tool call may take.",
   inputSchema: {
     type: 'object',
     required: ['op'],
@@ -307,7 +305,7 @@ export const BUILDERS_TOOL: CoreTool = {
       branch: { type: 'string', description: "clone: the builder's branch." },
       base: { type: 'string', description: "clone: the branch to start from, for an item stacked on another's. Left out: origin's default branch." },
       path: { type: 'string', description: "remove: the clone's folder." },
-      cap: { type: 'integer', description: 'limits: the cap, 10 when left out.' },
+      cap: { type: 'integer', description: 'limits: the cap. Left out: $WAFFLES_REVIEW_CAP, and no cap when that is unset.' },
     },
     additionalProperties: false,
   },

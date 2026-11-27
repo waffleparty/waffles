@@ -43,7 +43,7 @@ test('builders is one of the core tools, and test-slot is not a tool', async () 
 
 test('limits counts the ready pull requests with a review requested, in the main checkout, within the 45 s of the call', async () => {
   const $ = widget({ stdout: JSON.stringify([pr(3), pr(1), pr(2, true), pr(4, false, false)]) })
-  assert.deepEqual(await BUILDERS_TOOL.call($, { op: 'limits', repo: '../widget' }), { value: { waiting: 2, cap: 10, numbers: [1, 3] } })
+  assert.deepEqual(await BUILDERS_TOOL.call($, { op: 'limits', repo: '../widget' }), { value: { waiting: 2, cap: null, numbers: [1, 3] } })
   assert.deepEqual($.ran.map(r => [r.argv[0], r.cwd, r.timeoutMs]), [['git', '/widget', 30_000], ['gh', '/widget', 45_000]])
 })
 

@@ -44,13 +44,13 @@ Run `/waffles:init-check` to check the session for these.
 
 ## Settings
 
-Nothing needs to be set. Each of these is an environment variable of the agent's process, with a default.
+Nothing needs to be set. Each of these is an environment variable of the agent's process.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `WAFFLES_REMOTE` | `origin` | The git remote of your checkout that holds the project's pull requests. Builders clone from it, the review branch fetches from it, and the plan outline is copied to it when the branch names no remote of its own. |
-| `WAFFLES_REVIEW_CAP` | `10` | The open pull requests per repo that may wait for human review. At this count no builder starts. |
-| `WAFFLES_TEST_SLOT_COUNT` | `3` | The builders that may run tests at once on this machine. |
+| `WAFFLES_REVIEW_CAP` | Unset: no cap | The open pull requests per repo that may wait for human review. At this count no builder starts. |
+| `WAFFLES_MAX_CONCURRENT_TEST_SUITES` | `3` | The builders that may run their test suites at once on this machine. |
 | `WAFFLES_TEST_SLOTS` | `/tmp/waffles-test-slots-<uid>` | The folder of the test slots' lock files. |
 | `WAFFLES_BUILDERS_ROOT` | `<session scratchpad>/builders` | The folder that holds builders' clones. |
 

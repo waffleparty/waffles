@@ -13,7 +13,7 @@
 // test-slot is the script's own, and no tool: it runs COMMAND (a test run, a linter, a type check) once one of the
 // machine's test slots is free, and holds the slot until COMMAND ends, for minutes, longer than a tool call may take.
 // The slots are lock files in $WAFFLES_TEST_SLOTS or /tmp/waffles-test-slots-<uid>, shared by every session of the
-// user, 3 of them unless --slots or $WAFFLES_TEST_SLOT_COUNT says another count; a lock goes with its process, also when it is killed (./lock.ts). It exits with COMMAND's code.
+// user, 3 of them unless --slots or $WAFFLES_MAX_CONCURRENT_TEST_SUITES says another count; a lock goes with its process, also when it is killed (./lock.ts). It exits with COMMAND's code.
 //
 // Exit codes: 0 when done; 3 when refused, with the reason on stderr; 1 when git or gh failed, with its message on
 // stderr; 2 for wrong arguments, with the reason on stderr. test-slot exits with its command's code.
@@ -26,14 +26,14 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { nodeHost } from '../adapters/node/host.ts'
-import { builders, REVIEW_CAP, type BuildersInput } from '../core/builders.ts'
+import { builders, type BuildersInput } from '../core/builders.ts'
 import { tryLock } from './lock.ts'
 
-export { ownerRepo, REVIEW_CAP } from '../core/builders.ts'
+export { ownerRepo } from '../core/builders.ts'
 
 // Builders running tests at once on this machine. A test suite already spreads over several cores, so on a
 // many-core workstation the runs finished per minute stop rising at about 3 at once: past that, another run at once
-// only slows the others. --slots, else $WAFFLES_TEST_SLOT_COUNT, sets another count for another machine.
+// only slows the others. --slots, else $WAFFLES_MAX_CONCURRENT_TEST_SUITES, sets another count for another machine.
 export const TEST_SLOTS = 3
 const WAIT_MS = 1000
 
@@ -145,8 +145,8 @@ function inputOf(command: keyof typeof OPTIONS, args: Record<string, string | un
   const given = (name: string) => (args[name] === undefined ? {} : { [name]: args[name] })
   if (command === 'clone') return { op: 'clone', repo: args['repo']!, item: args['item']!, branch: args['branch']!, ...given('root'), ...given('base') }
   if (command === 'remove') return { op: 'remove', path: args['path']!, ...given('root') }
-  // With no --cap, the core takes $WAFFLES_REVIEW_CAP, else 10.
-  return { op: 'limits', repo: args['repo']!, ...(args['cap'] === undefined ? {} : { cap: count('cap', args['cap'], REVIEW_CAP) }) }
+  // With no --cap, the core takes $WAFFLES_REVIEW_CAP; with neither there is no cap.
+  return { op: 'limits', repo: args['repo']!, ...(args['cap'] === undefined ? {} : { cap: count('cap', args['cap'], 0) }) }
 }
 
 export async function main(argv: string[], out: Out = process.stdout, err: Out = process.stderr, cwd: string = process.cwd()): Promise<number> {
@@ -162,8 +162,8 @@ export async function main(argv: string[], out: Out = process.stdout, err: Out =
         out.write(`${USAGE}\n`)
         return 0
       }
-      const set = process.env['WAFFLES_TEST_SLOT_COUNT']?.trim()
-      if (args.slots === undefined && set && !/^[1-9][0-9]*$/.test(set)) throw new Usage(`WAFFLES_TEST_SLOT_COUNT must be a count from 1 up, not ${JSON.stringify(set)}`)
+      const set = process.env['WAFFLES_MAX_CONCURRENT_TEST_SUITES']?.trim()
+      if (args.slots === undefined && set && !/^[1-9][0-9]*$/.test(set)) throw new Usage(`WAFFLES_MAX_CONCURRENT_TEST_SUITES must be a count from 1 up, not ${JSON.stringify(set)}`)
       const slots = count('slots', args.slots ?? (set || undefined), TEST_SLOTS)
       if (args.command.length === 0 || slots < 1) throw new Usage('test-slot needs a command after --, and 1 slot or more.')
       return await testSlot(slots, args.command, out)

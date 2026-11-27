@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.14
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-27T00:52:05.385Z
+updated: 2026-11-27T01:18:49.213Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -98,3 +98,4 @@ updated: 2026-11-27T00:52:05.385Z
   - [x] 6.15 Clean up after the parallel adapter work
   - [x] 6.16 Make the texts the model reads take each platform's names
   - [x] 6.17 ⤷ Fix the small defects named in the reports
+  - [x] 6.18 ⤷ Rename the test suites variable and make the review cap unset by default
