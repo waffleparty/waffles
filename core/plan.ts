@@ -328,7 +328,8 @@ async function finishTurn($: Host, isStop: boolean) {
   if (turn === null || tree === null || slug === null) return
   const before = turn.goal === slug ? turn.tree : null
   const kept = await $.state.get('planCollapsed')
-  const held = await $.state.get('planPressed')
+  // Pressed steps of another goal hold nothing here.
+  const held = collapsedFor(await $.state.get('planPressed'), slug)
   const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree), { isExpandOnly: !turn.isOpen, held }))
   if (!same(kept, next)) await $.state.set('planCollapsed', next)
 }
@@ -787,7 +788,7 @@ export function submitPlan($: Host, isTurn: boolean): void {
     await finishTurn($, false)
     await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree'), isOpen: true })
     // A press holds through the end of the turn it was made in; at this turn's end the rules decide again.
-    if ((await $.state.get('planPressed')).length) await $.state.set('planPressed', [])
+    if ((await $.state.get('planPressed')) !== null) await $.state.set('planPressed', null)
   }).catch(() => undefined)
 }
 
@@ -815,8 +816,8 @@ export async function pressPlan($: Host, id: string): Promise<void> {
     if (same(kept, next)) return
     await $.state.set('planCollapsed', next)
     const step = findStep(tree, id)
-    const pressed = await $.state.get('planPressed')
-    if (step && !pressed.includes(step.id)) await $.state.set('planPressed', [...pressed, step.id])
+    const pressed = collapsedFor(await $.state.get('planPressed'), slug)
+    if (step && !pressed.includes(step.id)) await $.state.set('planPressed', collapsedOf(slug, [...pressed, step.id]))
   })
 }
 
@@ -845,7 +846,7 @@ export async function endPlan($: Host, sessionId: string, isProcessKept: boolean
   // The collapsed steps and the turn are the ended session's view: the new one starts with every step expanded.
   if ((await $.state.get('planCollapsed')) !== null) await $.state.set('planCollapsed', null)
   if ((await $.state.get('planTurn')) !== null) await $.state.set('planTurn', null)
-  if ((await $.state.get('planPressed')).length) await $.state.set('planPressed', [])
+  if ((await $.state.get('planPressed')) !== null) await $.state.set('planPressed', null)
 }
 
 /**

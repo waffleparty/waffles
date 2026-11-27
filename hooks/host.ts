@@ -24,7 +24,7 @@ const planOthers = atom({ plugin: 'waffles', key: 'planOthers' } as const, [])
 const planChanged = atom({ plugin: 'waffles', key: 'planChanged' } as const, [])
 const planCollapsed = atom({ plugin: 'waffles', key: 'planCollapsed' } as const, null)
 const planTurn = atom({ plugin: 'waffles', key: 'planTurn' } as const, null)
-const planPressed = atom({ plugin: 'waffles', key: 'planPressed' } as const, [])
+const planPressed = atom({ plugin: 'waffles', key: 'planPressed' } as const, null)
 const planFetched = atom({ plugin: 'waffles', key: 'planFetched' } as const, false)
 
 type Key = keyof SessionState

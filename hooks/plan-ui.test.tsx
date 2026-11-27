@@ -490,6 +490,28 @@ test('a click during a turn holds through that turn’s end, and the rules decid
   expect(await row4()).toBe('› ○ 4 Ship (1)')
 })
 
+test('a step pressed in one goal holds nothing in another goal the turn switches to', async ($, on) => {
+  const { disk, state } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  // Another goal with a step 4 too, whose steps are all done: the rules collapse it.
+  disk.files.set(
+    file('fix-flaky-test'),
+    `---\ngoal: Fix flaky test\nstatus: open\ncurrent: 1\ncreated: ${ISO}\nupdated: ${ISO}\n---\n- [ ] 1 Repro\n- [ ] 2 Bisect\n- [ ] 3 Fix\n- [ ] 4 Ship\n  - [x] 4.1 Tag\n`,
+  )
+
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await pressRow($, '4')
+  expect(state.planPressed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+  await call($, { op: 'goal', switch: 'fix-flaky-test' })
+  await $.turn.complete(FINISHED)
+  await call($, { op: 'show' })
+
+  expect((await drawPane($)).rows).toContain('› ○ 4 Ship (1)')
+})
+
 test('a turn a notification starts, with no prompt typed, reveals the steps it adds but collapses nothing', async ($, on) => {
   const { disk } = world(on)
   on('prompt.submit', ($, e) => ({ text: e.text }))
@@ -550,13 +572,13 @@ test('after /clear the kept tree is drawn with every step expanded, and no turn 
   await pressRow($, '4')
   expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
   expect(state.planTurn).not.toBe(null)
-  expect(state.planPressed).toEqual(['4'])
+  expect(state.planPressed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
 
   await $.session.end({ reason: 'clear', sessionId: ME, resume: { id: ME } })
 
   expect(state.planCollapsed).toBe(null)
   expect(state.planTurn).toBe(null)
-  expect(state.planPressed).toEqual([])
+  expect(state.planPressed).toBe(null)
   expect((await drawPane($)).rows).toContain('⌄ ○ 4 Ship')
 })
 

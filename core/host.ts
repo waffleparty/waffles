@@ -200,8 +200,8 @@ export type SessionState = {
   planCollapsed: Collapsed | null
   /** The tree drawn at the last turn boundary, for the collapse rules at the next; null before the first. */
   planTurn: Turn | null
-  /** The steps pressed since the person's last turn began, by ID: the rules leave them as pressed at that turn's end. */
-  planPressed: string[]
+  /** The drawn goal's steps pressed since the person's last turn began: the rules leave them as pressed at that turn's end. Null when none is. */
+  planPressed: Collapsed | null
   /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
   planFetched: boolean
 }
@@ -224,7 +224,7 @@ export const INITIAL: SessionState = {
   planChanged: [],
   planCollapsed: null,
   planTurn: null,
-  planPressed: [],
+  planPressed: null,
   planFetched: false,
 }
 
