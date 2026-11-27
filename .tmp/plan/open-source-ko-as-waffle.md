@@ -1,16 +1,16 @@
 ---
 goal: Open-source ko as waffle
 status: open
-current: 6.14
+current: 2
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-27T01:18:49.213Z
+updated: 2026-11-27T01:35:36.825Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
   - [-] 1.2 Review the skills
   - [-] 1.3 Review the agents
   - [-] 1.4 Review the scripts
-- [~] 2 Import ko into waffles <!-- parked=2026-11-26T16:05:33.407Z -->
+- [ ] 2 Import ko into waffles
   - [x] 2.1 Rename the repo references from waffle to waffles
   - [ ] 2.2 Point the marketplace entry at waffles
   - [x] 2.3 Import and scrub the hooks
@@ -44,8 +44,9 @@ updated: 2026-11-27T01:18:49.213Z
   - [x] 4.2 Keep the plan outline's files in the git folder, outside the working tree
   - [x] 4.3 Mirror the plan outline to a git ref at each push, and restore from it on another machine
   - [x] 4.4 Remove the plan outline's commit and cleanup rules from the commit protocol
-- [ ] 5 Phase 2: bring back the design layer
-- [ ] 6 Phase 2: move the hook logic into one vendor-neutral library behind per-platform adapters
+- [-] 5 Phase 2: bring back the design layer
+  - [-] 5.1 ? Decide who writes the spec and the plan
+- [x] 6 Phase 2: move the hook logic into one vendor-neutral library behind per-platform adapters
   - [x] 6.1 Choose the language of the core library
   - [x] 6.2 Verify the OpenCode plugin API against its official docs
   - [x] 6.3 Move the hook logic into the core library
@@ -87,14 +88,14 @@ updated: 2026-11-27T01:18:49.213Z
     - [x] 6.13.2 Fix the watcher's lost and repeated events
     - [x] 6.13.3 Fix the checkpoint's failures after it wrote the description
     - [x] 6.13.4 Fix the item files with CRLF line ends and the pull requests with missing fields
-  - [ ] 6.14 Widen the MCP server into a general front for the core
+  - [x] 6.14 Widen the MCP server into a general front for the core
     - [x] 6.14.1 Refactor the server into registries for tools, prompts, and resources, with the mode commands
     - [x] 6.14.2 Offer the scripts as tools
       - [x] 6.14.2.1 Define a tool once in the core and register it in-process and over MCP, with the merge queue as the first
       - [x] 6.14.2.2 Move builders, the review branch, the backlog queue, and the checkpoint to tools
       - [x] 6.14.2.3 Point the skills at the tools
-    - [ ] 6.14.3 Let hook events reach the core through the server
-    - [ ] 6.14.4 Look into a plan outline view through MCP Apps
+    - [-] 6.14.3 Let hook events reach the core through the server
+    - [-] 6.14.4 Look into a plan outline view through MCP Apps
   - [x] 6.15 Clean up after the parallel adapter work
   - [x] 6.16 Make the texts the model reads take each platform's names
   - [x] 6.17 ⤷ Fix the small defects named in the reports
