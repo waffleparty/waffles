@@ -232,8 +232,13 @@ const isClosed = (step: Step) => CLOSED.includes(step.state)
 const isOpen = (step: Step) => step.state === 'open' || step.state === 'parked' || step.state === 'review'
 /** A background subagent works on the step. */
 const isRunning = (step: Step) => step.agent !== undefined && !isClosed(step)
+/**
+ * The parked mark: ⏸ with U+FE0E, the text presentation selector. Without it, iPadOS draws ⏸ as a grey
+ * emoji. The selector takes no column.
+ */
+export const PARKED = '\u23F8\uFE0E'
 /** A step's shown state as its row shows it. */
-export const SHOWN: Record<Shown, string> = { open: '○', active: '▶', running: '▶', parked: '⏸', review: '◐', done: '✔', dropped: '✗', deferred: '↗' }
+export const SHOWN: Record<Shown, string> = { open: '○', active: '▶', running: '▶', parked: PARKED, review: '◐', done: '✔', dropped: '✗', deferred: '↗' }
 
 function lastNumber(id: string): number {
   return Number(id.slice(id.lastIndexOf('.') + 1))
@@ -607,7 +612,7 @@ export function describe(change: Change): string {
       return `${mark} ${change.id} ${change.title}${back}`
     }
     case 'parked':
-      return `⏸ ${change.id} ${change.title}`
+      return `${PARKED} ${change.id} ${change.title}`
     case 'focus':
       return `▶ ${change.id} ${change.title}`
     case 'moved':

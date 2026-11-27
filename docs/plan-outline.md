@@ -8,11 +8,13 @@ A goal is the root of one tree. Its steps are units of work with their own outco
 | --- | --- |
 | `○` | Open |
 | `▶` | Active |
-| `⏸` | Parked: it was started, then focus moved away |
+| `⏸︎` | Parked: it was started, then focus moved away |
 | `◐` | Waiting for review: a background subagent finished it |
 | `✔` | Done |
 | `✗` | Dropped |
 | `↗` | Deferred: moved to `.backlog/` |
+
+The parked mark is `⏸` (U+23F8) followed by U+FE0E, the text presentation selector, so that iPadOS draws it as text and not as a grey emoji. The selector takes no column.
 
 Detours carry a kind mark: `⤷` for work that changes something, `?` for research. Step IDs are dotted numbers (`3`, `3.2`, `3.2.1`). They never renumber and are never reused.
 

@@ -170,7 +170,8 @@ function textOf(output: unknown): string | null {
 // state glyph opening each row, or `<title>: no steps.`, then any other open goals after a blank line;
 // with no goal active, the open goals, or that there are none. Titles hold no line breaks.
 const PATH_LINE = /\n\nPath: [^\n]*$/
-const TREE_ROW = new RegExp(`^(?: {2})*[${Object.values(SHOWN).join('')}] \\S`)
+// A mark can be more than 1 code point (the parked one is 2), so the marks are alternatives, not a class.
+const TREE_ROW = new RegExp(`^(?: {2})*(?:${Object.values(SHOWN).join('|')}) \\S`)
 const NO_GOALS = 'No active goal and no open goals.'
 const OPEN_GOALS = 'No active goal. Open goals:\n'
 const OTHER_GOALS = 'Other open goals:\n'

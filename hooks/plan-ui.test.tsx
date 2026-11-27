@@ -369,6 +369,10 @@ test('every result shape a plan call returns draws once: in the row, not again i
   shapes.tree = await resultOf({ op: 'show' })
   shapes.openFirst = await resultOf({ op: 'show', goal: 'later' })
   shapes.noSteps = await resultOf({ op: 'show', goal: 'empty' })
+  // A parked step's mark is 2 code points (⏸ and U+FE0E): the row is still a tree row.
+  await resultOf({ op: 'add', parent: '1', titles: ['Draft'], focus: true })
+  await resultOf({ op: 'focus', id: '2' })
+  shapes.parked = await resultOf({ op: 'show' })
 
   expect(shapes).toEqual({
     none: 'No active goal and no open goals.',
@@ -378,6 +382,7 @@ test('every result shape a plan call returns draws once: in the row, not again i
     tree: '▶ 1 Spec\n○ 2 Build\n\nOther open goals:\n- empty: Empty, at no step\n- later: Later, at 2 B',
     openFirst: '○ 1 A\n▶ 2 B\n\nOther open goals:\n- empty: Empty, at no step\n- ship: Ship, at 1 Spec',
     noSteps: 'Empty: no steps.\n\nOther open goals:\n- later: Later, at 2 B\n- ship: Ship, at 1 Spec',
+    parked: '⏸\uFE0E 1 Spec\n  ⏸\uFE0E 1.1 Draft\n▶ 2 Build\n\nOther open goals:\n- empty: Empty, at no step\n- later: Later, at 2 B',
   })
   for (const output of Object.values(shapes)) {
     const row = (await drawCall($, { output })).texts.map(t => t.text)
@@ -811,7 +816,7 @@ test('widths count terminal cells: wide characters 2, marks and joiners 0, and a
   expect(width('👨‍👩‍👧')).toBe(2)
   expect(width('🇯🇵')).toBe(2)
   expect(width('❤️')).toBe(2)
-  expect(width('✔▶⏸')).toBe(3)
+  expect(width('✔▶⏸\uFE0E')).toBe(3)
 
   expect(cut('日本語日本語', 6)).toBe('日本…')
   expect(cut('日本語日本語', 5)).toBe('日本…')
@@ -881,7 +886,7 @@ test('a result block of an interrupted or unknown-shape call is the engine’s; 
   // An interrupt's notice has text, but not the change-lines shape.
   expect(await drawResult($, { output: "The user doesn't want to proceed with this tool use. The tool use was rejected." })).toEqual({ texts: [], isEngine: true })
   expect(await drawResult($, { output: [{ type: 'text', text: 'Interrupted by user' }] })).toEqual({ texts: [], isEngine: true })
-  for (const line of ['+ 3.2.2 Fix', '✔ 1 Spec', '✗ 3.3 x', '↗ 3 Build', '⏸ paused', '◇ new goal: Ship', '▶ 2 Next', 'moved 3.2 under 4', 'renamed 3 to Y']) {
+  for (const line of ['+ 3.2.2 Fix', '✔ 1 Spec', '✗ 3.3 x', '↗ 3 Build', '⏸\uFE0E paused', '◇ new goal: Ship', '▶ 2 Next', 'moved 3.2 under 4', 'renamed 3 to Y']) {
     expect(await drawResult($, { output: `${line}\n\nPath: none` })).toEqual({ texts: [], isEngine: false })
   }
   expect(await drawResult($, { output: [{ type: 'text', text: '✔ 1 Spec\n\nPath: none' }] })).toEqual({ texts: [], isEngine: false })
