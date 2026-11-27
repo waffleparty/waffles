@@ -12,19 +12,47 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Cursor | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/cursor.md](docs/cursor.md). For local use, put this repo at `~/.cursor/plugins/local/waffles` and reload the window. |
 | Antigravity | Not in a marketplace yet. `agy plugin install https://github.com/waffleparty/waffles`. Skills, the modes, unattended runs, the plan outline tool, and the checkpoint: see [docs/antigravity.md](docs/antigravity.md). |
 
-Skills follow the open Agent Skills format. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter. Claude Code has all of it. OpenCode 2 has the modes, the plan outline with its view, the checkpoint, unattended runs, and auto effort; see [OpenCode](docs/opencode.md) for what differs. Codex, Cursor, and Antigravity have the modes, the plan outline tool, and the checkpoint through hooks and an MCP server, with the limits their docs pages state. On other platforms only the skills load. Skills that depend on a hook, such as `/waffles:non-interactive`, need Claude Code, OpenCode, Antigravity, or Codex where its plugin hooks run (see [Codex](docs/codex.md)); on Cursor a run can't refuse a permission prompt or a question. The `waffles:*` agents run on Claude Code alone; on OpenCode its own agents take their place.
+Skills follow the open Agent Skills format, so they load on any agent that reads it. The logic behind the hooks lives in `core/`, which knows no platform; each platform reaches it through an adapter.
+
+### Features by platform
+
+| Feature | Claude Code | OpenCode 2 | Codex | Cursor | Antigravity |
+| --- | --- | --- | --- | --- | --- |
+| Skills | Yes | Yes, except `plan` | Yes | Yes | Yes |
+| Modes (`/prod`, `/rapid`, `/backlog-entry`) | Yes | Yes | Yes | Yes | Yes |
+| Plan outline tool | Yes | Yes | Yes, through the MCP server | Yes, through the MCP server | Yes, through the MCP server |
+| Plan outline view | Pane and footer | Panel and footer | No | No | No |
+| Pull request checklist after a push | Yes | Yes | Yes | Yes | Yes |
+| Unattended runs | Yes | Yes | Where its plugin hooks run | No: a hook can't refuse a permission prompt or a question | Yes |
+| Auto effort | Yes | Yes | No | No | No |
+| Dev servers menu | Yes | No | No | No | No |
+| `waffles:*` agents | Yes | No: its own agents take their place | No | No | No |
+
+Each platform's page states its limits: [OpenCode](docs/opencode.md), [Codex](docs/codex.md), [Cursor](docs/cursor.md), [Antigravity](docs/antigravity.md). The Codex CLI runs a plugin's hooks only from your own hooks file; its page says how. Cursor and Antigravity are built from their documentation and not yet run on a real install. On any other platform only the skills load, and a platform that speaks MCP can add the [MCP server](docs/mcp.md) by hand.
 
 ## Requirements
 
 | Requirement | Needed for |
 | --- | --- |
-| Claude Code, or OpenCode 2 | The hooks: modes, the plan outline, the checkpoint, unattended runs, and auto effort. The agents and the dev servers pane need Claude Code. |
+| Claude Code 2.1.332 or later, or OpenCode 2 | Claude Code 2.1.332 is the version the hooks are tested with in CI; an earlier one may not load hook modules. The hooks: modes, the plan outline, the checkpoint, unattended runs, and auto effort. The agents and the dev servers pane need Claude Code. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
 | Node.js 22.18 or later, on the model's shell path | What skills still run from the shell: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts`), and the CI watcher of `/waffles:watch-ci`. Builders, the merge queue, the review branch, the backlog queue, and the checkpoint are tools; their scripts in `scripts/` are the fallback where a platform has no tools, and a person can run them by hand. The MCP server needs Node.js too. All use Node.js built-ins only and run with no build step. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
 Run `/waffles:init-check` to check the session for these.
+
+## Settings
+
+Nothing needs to be set. Each of these is an environment variable of the agent's process, with a default.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WAFFLES_REMOTE` | `origin` | The git remote of your checkout that holds the project's pull requests. Builders clone from it, the review branch fetches from it, and the plan outline is copied to it when the branch names no remote of its own. |
+| `WAFFLES_REVIEW_CAP` | `10` | The open pull requests per repo that may wait for human review. At this count no builder starts. |
+| `WAFFLES_TEST_SLOT_COUNT` | `3` | The builders that may run tests at once on this machine. |
+| `WAFFLES_TEST_SLOTS` | `/tmp/waffles-test-slots-<uid>` | The folder of the test slots' lock files. |
+| `WAFFLES_BUILDERS_ROOT` | `<session scratchpad>/builders` | The folder that holds builders' clones. |
 
 ## Skills
 
