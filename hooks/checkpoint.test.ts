@@ -29,6 +29,7 @@ function world(on: On, bash: object = RAN, broken: string | null = null) {
   const runs: [string, string | undefined][] = []
   const limits: (number | undefined)[] = []
   const commands: string[] = []
+  const env: Record<string, string | undefined> = {}
   // The command that fails as git does outside a repository.
   const answer = (command: string) => (command === broken ? { exitCode: 128, stdout: '', stderr: 'fatal: not a git repository\n' } : { ...repo(command), stderr: '' })
   on('session.cwd', () => ({ value: '/repo' }))
@@ -36,6 +37,8 @@ function world(on: On, bash: object = RAN, broken: string | null = null) {
   on('fs.stat', ($, e) => ({ value: { kind: e.path === PLAN ? 'dir' : 'file', size: GOAL.length, mtimeMs: 0, isLink: false } }) as never)
   on('fs.list', () => ({ value: [{ name: 'g.md', kind: 'file', size: GOAL.length, mtimeMs: 0, isLink: false }] }) as never)
   on('fs.read', () => ({ value: GOAL }))
+  // Nothing is set but what a test puts in `env`: the remote is origin.
+  on('env.get', ($, e) => ({ value: env[e.name] }))
   on('clock.now', () => ({ value: 1000 }))
   on('process.run', ($, e) => {
     const command = e.argv.join(' ')
@@ -47,7 +50,7 @@ function world(on: On, bash: object = RAN, broken: string | null = null) {
     if (e.tool === 'Bash') commands.push(e.command)
     return bash as never
   })
-  return { runs, limits, commands }
+  return { runs, limits, commands, env }
 }
 
 // The folder of each checkpoint: its first command, the checkout's `gh pr view`, runs there.
@@ -143,8 +146,8 @@ test('a push in a folder named with $ gets no checkpoint and no note', async ($,
 })
 
 test('a push in a folder under ~ runs the checkpoint in the home folder', async ($, on) => {
-  const { runs } = world(on)
-  on('env.get', () => ({ value: '/Users/me' }))
+  const { runs, env } = world(on)
+  env['HOME'] = '/Users/me'
 
   await $.tool.call(bash('cd ~/Code/r && git push'))
 

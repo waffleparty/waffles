@@ -1,5 +1,6 @@
 import { answerOf, deadlineIn, Failed, outcomeOf, Refused, run, type Outcome } from './commands.ts'
 import type { Host } from './host.ts'
+import { remoteName } from './settings.ts'
 import { absolute, join } from './paths.ts'
 import type { CoreTool, Json } from './tools.ts'
 
@@ -11,8 +12,9 @@ import type { CoreTool, Json } from './tools.ts'
  * pull request merged into it, and one dev server serves it. The branch is never pushed: it has no upstream, and done
  * deletes it.
  *
- * build fetches each pull request's head from origin (refs/pull/<n>/head, kept under refs/waffles-review/), starts
- * `waffles-review` from origin's default branch, and merges them in the order given, unsigned, since the merges never leave
+ * build fetches each pull request's head from the remote ($WAFFLES_REMOTE, else origin; refs/pull/<n>/head, kept
+ * under refs/waffles-review/), starts `waffles-review` from the remote's default branch, and merges them in the
+ * order given, unsigned, since the merges never leave
  * this machine. A pull request that conflicts with the ones before it is left out, and the answer names it. waiting
  * takes the open pull requests that are ready and ask the person for a review (`gh pr list --search
  * review-requested:@me`). Build again to rebuild the branch after a waiting pull request changed. It refuses a checkout
@@ -75,7 +77,7 @@ async function readState(c: Checkout): Promise<BuildAnswer | null> {
 // Commits on waffles-review that are not the merges this tool made: someone's own work, which a rebuild or done would lose.
 async function ownCommits(c: Checkout): Promise<string> {
   if ((await git(c, ['rev-parse', '--verify', '--quiet', `refs/heads/${BRANCH}`], { check: false })).exitCode !== 0) return ''
-  const fallback = (await git(c, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { check: false })).stdout.trim() || 'HEAD'
+  const fallback = (await git(c, ['symbolic-ref', '--short', `refs/remotes/${await remoteName(c.$)}/HEAD`], { check: false })).stdout.trim() || 'HEAD'
   return outOf(c, 'log', '--oneline', '--no-merges', BRANCH, '--not', fallback, `--glob=${REFS}/*`)
 }
 
@@ -110,9 +112,10 @@ async function build($: Host, repo: string, prs: number[] | null, fromGh: boolea
   if (!back) throw new Refused(`${c.main} is not on a branch (a detached HEAD), so done could not switch back.`)
 
   await refuseOwnCommits(c)
-  await git(c, ['fetch', '--quiet', 'origin'], { timeoutMs: FETCH_MS })
-  const base = await outOf(c, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD')
-  await git(c, ['fetch', '--quiet', 'origin', ...numbers.map(n => `+refs/pull/${n}/head:${REFS}/pr-${n}`)], { timeoutMs: FETCH_MS })
+  const remote = await remoteName(c.$)
+  await git(c, ['fetch', '--quiet', remote], { timeoutMs: FETCH_MS })
+  const base = await outOf(c, 'symbolic-ref', '--short', `refs/remotes/${remote}/HEAD`)
+  await git(c, ['fetch', '--quiet', remote, ...numbers.map(n => `+refs/pull/${n}/head:${REFS}/pr-${n}`)], { timeoutMs: FETCH_MS })
   await git(c, ['switch', '--quiet', '--no-track', '-C', BRANCH, base])
   const merged: number[] = []
   const conflicts: number[] = []

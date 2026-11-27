@@ -177,6 +177,10 @@ export function hostOf($: EngineInterface): Host {
       switch (name) {
         case 'WAFFLES_BUILDERS_ROOT':
           return $.env.get('WAFFLES_BUILDERS_ROOT')
+        case 'WAFFLES_REMOTE':
+          return $.env.get('WAFFLES_REMOTE')
+        case 'WAFFLES_REVIEW_CAP':
+          return $.env.get('WAFFLES_REVIEW_CAP')
       }
     },
     state: {

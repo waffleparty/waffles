@@ -243,6 +243,14 @@ worldTest('with no remote nothing is copied; an unreachable remote costs one lin
   assert.equal(await w.withEnv(() => mirrorPlan(w.host(work), work)), null)
   assert.throws(() => w.git(work, 'rev-parse', '--verify', '-q', planRef('feat')))
 
+  // The remote that WAFFLES_REMOTE names takes the place of origin.
+  w.env['WAFFLES_REMOTE'] = 'upstream'
+  assert.equal(await w.withEnv(() => mirrorPlan(w.host(work), work)), null)
+  assert.notEqual(w.remoteRef('feat'), '')
+  delete w.env['WAFFLES_REMOTE']
+  w.git(work, 'push', '-q', 'upstream', '--delete', planRef('feat'))
+  w.git(work, 'update-ref', '-d', planRef('feat'))
+
   w.git(work, 'config', 'branch.feat.remote', 'upstream')
   w.git(work, 'remote', 'set-url', 'upstream', join(w.root, 'gone.git'))
   const line = await w.withEnv(() => mirrorPlan(w.host(work), work))

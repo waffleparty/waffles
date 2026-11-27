@@ -1,6 +1,7 @@
 import { notStarted } from './commands.ts'
 import type { Host, RunResult } from './host.ts'
 import { outlineIn, stateIn } from './plan-store.ts'
+import { remoteName } from './settings.ts'
 
 /*
  * Keeps a copy of the plan outline on the remote, so another machine or a fresh clone finds it. The
@@ -17,7 +18,8 @@ import { outlineIn, stateIn } from './plan-store.ts'
  * as its author and committer, so it needs neither the person's key nor their identity. Its parent is
  * the ref's last commit, so the ref keeps the outline's history.
  *
- * The remote. The one the branch's upstream names (`branch.<branch>.remote`), else `origin`. With
+ * The remote. The one the branch's upstream names (`branch.<branch>.remote`), else $WAFFLES_REMOTE, else
+ * `origin`. With
  * neither, nothing is copied or restored.
  *
  * When it is written. After a `git push` or a `gh pr create` that worked, by `afterShell` in
@@ -91,13 +93,14 @@ async function branchOf(g: Git): Promise<string | null> {
   return (await tryGit(g, ['symbolic-ref', '--short', '-q', 'HEAD']))?.trim() || null
 }
 
-/** The remote the branch's upstream names, else origin; null when there is neither. */
+/** The remote the branch's upstream names, else $WAFFLES_REMOTE or origin; null when there is neither. */
 async function remoteOf(g: Git, branch: string): Promise<string | null> {
   const named = (await tryGit(g, ['config', '--get', `branch.${branch}.remote`]))?.trim()
   // `.` is the repository itself: a branch that tracks another local branch.
   if (named && named !== '.') return named
   const remotes = (await tryGit(g, ['remote']))?.split('\n').map(line => line.trim()) ?? []
-  return remotes.includes('origin') ? 'origin' : null
+  const main = await remoteName(g.$)
+  return remotes.includes(main) ? main : null
 }
 
 /** The names of the files the ref holds that are in the plan folder, sorted; empty when there is no folder. */

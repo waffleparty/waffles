@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.14
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-27T00:46:52.730Z
+updated: 2026-11-27T00:51:55.575Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -36,7 +36,7 @@ updated: 2026-11-27T00:46:52.730Z
   - [-] 2.10 Drop the Codex and Cursor manifests
   - [x] 2.11 Make the hooks and scripts fail clearly without lsof, gh, or fcntl
   - [ ] 2.12 State in the README the minimum Claude Code version and what works on other platforms
-  - [ ] 2.13 Make the builder limits and the remote name configurable
+  - [x] 2.13 Make the builder limits and the remote name configurable
   - [x] 2.14 ? Verify which hook features other agent platforms offer
 - [ ] 3 Remove the working files
 - [x] 4 Phase 2: review storing the plan outline in .tmp (a custom ref or git notes instead)

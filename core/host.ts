@@ -126,7 +126,7 @@ export const runName = (names: Names) =>
   names.runCommand === undefined ? `run of the ${skillName(names, 'non-interactive')} skill` : `${names.runCommand} run`
 
 /** The variables the core reads. Claude Code lists the ones a module reads from its source, so each has its name here. */
-export type EnvName = 'WAFFLES_BUILDERS_ROOT'
+export type EnvName = 'WAFFLES_BUILDERS_ROOT' | 'WAFFLES_REMOTE' | 'WAFFLES_REVIEW_CAP'
 
 export type FileKind = 'file' | 'dir' | 'other'
 export type FileEntry = { name: string; kind: FileKind; size: number; mtimeMs: number }

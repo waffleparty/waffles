@@ -110,3 +110,19 @@ test('on Node.js, the tool clones from the main checkout it names, records the c
     await fs.rm(root, { recursive: true, force: true })
   }
 })
+
+test('limits takes its cap from the call, else from WAFFLES_REVIEW_CAP', async () => {
+  const two = JSON.stringify([pr(1), pr(2)])
+  const fromEnv = await BUILDERS_TOOL.call(widget({ stdout: two }, { env: { WAFFLES_REVIEW_CAP: '2' } }), { op: 'limits', repo: '/widget' })
+  assert.ok('refusal' in fromEnv)
+  assert.match(fromEnv.refusal, /and the cap is 2\./)
+  assert.deepEqual(await BUILDERS_TOOL.call(widget({ stdout: two }, { env: { WAFFLES_REVIEW_CAP: '2' } }), { op: 'limits', repo: '/widget', cap: 5 }), {
+    value: { waiting: 2, cap: 5, numbers: [1, 2] },
+  })
+})
+
+test('clone reads the URL of the remote that WAFFLES_REMOTE names in the main checkout', async () => {
+  const $ = widget({ stdout: '[]' }, { env: { WAFFLES_REMOTE: 'upstream' } })
+  await BUILDERS_TOOL.call($, { op: 'clone', root: '/scratch/builders', repo: '/widget', item: 'ITEM-1', branch: 'feat/item-1' })
+  assert.deepEqual($.ran.map(r => r.argv.join(' ')).filter(line => line.startsWith('git remote')), ['git remote get-url upstream'])
+})

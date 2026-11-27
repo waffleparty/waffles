@@ -3,6 +3,7 @@ import type { Host, RunResult } from './host.ts'
 import { absolute } from './paths.ts'
 import { dropPlan, mirrorPlan } from './plan-mirror.ts'
 import { outlineIn, stateIn } from './plan-store.ts'
+import { remoteName } from './settings.ts'
 import type { CoreTool, Json } from './tools.ts'
 
 /*
@@ -273,7 +274,7 @@ async function isFolder($: Host, path: string): Promise<boolean> {
 
 /** The "ahead of the branch" line, or null when every commit is pushed. */
 async function aheadNote(c: Checkout, branch: string): Promise<string | null> {
-  const upstream = await tryGit(c, 'rev-parse', '--verify', '-q', `refs/remotes/origin/${branch}`)
+  const upstream = await tryGit(c, 'rev-parse', '--verify', '-q', `refs/remotes/${await remoteName(c.$)}/${branch}`)
   let reason: string
   if (upstream === null) {
     reason = 'the branch is not pushed'

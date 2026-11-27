@@ -59,9 +59,9 @@ backlog item ─► builder: clone, branch, draft pull request ─► checks ─
 
 | Limit | How it is counted |
 | --- | --- |
-| At most 10 open pull requests per repo that wait for human review | From GitHub, across every developer (the builders tool's `limits`, or `builders.ts limits`): marked ready, with a review requested. At 10 it says why and lists them. |
+| At most 10 open pull requests per repo that wait for human review (`WAFFLES_REVIEW_CAP` sets another count) | From GitHub, across every developer (the builders tool's `limits`, or `builders.ts limits`): marked ready, with a review requested. At 10 it says why and lists them. |
 | One item at a time per component | From an item's claim until its pull request merges. A stacked item counts with the one below it. The component comes from the adapter; a repo with no adapter has one component, the repo. |
-| At most 3 builders running tests at once on this machine | Each builder runs its tests through the shell command `builders.ts test-slot -- <command>`, which waits for a free slot and holds it while the tests run; it is no tool, since a tool call may not last that long. The slots are lock files in `$WAFFLES_TEST_SLOTS`, or in `/tmp/waffles-test-slots-<uid>` when it is unset, shared by every session of your user. `--slots` sets another count. |
+| At most 3 builders running tests at once on this machine | Each builder runs its tests through the shell command `builders.ts test-slot -- <command>`, which waits for a free slot and holds it while the tests run; it is no tool, since a tool call may not last that long. The slots are lock files in `$WAFFLES_TEST_SLOTS`, or in `/tmp/waffles-test-slots-<uid>` when it is unset, shared by every session of your user. `--slots`, or `WAFFLES_TEST_SLOT_COUNT` for every run, sets another count. |
 
 ### Several UI items at once
 

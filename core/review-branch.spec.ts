@@ -125,3 +125,27 @@ test('on Node.js, the tool builds and ends the branch in the checkout it names, 
     await fs.rm(root, { recursive: true, force: true })
   }
 })
+
+test('a build fetches from the remote that WAFFLES_REMOTE names', async () => {
+  const $ = fakeHost({
+    cwd: '/session',
+    files: { '/main/README.md': 'readme\n' },
+    env: { WAFFLES_REMOTE: 'upstream' },
+    run: argv => {
+      const line = argv.slice(1).join(' ')
+      if (line === 'rev-parse --show-toplevel') return { stdout: '/main\n' }
+      if (line === 'rev-parse --absolute-git-dir') return { stdout: '/main/.git\n' }
+      if (line === 'branch --show-current') return { stdout: 'feat\n' }
+      if (line.startsWith('rev-parse --verify')) return { exitCode: 1 }
+      if (line.startsWith('symbolic-ref')) return { stdout: 'upstream/main\n' }
+      return {}
+    },
+  })
+  const answer = await REVIEW_BRANCH_TOOL.call($, { op: 'build', repo: '/main', prs: [2] })
+
+  assert.ok('value' in answer && (answer.value as { base: string }).base === 'upstream/main')
+  const lines = $.ran.map(r => r.argv.join(' '))
+  assert.ok(lines.includes('git fetch --quiet upstream'))
+  assert.ok(lines.includes('git symbolic-ref --short refs/remotes/upstream/HEAD'))
+  assert.equal(lines.some(line => / origin\b/.test(line)), false)
+})

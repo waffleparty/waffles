@@ -1,5 +1,6 @@
 import { answerOf, deadlineIn, Failed, outcomeOf, Refused, run, type Outcome } from './commands.ts'
 import type { Host } from './host.ts'
+import { DEFAULT_REVIEW_CAP, remoteName, reviewCap } from './settings.ts'
 import { absolute, basename, dirname, inside, join, normalize } from './paths.ts'
 import type { CoreTool, Json } from './tools.ts'
 
@@ -12,7 +13,8 @@ import type { CoreTool, Json } from './tools.ts'
  * A builder is an agent that builds one item: one clone, one branch, one draft pull request. Builders never share a
  * checkout, and nothing is copied back from a clone: the work reaches the repo as a pull request.
  *
- * clone makes `<root>/<owner>/<repo>/<item>` from the main checkout's `origin`. The root is $WAFFLES_BUILDERS_ROOT when
+ * clone makes `<root>/<owner>/<repo>/<item>` from the main checkout's remote ($WAFFLES_REMOTE, else `origin`; the
+ * clone's own remote is always `origin`, as git names it). The root is $WAFFLES_BUILDERS_ROOT when
  * it is set, so a person can keep clones where they like; otherwise root, which the skills set to `<session
  * scratchpad>/builders`: the session can write there without a permission prompt, and the plugin names no folder of
  * its own. A clone that a later session can't find is made again from its pushed branch. It borrows the main
@@ -27,7 +29,7 @@ import type { CoreTool, Json } from './tools.ts'
  * branch or a detached HEAD), and the folders above it that it leaves empty.
  *
  * limits counts, from GitHub, the open pull requests of the repo that wait for human review: marked ready (not a
- * draft), with a review requested from a person or a team. It counts every developer's. At the cap (10) it refuses:
+ * draft), with a review requested from a person or a team. It counts every developer's. At the cap (the call's, else $WAFFLES_REVIEW_CAP, else 10) it refuses:
  * waffles starts no builder in that repo until one is reviewed, and the reason lists them. A pull request that an
  * agent will merge itself has no review requested, so it is not counted. A list that the platform cut is refused.
  *
@@ -35,8 +37,8 @@ import type { CoreTool, Json } from './tools.ts'
  * A clone call takes at most 6 minutes in all, a remove 3, and limits 45 s.
  */
 
-// At most this many open pull requests per repo that wait for human review (the owner's cap).
-export const REVIEW_CAP = 10
+// At most this many open pull requests per repo that wait for human review, unless $WAFFLES_REVIEW_CAP or the call says another.
+export const REVIEW_CAP = DEFAULT_REVIEW_CAP
 
 const LOCAL_MS = 30_000
 const GH_MS = 60_000
@@ -105,7 +107,7 @@ async function rootOf(c: Call, option: string | undefined, flag: Spelling): Prom
 
 export function ownerRepo(url: string): [string, string] {
   const match = REMOTE.exec(url)
-  if (!match) throw new Refused(`origin's URL ${url} names no owner and repo.`)
+  if (!match) throw new Refused(`the remote's URL ${url} names no owner and repo.`)
   return [match[1]!, match[2]!]
 }
 
@@ -133,7 +135,8 @@ async function mainOf(c: Call, repo: string): Promise<string> {
 
 async function clone(c: Call, rootFolder: string, repo: string, item: string, branch: string, base: string | undefined): Promise<Clone> {
   const main = await mainOf(c, repo)
-  const url = await git(c, main, 'remote', 'get-url', 'origin')
+  // The main checkout's remote is the person's to name; the clone below is git's own, whose remote is origin.
+  const url = await git(c, main, 'remote', 'get-url', await remoteName(c.$))
   const [owner, name] = ownerRepo(url)
   const path = join(rootFolder, owner, name, slug(item))
   if (inside(path, main) || inside(main, path)) throw new Refused(`the clone ${path} would be inside the main checkout ${main}, or hold it.`)
@@ -234,7 +237,7 @@ export async function builders($: Host, input: BuildersInput, flag: Spelling = n
   return outcomeOf<Clone | Removed | Limits>(async () => {
     if (input.op === 'clone') return clone(c, await rootOf(c, input.root, flag), input.repo, input.item, input.branch, input.base)
     if (input.op === 'remove') return remove(c, await rootOf(c, input.root, flag), input.path)
-    return limits(c, input.repo, input.cap ?? REVIEW_CAP)
+    return limits(c, input.repo, input.cap ?? (await reviewCap($)))
   })
 }
 
@@ -292,7 +295,7 @@ export const BUILDERS_TOOL: CoreTool = {
   name: 'builders',
   title: 'Builders',
   description:
-    "Gives a builder (an agent that builds one item) its own full clone of the repo, removes it once merged, and checks the open pull request limit. op clone makes <root>/<owner>/<repo>/<item> from the main checkout repo's origin, on branch (checked out from origin when it is there, else started from origin's base, the default branch when left out), and answers with its path; a clone of the item on the same branch is reused, and one on another branch is refused. op remove deletes the clone at path, under root, and refuses one that holds changes, a stash, or commits that origin lacks. op limits counts the open pull requests of repo that wait for human review (ready, with a review requested), and refuses at cap (10), listing them: then start no builder in that repo. $WAFFLES_BUILDERS_ROOT, when set, takes the place of root. Test runs are not this tool: run each through the shell command `node <scripts>/builders.ts test-slot -- <command>`, which holds 1 of the machine's test slots for as long as the command runs, longer than a tool call may take.",
+    "Gives a builder (an agent that builds one item) its own full clone of the repo, removes it once merged, and checks the open pull request limit. op clone makes <root>/<owner>/<repo>/<item> from the main checkout repo's remote ($WAFFLES_REMOTE, else origin), on branch (checked out from origin when it is there, else started from origin's base, the default branch when left out), and answers with its path; a clone of the item on the same branch is reused, and one on another branch is refused. op remove deletes the clone at path, under root, and refuses one that holds changes, a stash, or commits that origin lacks. op limits counts the open pull requests of repo that wait for human review (ready, with a review requested), and refuses at cap (left out: $WAFFLES_REVIEW_CAP, else 10), listing them: then start no builder in that repo. $WAFFLES_BUILDERS_ROOT, when set, takes the place of root. Test runs are not this tool: run each through the shell command `node <scripts>/builders.ts test-slot -- <command>`, which holds 1 of the machine's test slots for as long as the command runs, longer than a tool call may take.",
   inputSchema: {
     type: 'object',
     required: ['op'],
