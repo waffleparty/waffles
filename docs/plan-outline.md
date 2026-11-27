@@ -89,9 +89,48 @@ Refer to steps by ID in plain language:
 - **Colors.** The main thread's step is cyan, a step a background subagent works on is magenta, and a step waiting for review is yellow, each with a bold marker. A step with work in progress under it is bold. A step changed since your last prompt is in italics.
 - **Change rows** appear in the transcript for each change, for example `plan outline  ✔ 3.2.1 Fix CORS on dev proxy → back to 3.2 Callback route`.
 - **The footer item** is last in the footer's right end, after the effort, while a goal is active, whether or not the pane is open. It shows `▶ Callback route` (`▶` in cyan), the current step's title, cut with `…` to the room the footer has left. With under 36 columns for the title, or no current step, it shows `▶ 5 of 8 steps` instead (the done, dropped, and deferred steps of all the goal's steps). Where that does not fit either, the footer leaves it out. Clicking it opens or closes the pane, as `/waffles:plan` does.
-- **The pane** shows the whole tree. In the fullscreen layout it opens by itself and docks beside the transcript, also when the plugin reloads with a goal active. On the main screen layout it does not open by itself: the footer item shows the current step, and `/waffles:plan` opens the pane above the prompt. When a goal ends, or `/clear` leaves no active goal, the pane keeps that goal's tree under a dim `done` or `not active` row until a goal becomes active. A session that has shown no goal shows `No active goal.`
+- **The pane** shows the tree, with [collapsed steps](#collapsed-steps) drawn as one row. In the fullscreen layout it opens by itself and docks beside the transcript, also when the plugin reloads with a goal active. On the main screen layout it does not open by itself: the footer item shows the current step, and `/waffles:plan` opens the pane above the prompt. When a goal ends, or `/clear` leaves no active goal, the pane keeps that goal's tree under a dim `done` or `not active` row until a goal becomes active. A session that has shown no goal shows `No active goal.`
 
 **`/waffles:plan`** opens or closes the pane. Typed during a turn, it runs when the turn ends. The plugin's hook answers it. The skill `skills/plan` only gives the command its name: a plugin cannot register a command named `waffles:plan`, and `/plan` alone is Claude Code's plan mode. When the pane is a tab behind another pane, `/waffles:plan` brings it to the front instead. It takes the keyboard only while the prompt has it and the prompt is empty. Closing the pane with `ctrl+x x` or its close mark counts the same as `/waffles:plan`. The choice is kept across sessions.
+
+### Collapsed steps
+
+A step with children can be collapsed: its children are not drawn, and its row ends with the count of its direct children, dim. Each step row has 2 columns before its state mark, so the marks of one depth line up:
+
+```
+Add SSO login
+› ✔ 1 Research the SSO providers (2)
+⌄ ▶ 2 Build the callback route
+  › ✔ 2.1 Parse the token (1)
+    ▶ 2.2 Validate the state param
+⌄ ▶ 3 Deploy to staging
+    ▶ 3.1 Add the secrets
+    ○ 3.2 Run the migration
+```
+
+| Gutter | Row |
+| --- | --- |
+| `›` (dim) | A collapsed step. The count after its title, such as `(2)`, is of its direct children. |
+| `⌄` (dim) | An expanded step. |
+| 2 spaces | A step with no children. |
+
+A long title is cut to leave room for the count, so the count stays visible: `Long title… (5)`.
+
+The pane collapses and expands steps by itself at the end of each turn, to show where work happens and to hide finished or idle sections. A turn runs from one prompt you type to the next. Its end is when Claude's turn stops, or your next prompt if no stop came. For each step with children, the first rule that holds decides:
+
+```
+every child closed (done, dropped, deferred) ─► collapse   (also when they were added this turn)
+a child started this turn (active, subagent, review) ─► expand the step and its ancestors
+a child added this turn ─► expand the step and its ancestors
+no child active, every child there when the turn began ─► collapse
+otherwise ─► keep its state
+```
+
+Work in progress is always visible: the main thread's current step, a step a background subagent works on, and a step waiting for review. No step above them stays collapsed, and work that starts during a turn shows at once. Steps collapse only at the end of a turn, or by a click.
+
+A click on a parent step's row collapses or expands it at once. In Claude Code's pane, Tab to the row and Enter does the same while the pane has the keyboard. At the end of the next turn the rules decide again: a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
+
+The collapsed steps are view state: each session keeps its own, and no goal file holds them. A step that is not known is expanded. A moved step keeps its state under its new ID. Another goal starts with every step expanded.
 
 ## Sessions and locks
 
