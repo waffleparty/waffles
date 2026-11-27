@@ -147,8 +147,10 @@ Releases are automatic. On each push to `main`, [semantic-release](https://seman
 | --- | --- |
 | `fix:`, `perf:`, `revert:` | Patch |
 | `feat:` | Minor |
-| `!` after the type, or a `BREAKING CHANGE:` footer | Major |
+| `!` after the type, or a `BREAKING CHANGE:` footer | Minor, while the version is 0.x |
 | `docs:`, `chore:`, `ci:`, `test:`, `refactor:`, `style:`, `build:` | None |
+
+The plugin stays on 0.x until its feature set is final: the `releaseRules` of `@semantic-release/commit-analyzer` in `.releaserc.json` make a breaking change a minor release. To release 1.0.0, remove that rule, and the next breaking change releases it.
 
 When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. The release workflow then compiles the npm package `@waffleparty/waffles` at the new tag (`npm run build:npm`) and publishes it to npm with [trusted publishing](https://docs.npmjs.com/trusted-publishers), with no token secret. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffles` entry to the new tag.
 
