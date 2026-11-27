@@ -17,7 +17,7 @@ import {
   type GoalFile,
   type Where,
 } from './plan-store.ts'
-import { collapsedFor, collapsedOf, currentIds } from './plan-collapse.ts'
+import { collapsedFor, collapsedOf, currentIds, toggle } from './plan-collapse.ts'
 import { restorePlan } from './plan-mirror.ts'
 import type { CoreTool } from './tools.ts'
 import {
@@ -753,6 +753,22 @@ export function submitPlan($: Host): void {
   void serial($, async () => {
     if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
   }).catch(() => undefined)
+}
+
+/**
+ * A press on a parent step's row in a view: the step collapses or expands now, unless that would hide
+ * work in progress. At the end of the next turn the automatic rules decide again. Queued behind a poll
+ * or a call, so a redraw never writes over the press.
+ */
+export async function pressPlan($: Host, id: string): Promise<void> {
+  await serial($, async () => {
+    const tree = await $.state.get('planTree')
+    const slug = (await $.state.get('planGoal')) ?? (await $.state.get('planKept'))
+    if (tree === null || slug === null) return
+    const kept = await $.state.get('planCollapsed')
+    const next = collapsedOf(slug, toggle(tree, collapsedFor(kept, slug), id))
+    if (!same(kept, next)) await $.state.set('planCollapsed', next)
+  })
 }
 
 /**

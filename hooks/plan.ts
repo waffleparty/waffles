@@ -1,6 +1,6 @@
 import type { EngineInterface, On, PromptSubmitInput, SessionEndInput } from 'claude-code'
 
-import { callPlan, completePlan as complete, endPlan as end, PLAN_TOOL, POLL_MS, spawnPlan, startPlan as start, submitPlan as submit, SUBAGENT, tickPlan } from '../core/plan.ts'
+import { callPlan, completePlan as complete, endPlan as end, PLAN_TOOL, POLL_MS, pressPlan as press, spawnPlan, startPlan as start, submitPlan as submit, SUBAGENT, tickPlan } from '../core/plan.ts'
 import type { Collapsed } from '../core/plan-collapse.ts'
 import type { Goal, Step } from '../core/plan-tree.ts'
 import type { PlanCollapsed, PlanGoal, PlanStep } from '../types'
@@ -26,6 +26,11 @@ export function submitPlan($: EngineInterface, e: PromptSubmitInput): void {
 // no active goal; after /resume the next poll restores the resumed session's goal.
 export async function endPlan($: EngineInterface, e: SessionEndInput) {
   await end(hostOf($), e.sessionId, e.reason === 'clear' || e.reason === 'resume')
+}
+
+// A press on a parent step's row in the pane (plan-ui.tsx).
+export async function pressPlan($: EngineInterface, id: string) {
+  await press(hostOf($), id)
 }
 
 // The module's one turn.complete hook calls this for a subagent's turn.

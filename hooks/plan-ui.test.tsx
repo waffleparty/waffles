@@ -36,7 +36,7 @@ updated: ${ISO}
 type Pane = { id: string; title: string; isShown: boolean; isFocused: boolean; isPlaced: boolean }
 
 // The disk, the session's ID, a clock and a store beneath the plugin, and an engine that keeps the
-// open panes: `opened` holds each `ui.open`, `panes` what `$.ui.panes()` lists.
+// open panes: `opened` holds each `ui.open`, `panes` what `$.ui.panes()` lists; `state` the session's values.
 function world(on: On, stored: Record<string, unknown> = {}) {
   const disk = fakeDisk(on)
   on('session.id', () => ({ value: ME }) as never)
@@ -73,7 +73,10 @@ function world(on: On, stored: Record<string, unknown> = {}) {
   on('command.register', ($, e) => (commands.push(e), { value: { command: e.name } }) as never)
   on('settings.read', () => ({ value: {} }) as never)
   on('session.start', ($, e) => ({ cwd: e.cwd }) as never)
-  return { disk, clock, opened, panes, store, commands, fails, during }
+  // The last value the plugin wrote to each session key.
+  const state: Record<string, unknown> = {}
+  on('state.set', ($, e, next) => ((state[e.key] = e.value), next(e)))
+  return { disk, clock, opened, panes, store, commands, fails, during, state }
 }
 
 const start = ($: Engine) => $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
@@ -293,6 +296,60 @@ test('a 24-column pane cuts titles with … and keeps markers and IDs', async ($
   ])
   expect(rows.every(row => [...row].length <= 24)).toBe(true)
   expect((await drawPane($, 12)).rows[0]).toBe('Ship OAuth…')
+})
+
+/** Presses a parent step's row in the pane, as a click on it does. */
+async function pressRow($: Engine, id: string) {
+  const ui = await $.ui.mount({ plugin: 'waffles', component: 'Pane', requestId: 'plan-outline', surface: 'terminal', props: paneProps(40) })
+  await ui.press({ key: `plan-step-${id}` })
+  await ui.unmount()
+}
+
+test('a parent step’s row is a Button: a press collapses it to its count, and another expands it', async ($, on) => {
+  const { disk } = world(on)
+  await specExample($, disk)
+  await call($, { op: 'focus', id: '4' })
+  await call($, { op: 'add', parent: '4', titles: ['Tag', 'Release'] })
+
+  const ui = await $.ui.mount({ plugin: 'waffles', component: 'Pane', requestId: 'plan-outline', surface: 'terminal', props: paneProps(40) })
+  const buttons = await ui.findAll({ type: 'Button' })
+  await ui.unmount()
+  // A Button for each parent, 3, 3.2 and 4, and none for a leaf.
+  expect(buttons.map(b => b.key)).toEqual(['plan-step-3', 'plan-step-3.2', 'plan-step-4'])
+
+  await pressRow($, '3')
+  expect((await drawPane($)).rows.slice(1, 6)).toEqual(['  ✔ 1 Spec', '  ✔ 2 Design', '› ⏸\uFE0E 3 Build (3)', '⌄ ▶ 4 Ship', '    ○ 4.1 Tag'])
+  await pressRow($, '3')
+  expect((await drawPane($)).rows[3]).toBe('⌄ ⏸\uFE0E 3 Build')
+  expect((await drawPane($)).rows[5]).toBe('  ⌄ ⏸\uFE0E 3.2 Callback route')
+})
+
+test('a press that would hide the current step changes nothing; on the current step it hides the steps under it', async ($, on) => {
+  const { disk, state } = world(on)
+  await specExample($, disk)
+
+  // 3 holds the current step, 3.2.
+  await pressRow($, '3')
+  expect((await drawPane($)).rows[3]).toBe('⌄ ▶ 3 Build')
+  expect(state.planCollapsed ?? null).toBe(null)
+
+  await pressRow($, '3.2')
+  expect((await drawPane($)).rows.slice(3, 7)).toEqual(['⌄ ▶ 3 Build', '    ✔ 3.1 Provider config', '  › ▶ 3.2 Callback route (1)', '    ✗ 3.3 ? Try implicit flow'])
+})
+
+test('a collapsed step stays collapsed under its new ID after a move, and another goal starts expanded', async ($, on) => {
+  const { disk, state } = world(on)
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  await pressRow($, '4')
+  expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+
+  await call($, { op: 'move', id: '4', to: '3' })
+  expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['3.4'] })
+  expect((await drawPane($)).rows).toContain('  › ○ 3.4 Ship (1)')
+
+  await call($, { op: 'goal', switch: 'fix-flaky-test' })
+  expect(state.planCollapsed).toBe(null)
 })
 
 test('a plan call draws its change lines; expanded, it draws the normal row', async ($, on) => {

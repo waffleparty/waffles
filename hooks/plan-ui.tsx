@@ -3,6 +3,8 @@ import type { EngineInterface, On, PaneCloseInput, RenderInput } from 'claude-co
 
 import type { PlanGoal, PlanStep } from '../types'
 import { ELSEWHERE } from '../core/plan.ts'
+import { collapsedFor } from '../core/plan-collapse.ts'
+import { pressPlan } from './plan'
 import { cut, MAIN, paneRows, stepCount, width, type Piece } from '../core/plan-view.ts'
 
 export { cut, width }
@@ -20,6 +22,7 @@ const planKept = atom({ plugin: 'waffles', key: 'planKept' } as const, null)
 const planKeptIssue = atom({ plugin: 'waffles', key: 'planKeptIssue' } as const, null)
 const planOthers = atom({ plugin: 'waffles', key: 'planOthers' } as const, [])
 const planChanged = atom({ plugin: 'waffles', key: 'planChanged' } as const, [])
+const planCollapsed = atom({ plugin: 'waffles', key: 'planCollapsed' } as const, null)
 
 // `$.store` key: the person's last choice, 'open' or 'closed', kept across sessions.
 const CHOICE = 'planPane'
@@ -188,29 +191,38 @@ function isPlanText(text: string, isErrored: boolean): boolean {
 }
 
 export function registerPlanUi(on: On): void {
-  // The pane: the active goal's tree, else the kept one's, the steps changed since the person's last prompt in italics.
+  // The pane: the active goal's tree, else the kept one's, the steps changed since the person's last prompt
+  // in italics. A parent step's row is a Button: a press collapses or expands it.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const goal = await read($, planTree)
-    const isActive = (await read($, planGoal)) !== null
-    const isKept = (await read($, planKept)) !== null
+    const active = await read($, planGoal)
+    const kept = await read($, planKept)
     const error = await read($, planError)
     const issue = await read($, planKeptIssue)
     const others = await read($, planOthers)
     const changed = await read($, planChanged)
+    const collapsed = collapsedFor(await read($, planCollapsed), active ?? kept)
     noteLayout(e.viewport?.isFullscreen)
-    const { Box, Text } = $.ui.resolve(e)
-    const rows = paneRows(goal, isActive, isKept, error, issue, others, changed, [], e.props.bodyColumns)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const rows = paneRows(goal, active !== null, kept !== null, error, issue, others, changed, collapsed, e.props.bodyColumns)
     return (
       <Box flexDirection="column">
-        {rows.map(pieces => (
-          <Box>
-            {pieces.map(p => (
-              <Text wrap="truncate-end" color={p.color} dimColor={p.isDim || undefined} bold={p.isBold || undefined} italic={p.isItalic || undefined}>
-                {p.text}
-              </Text>
-            ))}
-          </Box>
-        ))}
+        {rows.map(pieces => {
+          const texts = pieces.map(p => (
+            <Text wrap="truncate-end" color={p.color} dimColor={p.isDim || undefined} bold={p.isBold || undefined} italic={p.isItalic || undefined}>
+              {p.text}
+            </Text>
+          ))
+          const id = pieces.find(p => p.toggle !== undefined)?.toggle
+          if (id === undefined) return <Box>{texts}</Box>
+          return (
+            <Box>
+              <Button key={`plan-step-${id}`} plain onPress={() => pressPlan($, id).catch(() => undefined)}>
+                {texts}
+              </Button>
+            </Box>
+          )
+        })}
       </Box>
     )
   })
