@@ -118,16 +118,19 @@ export function reveal(goal: Goal, ids: readonly string[]): string[] {
  * every step that must be visible is shown (`reveal`).
  *
  * With `isExpandOnly`, for a stop with no turn of the person's open (a turn a notification started), the
- * rules that collapse keep P's state instead: steps collapse once per person's turn, at its end.
+ * rules that collapse keep P's state instead: steps collapse once per person's turn, at its end. A step
+ * in `held` (pressed during the turn) keeps the state the press gave it, whatever the rules say.
  */
 export function endTurn(
   before: Goal | null,
   after: Goal,
   ids: readonly string[],
   added: readonly string[],
-  { isExpandOnly = false }: { isExpandOnly?: boolean } = {},
+  { isExpandOnly = false, held = [] }: { isExpandOnly?: boolean; held?: readonly string[] } = {},
 ): string[] {
-  const collapsed = new Set(currentIds(after, ids))
+  const given = new Set(currentIds(after, ids))
+  const kept = new Set(held.flatMap(id => findStep(after, id)?.id ?? []))
+  const collapsed = new Set(given)
   const opened = new Set<string>()
   const wasActive = (step: Step) => {
     const was = before === null ? undefined : earlier(before, step)
@@ -141,7 +144,9 @@ export function endTurn(
       for (const id of [...above, step.id]) opened.add(id)
     } else if (!isExpandOnly && !kids.some(kid => isActive(after, kid))) collapsed.add(step.id)
   }
-  const out = parents(after).map(p => p.step.id).filter(id => collapsed.has(id) && !opened.has(id))
+  const out = parents(after)
+    .map(p => p.step.id)
+    .filter(id => (kept.has(id) ? given.has(id) : collapsed.has(id) && !opened.has(id)))
   return reveal(after, out)
 }
 

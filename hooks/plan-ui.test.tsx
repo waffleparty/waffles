@@ -462,6 +462,34 @@ test('a press holds until the next turn’s end, where the rules decide again; a
   expect(await row4()).toBe('› ○ 4 Ship (1)')
 })
 
+test('a click during a turn holds through that turn’s end, and the rules decide again at the end of the next', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const begin = () => $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  const end = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  const row4 = async () => (await drawPane($)).rows.find(row => row.includes(' 4 Ship'))
+  await begin()
+  await end()
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+
+  // Expanded by a click while the next turn runs: that turn's end leaves it so.
+  await begin()
+  await call($, { op: 'rename', id: '1', title: 'Spec it' })
+  await pressRow($, '4')
+  await end()
+  expect(await row4()).toBe('⌄ ○ 4 Ship')
+  // At the end of the turn after, the rules decide again: 4 is idle and old.
+  await begin()
+  await end()
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+})
+
 test('a turn a notification starts, with no prompt typed, reveals the steps it adds but collapses nothing', async ($, on) => {
   const { disk } = world(on)
   on('prompt.submit', ($, e) => ({ text: e.text }))
@@ -519,11 +547,13 @@ test('after /clear the kept tree is drawn with every step expanded, and no turn 
   await pressRow($, '4')
   expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
   expect(state.planTurn).not.toBe(null)
+  expect(state.planPressed).toEqual(['4'])
 
   await $.session.end({ reason: 'clear', sessionId: ME, resume: { id: ME } })
 
   expect(state.planCollapsed).toBe(null)
   expect(state.planTurn).toBe(null)
+  expect(state.planPressed).toEqual([])
   expect((await drawPane($)).rows).toContain('⌄ ○ 4 Ship')
 })
 

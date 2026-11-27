@@ -116,7 +116,7 @@ Add SSO login
 
 A long title is cut to leave room for the count, so the count stays visible: `Long title… (5)`.
 
-The pane collapses and expands steps by itself at the end of each turn, to show where work happens and to hide finished or idle sections. A turn runs from one prompt you type to the next. Its end is when Claude's turn stops, or your next prompt if no stop came. For each step with children, the first rule that holds decides:
+The pane collapses and expands steps by itself at the end of each turn, to show where work happens and to hide finished or idle sections. A turn runs from one prompt you type between Claude's turns to the next. A prompt you type while Claude works goes into the running turn and begins none. The turn's end is when Claude's turn stops, or your next prompt if no stop came. For each step with children, the first rule that holds decides:
 
 ```
 every child closed (done, dropped, deferred) ─► collapse   (also when they were added this turn)
@@ -126,11 +126,13 @@ no child active, every child there when the turn began ─► collapse
 otherwise ─► keep its state
 ```
 
+A turn that Claude starts with no prompt of yours (after a background subagent finishes, for example) expands steps by the second and third rules when it stops, so the steps it adds show, but it collapses nothing.
+
 Work in progress is always visible: the main thread's current step, a step a background subagent works on, and a step waiting for review. No step above them stays collapsed, and work that starts during a turn shows at once. Steps collapse only at the end of a turn, or by a click.
 
-A click on a parent step's row collapses or expands it at once. In Claude Code's pane, Tab to the row and Enter does the same while the pane has the keyboard. At the end of the next turn the rules decide again: a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
+A click on a parent step's row collapses or expands it at once. In Claude Code's pane, Tab to the row and Enter does the same while the pane has the keyboard. The click holds through the end of the turn it is made in (made between turns, through the end of the next turn). At the end of the turn after that, the rules decide again: a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
 
-The collapsed steps are view state: each session keeps its own, and no goal file holds them. A step that is not known is expanded. A moved step keeps its state under its new ID. Another goal starts with every step expanded.
+The collapsed steps are view state: each session keeps its own, and no goal file holds them. `/clear` and `/resume` start the new conversation with every step expanded. A step that is not known is expanded. A moved step keeps its state under its new ID. Another goal starts with every step expanded.
 
 ## Sessions and locks
 

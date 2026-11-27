@@ -107,6 +107,8 @@ declare module 'claude-code' {
       planCollapsed: PlanCollapsed | null
       /** The tree drawn at the last turn boundary, for the collapse rules at the next; null before the first. */
       planTurn: PlanTurn | null
+      /** The steps pressed since the person's last turn began, by ID: the rules leave them as pressed at that turn's end. */
+      planPressed: string[]
       /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
       planFetched: boolean
     }

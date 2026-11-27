@@ -27,6 +27,7 @@ import {
   deferStep,
   describe,
   endAgent,
+  findStep,
   focusStep,
   markRunning,
   moveGoalInto,
@@ -327,7 +328,8 @@ async function finishTurn($: Host, isStop: boolean) {
   if (turn === null || tree === null || slug === null) return
   const before = turn.goal === slug ? turn.tree : null
   const kept = await $.state.get('planCollapsed')
-  const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree), { isExpandOnly: !turn.isOpen }))
+  const held = await $.state.get('planPressed')
+  const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree), { isExpandOnly: !turn.isOpen, held }))
   if (!same(kept, next)) await $.state.set('planCollapsed', next)
 }
 
@@ -784,6 +786,8 @@ export function submitPlan($: Host, isTurn: boolean): void {
     if (!isTurn) return
     await finishTurn($, false)
     await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree'), isOpen: true })
+    // A press holds through the end of the turn it was made in; at this turn's end the rules decide again.
+    if ((await $.state.get('planPressed')).length) await $.state.set('planPressed', [])
   }).catch(() => undefined)
 }
 
@@ -797,8 +801,9 @@ export function stopPlan($: Host): void {
 
 /**
  * A press on a parent step's row in a view: the step collapses or expands now, unless that would hide
- * work in progress. At the end of the next turn the automatic rules decide again. Queued behind a poll
- * or a call, so a redraw never writes over the press.
+ * work in progress. It holds through the end of the turn it is made in (between turns, the next one);
+ * at the end of the turn after, the automatic rules decide again. Queued behind a poll or a call, so a
+ * redraw never writes over the press.
  */
 export async function pressPlan($: Host, id: string): Promise<void> {
   await serial($, async () => {
@@ -807,7 +812,11 @@ export async function pressPlan($: Host, id: string): Promise<void> {
     if (tree === null || slug === null) return
     const kept = await $.state.get('planCollapsed')
     const next = collapsedOf(slug, toggle(tree, collapsedFor(kept, slug), id))
-    if (!same(kept, next)) await $.state.set('planCollapsed', next)
+    if (same(kept, next)) return
+    await $.state.set('planCollapsed', next)
+    const step = findStep(tree, id)
+    const pressed = await $.state.get('planPressed')
+    if (step && !pressed.includes(step.id)) await $.state.set('planPressed', [...pressed, step.id])
   })
 }
 
@@ -836,6 +845,7 @@ export async function endPlan($: Host, sessionId: string, isProcessKept: boolean
   // The collapsed steps and the turn are the ended session's view: the new one starts with every step expanded.
   if ((await $.state.get('planCollapsed')) !== null) await $.state.set('planCollapsed', null)
   if ((await $.state.get('planTurn')) !== null) await $.state.set('planTurn', null)
+  if ((await $.state.get('planPressed')).length) await $.state.set('planPressed', [])
 }
 
 /**

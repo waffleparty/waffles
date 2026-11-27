@@ -24,6 +24,7 @@ const planOthers = atom({ plugin: 'waffles', key: 'planOthers' } as const, [])
 const planChanged = atom({ plugin: 'waffles', key: 'planChanged' } as const, [])
 const planCollapsed = atom({ plugin: 'waffles', key: 'planCollapsed' } as const, null)
 const planTurn = atom({ plugin: 'waffles', key: 'planTurn' } as const, null)
+const planPressed = atom({ plugin: 'waffles', key: 'planPressed' } as const, [])
 const planFetched = atom({ plugin: 'waffles', key: 'planFetched' } as const, false)
 
 type Key = keyof SessionState
@@ -62,6 +63,8 @@ async function getState($: EngineInterface, key: Key): Promise<SessionState[Key]
       return read($, planCollapsed)
     case 'planTurn':
       return read($, planTurn)
+    case 'planPressed':
+      return read($, planPressed)
     case 'planFetched':
       return read($, planFetched)
   }
@@ -116,6 +119,9 @@ async function setState($: EngineInterface, key: Key, value: SessionState[Key]):
       return
     case 'planTurn':
       await update($, planTurn, () => value as SessionState['planTurn'])
+      return
+    case 'planPressed':
+      await update($, planPressed, () => value as SessionState['planPressed'])
       return
     case 'planFetched':
       await update($, planFetched, () => value as SessionState['planFetched'])

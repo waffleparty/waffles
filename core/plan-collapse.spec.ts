@@ -152,3 +152,14 @@ test('at a stop with no turn of the person’s open, only the rules that expand 
   // At the person's turn's end they do.
   assert.deepEqual(endTurn(after, after, [], []), ['2', '3'])
 })
+
+test('a step pressed during the turn keeps the state the press gave it at that turn’s end', () => {
+  let before = newGoal('Ship', [{ title: 'Build' }, { title: 'Test' }, { title: 'Docs' }], NOW)
+  before = addSteps(before, '2', 'planned', ['Unit'], NOW).goal
+  before = addSteps(before, '3', 'planned', ['Guide'], NOW).goal
+  const after = addSteps(before, '2', 'planned', ['Lint'], NOW).goal
+  // 2 gets a new step and 3 is idle: the rules expand 2 and collapse 3.
+  assert.deepEqual(endTurn(before, after, ['2'], ['2.2']), ['3'])
+  // Pressed during the turn, 2 stays collapsed and 3 expanded.
+  assert.deepEqual(endTurn(before, after, ['2'], ['2.2'], { held: ['2', '3'] }), ['2'])
+})
