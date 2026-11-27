@@ -137,3 +137,18 @@ test('a moved step is no new step, and keeps its collapsed state under its new I
   // moved step was there when the turn began, so 3 collapses as idle and old.
   assert.deepEqual(endTurn(before, after, ['2'], []), ['3', '3.1'])
 })
+
+test('at a stop with no turn of the person’s open, only the rules that expand run', () => {
+  let before = newGoal('Ship', [{ title: 'Build' }, { title: 'Test' }, { title: 'Docs' }], NOW)
+  before = addSteps(before, '2', 'planned', ['Unit'], NOW).goal
+  before = addSteps(before, '3', 'planned', ['Guide'], NOW).goal
+  // 2 collapsed by the last turn's end; a notification's turn adds 2.2 and closes 3.1, and 1 has none.
+  let after = addSteps(before, '2', 'planned', ['Lint'], NOW).goal
+  after = closeSteps(after, ['3.1'], 'done', false, NOW).goal
+  assert.deepEqual(endTurn(before, after, ['2'], newIds(before, after), { isExpandOnly: true }), [])
+  // 3 is all closed and 2 idle: neither collapses at such a stop, and a collapsed one stays so.
+  assert.deepEqual(endTurn(after, after, [], [], { isExpandOnly: true }), [])
+  assert.deepEqual(endTurn(after, after, ['3'], [], { isExpandOnly: true }), ['3'])
+  // At the person's turn's end they do.
+  assert.deepEqual(endTurn(after, after, [], []), ['2', '3'])
+})

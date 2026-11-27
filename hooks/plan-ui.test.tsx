@@ -462,6 +462,34 @@ test('a press holds until the next turn’s end, where the rules decide again; a
   expect(await row4()).toBe('› ○ 4 Ship (1)')
 })
 
+test('a turn a notification starts, with no prompt typed, reveals the steps it adds but collapses nothing', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const stop = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  const rows = async () => (await drawPane($)).rows
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await stop()
+  expect(await rows()).toContain('› ○ 4 Ship (1)')
+  // 3.2's steps are all done: collapsed too.
+  expect(await rows()).toContain('  › ▶ 3.2 Callback route (1)')
+
+  // A subagent's notification starts a turn: no typed prompt. Claude adds a step under 4, not current.
+  await $.prompt.submit({ origin: { kind: 'task-notification' }, wait: false, text: 'Agent finished' } as never)
+  await call($, { op: 'add', parent: '4', titles: ['Release'] })
+  await pressRow($, '3.2')
+  await stop()
+  expect(await rows()).toContain('⌄ ○ 4 Ship')
+  expect(await rows()).toContain('    ○ 4.2 Release')
+  // 3.2 was expanded by a click: such a stop collapses nothing, so it stays as the click left it.
+  expect(await rows()).toContain('  ⌄ ▶ 3.2 Callback route')
+})
+
 test('a prompt typed into a running turn ends no turn: steps added before it count as new at the stop', async ($, on) => {
   const { disk } = world(on)
   on('prompt.submit', ($, e) => ({ text: e.text }))

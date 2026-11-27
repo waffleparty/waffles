@@ -198,7 +198,7 @@ export type SessionState = {
   planChanged: string[]
   /** The drawn goal's collapsed steps, for drawing: view state, in no goal file. Null when none is collapsed. */
   planCollapsed: Collapsed | null
-  /** The tree drawn when the person's last prompt began the turn; null once the turn's end ran the collapse rules. */
+  /** The tree drawn at the last turn boundary, for the collapse rules at the next; null before the first. */
   planTurn: Turn | null
   /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
   planFetched: boolean

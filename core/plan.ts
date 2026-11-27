@@ -312,20 +312,22 @@ async function drawnSlug($: Host): Promise<string | null> {
 }
 
 /**
- * Runs the collapse rules (core/plan-collapse.ts's `endTurn`) for the turn that is ending, once: at the
- * turn's stop, else at the next prompt. The tree when the turn began is the one before; a tree of another
- * goal counts as none, so each step of this one is new.
+ * Runs the collapse rules (core/plan-collapse.ts's `endTurn`) at a turn boundary: a stop (`isStop`), or a
+ * prompt that begins a turn. The person's turn is ended once: at its stop, else at the next prompt; the
+ * tree when it began is the one before. A later stop with no turn of the person's open (a turn a
+ * notification started) runs only the rules that expand, on what changed since the rules last ran. A
+ * tree of another goal counts as none, so each step of this one is new. The tree now is kept for the next.
  */
-async function finishTurn($: Host) {
+async function finishTurn($: Host, isStop: boolean) {
   const turn = await $.state.get('planTurn')
-  if (turn === null) return
-  await $.state.set('planTurn', null)
+  if (!isStop && turn?.isOpen !== true) return
   const tree = await $.state.get('planTree')
   const slug = await drawnSlug($)
-  if (tree === null || slug === null) return
+  await $.state.set('planTurn', { goal: slug, tree, isOpen: false })
+  if (turn === null || tree === null || slug === null) return
   const before = turn.goal === slug ? turn.tree : null
   const kept = await $.state.get('planCollapsed')
-  const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree)))
+  const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree), { isExpandOnly: !turn.isOpen }))
   if (!same(kept, next)) await $.state.set('planCollapsed', next)
 }
 
@@ -780,16 +782,17 @@ export function submitPlan($: Host, isTurn: boolean): void {
   void serial($, async () => {
     if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
     if (!isTurn) return
-    await finishTurn($)
-    await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree') })
+    await finishTurn($, false)
+    await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree'), isOpen: true })
   }).catch(() => undefined)
 }
 
 /**
- * The main thread's turn stopped: the collapse rules run for it. Queued, not awaited, as submitPlan is.
+ * The main thread's turn stopped, also one a notification started: the collapse rules run for it.
+ * Queued, not awaited, as submitPlan is.
  */
 export function stopPlan($: Host): void {
-  void serial($, () => finishTurn($)).catch(error => logFailure($, "couldn't collapse the plan outline at the turn's end", error))
+  void serial($, () => finishTurn($, true)).catch(error => logFailure($, "couldn't collapse the plan outline at the turn's end", error))
 }
 
 /**

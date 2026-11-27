@@ -10,10 +10,11 @@ import { findStep, shownState, type Goal, type Shown, type Step } from './plan-t
 export type Collapsed = { goal: string; ids: string[] }
 
 /**
- * The tree drawn when a turn began, for the rules at its end: the drawn goal's slug (null with none) and
- * its tree (null when it could not be read).
+ * The tree drawn at the last turn boundary, for the rules at the next one: the drawn goal's slug (null
+ * with none) and its tree (null when it could not be read). `isOpen` holds from the prompt the person
+ * typed to begin a turn until that turn's end; otherwise the tree is the one the rules last ran on.
  */
-export type Turn = { goal: string | null; tree: Goal | null }
+export type Turn = { goal: string | null; tree: Goal | null; isOpen: boolean }
 
 /** Whether the step is listed: by its ID, or by an old ID that a move left as its alias. */
 export function isCollapsed(step: Step, ids: readonly string[]): boolean {
@@ -115,8 +116,17 @@ export function reveal(goal: Goal, ids: readonly string[]): string[] {
  *
  * An ancestor that the second or third rule expands stays expanded whatever its own rule says. Last,
  * every step that must be visible is shown (`reveal`).
+ *
+ * With `isExpandOnly`, for a stop with no turn of the person's open (a turn a notification started), the
+ * rules that collapse keep P's state instead: steps collapse once per person's turn, at its end.
  */
-export function endTurn(before: Goal | null, after: Goal, ids: readonly string[], added: readonly string[]): string[] {
+export function endTurn(
+  before: Goal | null,
+  after: Goal,
+  ids: readonly string[],
+  added: readonly string[],
+  { isExpandOnly = false }: { isExpandOnly?: boolean } = {},
+): string[] {
   const collapsed = new Set(currentIds(after, ids))
   const opened = new Set<string>()
   const wasActive = (step: Step) => {
@@ -125,10 +135,11 @@ export function endTurn(before: Goal | null, after: Goal, ids: readonly string[]
   }
   for (const { step, above } of parents(after)) {
     const kids = step.children
-    if (kids.every(isClosed)) collapsed.add(step.id)
-    else if (kids.some(kid => isActive(after, kid) && !wasActive(kid)) || kids.some(kid => added.includes(kid.id))) {
+    if (kids.every(isClosed)) {
+      if (!isExpandOnly) collapsed.add(step.id)
+    } else if (kids.some(kid => isActive(after, kid) && !wasActive(kid)) || kids.some(kid => added.includes(kid.id))) {
       for (const id of [...above, step.id]) opened.add(id)
-    } else if (!kids.some(kid => isActive(after, kid))) collapsed.add(step.id)
+    } else if (!isExpandOnly && !kids.some(kid => isActive(after, kid))) collapsed.add(step.id)
   }
   const out = parents(after).map(p => p.step.id).filter(id => collapsed.has(id) && !opened.has(id))
   return reveal(after, out)

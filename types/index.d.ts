@@ -50,12 +50,14 @@ export type PlanCollapsed = {
   ids: string[]
 }
 
-/** The tree drawn when a turn began, for the collapse rules at its end (core/plan-collapse.ts's `Turn`). */
+/** The tree drawn at the last turn boundary, for the collapse rules at the next (core/plan-collapse.ts's `Turn`). */
 export type PlanTurn = {
   /** The drawn goal's slug; null with none. */
   goal: string | null
   /** Its tree; null when it could not be read. */
   tree: PlanGoal | null
+  /** From the prompt the person typed to begin a turn until that turn's end. */
+  isOpen: boolean
 }
 
 /** Where rapid work started: HEAD then, and the paths already changed then, relative to the repository root. */
@@ -103,7 +105,7 @@ declare module 'claude-code' {
       planChanged: string[]
       /** The drawn goal's collapsed steps, for drawing: view state, in no goal file. Null when none is collapsed. */
       planCollapsed: PlanCollapsed | null
-      /** The tree drawn when the person's last prompt began the turn; null once the turn's end ran the collapse rules. */
+      /** The tree drawn at the last turn boundary, for the collapse rules at the next; null before the first. */
       planTurn: PlanTurn | null
       /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
       planFetched: boolean
