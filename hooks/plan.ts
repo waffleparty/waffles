@@ -1,17 +1,18 @@
 import type { EngineInterface, On, PromptSubmitInput, SessionEndInput } from 'claude-code'
 
 import { callPlan, completePlan as complete, endPlan as end, PLAN_TOOL, POLL_MS, spawnPlan, startPlan as start, submitPlan as submit, SUBAGENT, tickPlan } from '../core/plan.ts'
+import type { Collapsed } from '../core/plan-collapse.ts'
 import type { Goal, Step } from '../core/plan-tree.ts'
-import type { PlanGoal, PlanStep } from '../types'
+import type { PlanCollapsed, PlanGoal, PlanStep } from '../types'
 import { hostOf } from './host'
 
 /** The plan outline tool's name as the model calls it: Claude Code puts a plugin's tools under `mcp__<plugin>__`. */
 export const TOOL = 'mcp__waffles__plan'
 
-// plan-ui.tsx draws types/index.d.ts's copies of Goal and Step: a change to one side alone fails to compile here.
+// plan-ui.tsx draws types/index.d.ts's copies of Goal, Step and Collapsed: a change to one side alone fails to compile here.
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
 type Holds<T extends true> = T
-export type PlanShapes = [Holds<Equal<Goal, PlanGoal>>, Holds<Equal<Step, PlanStep>>]
+export type PlanShapes = [Holds<Equal<Goal, PlanGoal>>, Holds<Equal<Step, PlanStep>>, Holds<Equal<Collapsed, PlanCollapsed>>]
 
 // The module's one prompt.submit hook calls this. Only a prompt the person typed clears the
 // highlights: a notification, a trigger or a slash command (/waffles:plan opens the pane that shows them) leaves them.

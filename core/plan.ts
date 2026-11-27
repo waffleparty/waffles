@@ -17,6 +17,7 @@ import {
   type GoalFile,
   type Where,
 } from './plan-store.ts'
+import { collapsedFor, collapsedOf, currentIds } from './plan-collapse.ts'
 import { restorePlan } from './plan-mirror.ts'
 import type { CoreTool } from './tools.ts'
 import {
@@ -285,11 +286,23 @@ async function refresh(
   }
   if (slug !== null || isRead) {
     const tree = isRead ? mine.goal : null
+    // Before the tree, so a tree is never drawn with the collapsed steps of another goal.
+    if (tree !== null && shown !== null && !isEnded()) await syncCollapsed($, shown, tree)
     if (!isEnded() && !same(await $.state.get('planTree'), tree)) await $.state.set('planTree', tree)
   }
   if (!isEnded() && (await $.state.get('planKeptIssue')) !== issue) await $.state.set('planKeptIssue', issue)
   if (!isEnded() && (await $.state.get('planError')) !== error) await $.state.set('planError', error)
   if (!isEnded() && !same(await $.state.get('planOthers'), others)) await $.state.set('planOthers', others)
+}
+
+/**
+ * Keeps the collapsed steps in step with the tree drawn: none for a goal other than the one they were
+ * kept for, and each named by its ID in the tree, so a moved step keeps its state under its new ID.
+ */
+async function syncCollapsed($: Host, slug: string, tree: Goal) {
+  const kept = await $.state.get('planCollapsed')
+  const next = collapsedOf(slug, currentIds(tree, collapsedFor(kept, slug)))
+  if (!same(kept, next)) await $.state.set('planCollapsed', next)
 }
 
 /** Sets the goal whose tree the pane keeps while no goal is active; null once one is. */

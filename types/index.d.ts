@@ -42,6 +42,14 @@ export type PlanOther = {
   inUse: boolean
 }
 
+/** The drawn goal's collapsed steps (core/plan-collapse.ts's `Collapsed`). */
+export type PlanCollapsed = {
+  /** The slug of the goal they are steps of. */
+  goal: string
+  /** The IDs of its collapsed steps; a step not listed is expanded. */
+  ids: string[]
+}
+
 /** Where rapid work started: HEAD then, and the paths already changed then, relative to the repository root. */
 export type RapidBase = { head: string; dirty: string[] }
 
@@ -85,6 +93,8 @@ declare module 'claude-code' {
       planOthers: PlanOther[]
       /** Step IDs changed since the person's last prompt. */
       planChanged: string[]
+      /** The drawn goal's collapsed steps, for drawing: view state, in no goal file. Null when none is collapsed. */
+      planCollapsed: PlanCollapsed | null
       /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
       planFetched: boolean
     }

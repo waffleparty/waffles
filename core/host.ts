@@ -1,3 +1,4 @@
+import type { Collapsed } from './plan-collapse.ts'
 import type { Goal } from './plan-tree.ts'
 
 /**
@@ -195,6 +196,8 @@ export type SessionState = {
   planOthers: OtherGoal[]
   /** Step IDs changed since the person's last prompt. */
   planChanged: string[]
+  /** The drawn goal's collapsed steps, for drawing: view state, in no goal file. Null when none is collapsed. */
+  planCollapsed: Collapsed | null
   /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
   planFetched: boolean
 }
@@ -215,6 +218,7 @@ export const INITIAL: SessionState = {
   planError: null,
   planOthers: [],
   planChanged: [],
+  planCollapsed: null,
   planFetched: false,
 }
 
