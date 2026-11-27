@@ -7,7 +7,7 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Agent | Command |
 | --- | --- |
 | Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
-| OpenCode 2 | Clone this repo and add its absolute path to `plugins` in `~/.config/opencode/opencode.jsonc`. See [OpenCode](docs/opencode.md). |
+| OpenCode 2 | `opencode plugin add @waffleparty/waffles`, the npm package. See [OpenCode](docs/opencode.md). |
 | Codex | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/codex.md](docs/codex.md). |
 | Cursor | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/cursor.md](docs/cursor.md). For local use, put this repo at `~/.cursor/plugins/local/waffles` and reload the window. |
 | Antigravity | Not in a marketplace yet. `agy plugin install https://github.com/waffleparty/waffles`. Skills, the modes, unattended runs, the plan outline tool, and the checkpoint: see [docs/antigravity.md](docs/antigravity.md). |
@@ -36,7 +36,7 @@ Each platform's page states its limits: [OpenCode](docs/opencode.md), [Codex](do
 | --- | --- |
 | Claude Code 2.1.332 or later, or OpenCode 2 | Claude Code 2.1.332 is the version the hooks are tested with in CI; an earlier one may not load hook modules. The hooks: modes, the plan outline, the checkpoint, unattended runs, and auto effort. The agents and the dev servers pane need Claude Code. |
 | `git` | Everything that touches a repo: the plan outline, builders' clones, commit prep. |
-| Node.js 22.18 or later, on the model's shell path | What skills still run from the shell: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts`), and the CI watcher of `/waffles:watch-ci`. Builders, the merge queue, the review branch, the backlog queue, and the checkpoint are tools; their scripts in `scripts/` are the fallback where a platform has no tools, and a person can run them by hand. The MCP server needs Node.js too. All use Node.js built-ins only and run with no build step. |
+| Node.js 22.18 or later in the 22 line, or 24.3 or later, on the model's shell path | What skills still run from the shell: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts`), and the CI watcher of `/waffles:watch-ci`. Builders, the merge queue, the review branch, the backlog queue, and the checkpoint are tools; their scripts in `scripts/` are the fallback where a platform has no tools, and a person can run them by hand. The MCP server needs Node.js too. All use Node.js built-ins only and run with no build step. Those versions are the first with type stripping on by default, `import.meta.main`, and no warning on stderr for type stripping; Node.js 23 and 24.0 to 24.2 lack one of them. |
 | `gh`, signed in, and a GitHub remote | The pull request features: the checklist in the pull request description, builders' draft pull requests, the open pull request limit, the review branch, the merge queue check, and `/waffles:watch-ci` for GitHub-hosted CI. |
 | `lsof` | The dev servers pane and the ownership check of `/waffles:dev-server`. |
 
@@ -130,7 +130,8 @@ waffles/
 ├── adapters/command/            The adapter for platforms whose hooks run a command per event, with a table per platform
 ├── adapters/mcp/                The MCP server that offers the plan outline tool and the core's tools
 ├── scripts/                     Command-line wrappers over the core's tools, test-slot, and their tests (*.spec.ts)
-│   └── bump-version.sh          Writes or checks the version in every manifest
+│   ├── bump-version.sh          Writes or checks the version in every manifest
+│   └── build-npm.ts             Compiles the npm package into dist/, which is not in git
 ├── types/                       Type declarations for the hooks
 ├── docs/                        User documentation
 └── .version-bump.json           The files and fields that hold the version
@@ -149,7 +150,7 @@ Releases are automatic. On each push to `main`, [semantic-release](https://seman
 | `!` after the type, or a `BREAKING CHANGE:` footer | Major |
 | `docs:`, `chore:`, `ci:`, `test:`, `refactor:`, `style:`, `build:` | None |
 
-When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffles` entry to the new tag.
+When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. The release workflow then compiles the npm package `@waffleparty/waffles` at the new tag (`npm run build:npm`) and publishes it to npm with [trusted publishing](https://docs.npmjs.com/trusted-publishers), with no token secret. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffles` entry to the new tag.
 
 Do not edit `version` fields by hand. To add a file that holds the version, add it to `.version-bump.json` and to the `@semantic-release/git` `assets` in `.releaserc.json`; `scripts/bump-version.sh --check` fails until both lists agree.
 
@@ -171,6 +172,7 @@ claude plugin validate .                                     # the manifests, sk
 claude plugin test                                           # the Claude Code adapter's tests
 npm run typecheck                                            # the core, the adapters, and the scripts
 npm run test:node                                            # their tests, on Node.js
+npm run build:npm                                            # the npm package, into dist/
 claude --plugin-dir .                                        # try the plugin from this checkout
 ```
 

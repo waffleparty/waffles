@@ -41,3 +41,6 @@ jobs:
         run: npm run typecheck
       - name: Test on Node.js
         run: npm run test:node
+      # The package that release.yml publishes to npm.
+      - name: Build the npm package
+        run: npm run build:npm

@@ -30,7 +30,7 @@ The Codex CLI's composer refuses a slash command it doesn't know ("Unrecognized 
 
 ## Install
 
-Codex reads the root `plugin.json` (the Agent Plugins format). Its `extensions.com.openai` object names the hooks file, `adapters/command/codex-hooks.json`; `mcp.json` names the MCP server. The hooks need Node.js 22.18 or later as `node` on the PATH.
+Codex reads the root `plugin.json` (the Agent Plugins format). Its `extensions.com.openai` object names the hooks file, `adapters/command/codex-hooks.json`; `mcp.json` names the MCP server. The hooks need Node.js 22.18 or later in the 22 line, or 24.3 or later as `node` on the PATH.
 
 No marketplace lists waffles for Codex yet. To install from a checkout:
 

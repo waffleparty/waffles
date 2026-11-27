@@ -54,7 +54,7 @@ Cursor's documentation doesn't say whether a prompt that starts with `/` and nam
 
 ## Install
 
-Cursor reads `.cursor-plugin/plugin.json`. It names the skills, the hooks file (`adapters/command/cursor-hooks.json`), and the MCP servers file (`adapters/command/cursor-mcp.json`). The hooks and the MCP server need Node.js 22.18 or later as `node` on the PATH.
+Cursor reads `.cursor-plugin/plugin.json`. It names the skills, the hooks file (`adapters/command/cursor-hooks.json`), and the MCP servers file (`adapters/command/cursor-mcp.json`). The hooks and the MCP server need Node.js 22.18 or later in the 22 line, or 24.3 or later as `node` on the PATH.
 
 No marketplace lists waffles for Cursor yet. To install from a checkout:
 
