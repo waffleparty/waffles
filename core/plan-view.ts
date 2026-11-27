@@ -85,7 +85,9 @@ export function stepRow(goal: Goal, step: Step, depth: number, isChanged: boolea
   const mark = SHOWN[state]
   const head = ` ${step.id} ${MARKER[step.kind]}`
   const count = hasChildren && isShut ? ` (${step.children.length})` : ''
-  const title = cut(step.title, room - width(indent) - width(gutter) - width(mark) - width(head))
+  // The room left for the title, after the gutter and the count: a long title is cut, never the count.
+  // A cut title ends `…`, and 1 space goes between it and the count: `Long title… (5)`.
+  const title = cut(step.title, room - width(indent) - width(gutter) - width(mark) - width(head) - width(count))
   const color = state === 'running' ? AGENT : state === 'review' ? REVIEW : state === 'active' && step.id === goal.current ? MAIN : undefined
   const isParent = state === 'active' && color === undefined
   const isDim = state === 'dropped'
@@ -93,7 +95,8 @@ export function stepRow(goal: Goal, step: Step, depth: number, isChanged: boolea
   return [
     ...(hasChildren ? [...(indent ? [{ text: indent }] : []), { text: gutter, isDim: true, toggle: step.id }] : [{ text: indent + gutter }]),
     { text: mark, color: isDim ? undefined : (color ?? MARK_COLOR[state]), isDim, isBold: color !== undefined || isParent, isItalic },
-    { text: head + title, color, isDim, isBold: isParent, isItalic },
+    // With no room for a title at all, the count follows the ID after 1 space too.
+    { text: title === '' && count ? head.trimEnd() : head + title, color, isDim, isBold: isParent, isItalic },
     ...(count ? [{ text: count, isDim: true }] : []),
   ]
 }
