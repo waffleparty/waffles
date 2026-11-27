@@ -45,7 +45,7 @@ Antigravity has no slash commands a plugin registers, other than its skills. The
 
 ## Install
 
-Antigravity reads `.antigravity-plugin/plugin.json`, which takes precedence over the root `plugin.json` (Codex's manifest). It loads the components from the repo root: `skills/`, `agents/`, `hooks.json`, and `mcp_config.json`. The hooks and the MCP server need Node.js 22.18 or later as `node` on the PATH.
+Antigravity reads `.antigravity-plugin/plugin.json`, which takes precedence over the root `plugin.json` (Codex's manifest). It loads the components from the repo root: `skills/`, `agents/`, `hooks.json`, and `mcp_config.json`. The hooks and the MCP server need Node.js 22.18 or later in the 22 line, or 24.3 or later as `node` on the PATH.
 
 No marketplace lists waffles for Antigravity. Install it in one of these ways:
 

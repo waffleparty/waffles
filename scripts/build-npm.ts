@@ -67,7 +67,7 @@ function build(): void {
       '.': './adapters/opencode/server.js',
       './tui': './adapters/opencode/tui.tsx',
     },
-    engines: { node: '>=22.18' },
+    engines: { node: '^22.18.0 || >=24.3.0' },
   }
   writeFileSync(join(DIST, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`)
 

@@ -20,7 +20,7 @@ Every git and `gh` command a tool runs has a time limit, and so does the call as
 
 The current mode is not in the instructions: a client reads them once or caches them, so a mode statement there would go stale at the first change, and a fresh one would change the client's system prompt. The instructions say to call the `mode` tool with no input to read the mode, and each prompt and each `mode` call with `set` returns the statement of the change. They also say that no mode statement comes with the first message, unless `WAFFLES_HOOKS` is `1`: the platform's hooks then send one. On these clients no statement comes beside a prompt typed in backlog mode: the platforms give the server no hook on the person's prompts.
 
-The server needs Node.js 22.18 or later and no npm packages.
+The server needs Node.js 22.18 or later in the 22 line, or 24.3 or later and no npm packages.
 
 ## Notifications
 
