@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { addSteps, closeSteps, newGoal } from '../../core/plan-tree.ts'
-import { footerParts, noticeOf, outlineRows, PIECE_COLORS, pressOf, toggleOf } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS, pressOf, pressOptions, toggleOf } from './view.ts'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 const goal = () => newGoal('Ship it', [{ title: 'Build', kind: 'planned' }, { title: 'Test', kind: 'planned' }], NOW)
@@ -78,4 +78,9 @@ test('the panel draws the collapsed steps the server part keeps, and a parent ro
 test('a press names its session and its step, or is no press', () => {
   assert.deepEqual(pressOf({ sessionID: 's1', id: '2' }), { sessionID: 's1', id: '2' })
   for (const input of [undefined, null, {}, { sessionID: 's1' }, { sessionID: 1, id: '2' }]) assert.equal(pressOf(input), null)
+})
+
+test("a press goes to the session's folder, and to the client's own where the folder is unknown", () => {
+  assert.deepEqual(pressOptions({ id: 's1', location: { directory: '/work/tree-2' } }), { location: { directory: '/work/tree-2' } })
+  for (const session of [undefined, null, {}, { location: {} }, { location: { directory: 3 } }]) assert.equal(pressOptions(session), undefined)
 })

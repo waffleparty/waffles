@@ -6,7 +6,7 @@
 import { Plugin } from '@opencode/plugin/tui'
 import { createEffect, For, Show } from 'solid-js'
 
-import { footerParts, noticeOf, outlineRows, PIECE_COLORS, PLAN_RPC, toggleOf } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS, PLAN_RPC, pressOptions, toggleOf } from './view.ts'
 
 // The panel's name: OpenCode shares one panel between plugins, and each draws under its own name.
 const PANEL = 'waffles.plan'
@@ -45,11 +45,13 @@ export default Plugin.define({
     })
 
     // A click on a parent step's row collapses or expands it: the server part changes the session's
-    // collapsed steps, and the metadata it writes draws the panel again.
+    // collapsed steps, and the metadata it writes draws the panel again. The call goes to the session's
+    // folder, whose server part holds the session.
     const plan = context.client.rpc(PLAN_RPC)
     const press = (sessionID, row) => {
       const id = toggleOf(row)
-      if (sessionID && id !== undefined) void plan.press({ sessionID, id }).catch(() => undefined)
+      if (!sessionID || id === undefined) return
+      void plan.press({ sessionID, id }, pressOptions(context.data.session.get(sessionID))).catch(() => undefined)
     }
 
     const panel = context.ui.slot({

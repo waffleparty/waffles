@@ -110,6 +110,15 @@ export const PLAN_RPC = {
   events: {},
 } as const satisfies Rpc.PortableDefinition
 
+/**
+ * The options of a `press` call for the session: OpenCode registers an RPC per location, so the call
+ * goes to the session's folder. Unknown, the client's own folder takes it.
+ */
+export function pressOptions(session: unknown): { location: { directory: string } } | undefined {
+  const directory = (session as { location?: { directory?: unknown } } | null | undefined)?.location?.directory
+  return typeof directory === 'string' ? { location: { directory } } : undefined
+}
+
 /** The input of a `press`, or null when it is not one. */
 export function pressOf(input: unknown): { sessionID: string; id: string } | null {
   const { sessionID, id } = (input ?? {}) as { sessionID?: unknown; id?: unknown }
