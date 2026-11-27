@@ -21,7 +21,7 @@ import {
   submitMode,
   wafflesMode,
 } from '../../core/modes.ts'
-import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, pressPlan, spawnPlan, startPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
+import { callPlan, completePlan, endPlan, PLAN_TOOL, POLL_MS, pressPlan, spawnPlan, startPlan, stopPlan, submitPlan, SUBAGENT, tickPlan } from '../../core/plan.ts'
 import { planContext, planRules } from '../../core/plan-prompt.ts'
 import { textOf, TOOLS } from '../../core/tools.ts'
 import { isRunCommand, permissionAsked, submitUnattended } from '../../core/unattended.ts'
@@ -465,6 +465,8 @@ const plugin: Plugin.Plugin = {
       }
       effort.complete(sessionID)
       await completeMode(session.$).catch(() => undefined)
+      // The plan outline's collapse rules run once per turn, here; before the first prompt there is no turn.
+      if (session.started) stopPlan(session.$)
     }
     const events = new AbortController()
     void (async () => {

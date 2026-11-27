@@ -450,6 +450,30 @@ test("a click on a parent step's row, through the server part's RPC, collapses a
   await cleanup()
 })
 
+test("at the main session's turn end the collapse rules run once, and the metadata holds what they collapsed", async () => {
+  const { registered, sessions, emit, cleanup } = await fakeContext()
+  const tool = registered.tools[0]!
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+  const until = async (ready: () => boolean) => {
+    for (let i = 0; i < 100 && !ready(); i++) await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  // Turn 1 starts the goal: every step is new, so nothing collapses.
+  await registered.hooks['session.prompt']!(prompt('s1', 'ship it') as never)
+  await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  assert.equal(collapsed(), null)
+  // Turn 2 leaves 2 idle, and its step was there when the turn began: 2 collapses at the turn's end.
+  await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
+  await tool.execute({ op: 'rename', id: '1', title: 'Build it' }, { sessionID: 's1' })
+  assert.equal(collapsed(), null)
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await until(() => collapsed() !== null)
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
+  await cleanup()
+})
+
 test('a shell command that is no push leaves its result alone', async () => {
   const { registered, cleanup } = await fakeContext()
   const event = { tool: 'shell', status: 'completed', sessionID: 's1', input: { command: 'ls -la' }, result: { content: 'files' } }

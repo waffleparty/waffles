@@ -5,7 +5,7 @@ import { registerCheckpoint } from './checkpoint'
 import { devServersItem, registerDevServers, startDevServers } from './dev-servers'
 import { completeEffort, effortLabel, registerEffort, startEffort, submitEffort } from './effort'
 import { completeMode, endMode, interactionMode, modeContext, MODES_SECTION, registerMode, startMode, submitMode, wafflesMode } from './mode'
-import { completePlan, endPlan, registerPlan, startPlan, submitPlan } from './plan'
+import { completePlan, endPlan, registerPlan, startPlan, stopPlan, submitPlan } from './plan'
 import { RULES, planContext } from './plan-prompt'
 import { footerItem, registerPlanUi } from './plan-ui'
 import { registerTools, startTools } from './tools'
@@ -67,6 +67,7 @@ export const register: Register = on => {
     if (e.agentId === undefined) {
       await completeEffort($)
       await completeMode($)
+      stopPlan($)
     } else await completePlan($, e.agentId)
     return next(e)
   })

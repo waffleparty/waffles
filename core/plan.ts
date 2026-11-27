@@ -17,7 +17,7 @@ import {
   type GoalFile,
   type Where,
 } from './plan-store.ts'
-import { collapsedFor, collapsedOf, currentIds, toggle } from './plan-collapse.ts'
+import { collapsedFor, collapsedOf, endTurn, newIds, reveal, toggle } from './plan-collapse.ts'
 import { restorePlan } from './plan-mirror.ts'
 import type { CoreTool } from './tools.ts'
 import {
@@ -297,11 +297,35 @@ async function refresh(
 
 /**
  * Keeps the collapsed steps in step with the tree drawn: none for a goal other than the one they were
- * kept for, and each named by its ID in the tree, so a moved step keeps its state under its new ID.
+ * kept for, and each named by its ID in the tree, so a moved step keeps its state under its new ID. Work
+ * that became active is revealed at once, mid-turn too; a step collapses only at a turn's end or a press.
  */
 async function syncCollapsed($: Host, slug: string, tree: Goal) {
   const kept = await $.state.get('planCollapsed')
-  const next = collapsedOf(slug, currentIds(tree, collapsedFor(kept, slug)))
+  const next = collapsedOf(slug, reveal(tree, collapsedFor(kept, slug)))
+  if (!same(kept, next)) await $.state.set('planCollapsed', next)
+}
+
+/** The slug of the goal drawn: the active one, else the kept one; null with neither. */
+async function drawnSlug($: Host): Promise<string | null> {
+  return (await $.state.get('planGoal')) ?? (await $.state.get('planKept'))
+}
+
+/**
+ * Runs the collapse rules (core/plan-collapse.ts's `endTurn`) for the turn that is ending, once: at the
+ * turn's stop, else at the next prompt. The tree when the turn began is the one before; a tree of another
+ * goal counts as none, so each step of this one is new.
+ */
+async function finishTurn($: Host) {
+  const turn = await $.state.get('planTurn')
+  if (turn === null) return
+  await $.state.set('planTurn', null)
+  const tree = await $.state.get('planTree')
+  const slug = await drawnSlug($)
+  if (tree === null || slug === null) return
+  const before = turn.goal === slug ? turn.tree : null
+  const kept = await $.state.get('planCollapsed')
+  const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree)))
   if (!same(kept, next)) await $.state.set('planCollapsed', next)
 }
 
@@ -746,13 +770,24 @@ export async function activeGoal($: Host): Promise<string | null> {
 
 /**
  * The person typed a prompt. The highlights mark what changed since they last typed, so it clears
- * them; an adapter leaves out a notification, a trigger and a slash command. The reset waits its turn
- * behind a poll or a call, so it is not awaited: the prompt never waits on the plan outline.
+ * them; an adapter leaves out a notification, a trigger and a slash command. A new turn begins: the turn
+ * before ends here if its stop did not end it, and the tree drawn now is kept for the rules at this
+ * turn's end. The work waits its turn behind a poll or a call, so it is not awaited: the prompt never
+ * waits on the plan outline.
  */
 export function submitPlan($: Host): void {
   void serial($, async () => {
     if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
+    await finishTurn($)
+    await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree') })
   }).catch(() => undefined)
+}
+
+/**
+ * The main thread's turn stopped: the collapse rules run for it. Queued, not awaited, as submitPlan is.
+ */
+export function stopPlan($: Host): void {
+  void serial($, () => finishTurn($)).catch(error => logFailure($, "couldn't collapse the plan outline at the turn's end", error))
 }
 
 /**
@@ -763,7 +798,7 @@ export function submitPlan($: Host): void {
 export async function pressPlan($: Host, id: string): Promise<void> {
   await serial($, async () => {
     const tree = await $.state.get('planTree')
-    const slug = (await $.state.get('planGoal')) ?? (await $.state.get('planKept'))
+    const slug = await drawnSlug($)
     if (tree === null || slug === null) return
     const kept = await $.state.get('planCollapsed')
     const next = collapsedOf(slug, toggle(tree, collapsedFor(kept, slug), id))

@@ -352,6 +352,116 @@ test('a collapsed step stays collapsed under its new ID after a move, and anothe
   expect(state.planCollapsed).toBe(null)
 })
 
+// A main-thread turn's end and a background subagent's start, as the engine raises them; the test answers both beneath the plugin.
+const FINISHED = { answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as const
+const SPAWN = { prompt: 'Do it', subagentType: 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'opus', fork: false, background: true }
+
+test('the pane collapses and expands steps by itself at each turn’s end, as in the mockups’ 4 turns', async ($, on) => {
+  world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('agent.spawn', () => ({ model: 'haiku', agentId: 'agent-1' }) as never)
+  const rows = async () => (await drawPane($, 60)).rows.slice(1)
+  const begin = () => $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  // The turn's end is queued behind plan outline work: a call waits for it.
+  const end = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+    return rows()
+  }
+
+  // Turn 1: the goal starts with 1, 2, 3 and their steps, and 1.1 starts. Every step is new.
+  await begin()
+  await call($, { op: 'goal', title: 'Add SSO login', steps: [{ title: 'Research the SSO providers' }, { title: 'Build the callback route' }, { title: 'Deploy to staging' }] })
+  await call($, { op: 'add', parent: '1', titles: ['Compare Okta and Auth0', 'Pick a provider'], focus: true })
+  await call($, { op: 'add', parent: '2', titles: ['Parse the token', 'Validate the state param'] })
+  await call($, { op: 'add', parent: '3', titles: ['Add the secrets', 'Run the migration'] })
+  expect(await end()).toEqual([
+    '⌄ ▶ 1 Research the SSO providers',
+    '    ▶ 1.1 Compare Okta and Auth0',
+    '    ○ 1.2 Pick a provider',
+    '⌄ ○ 2 Build the callback route',
+    '    ○ 2.1 Parse the token',
+    '    ○ 2.2 Validate the state param',
+    '⌄ ○ 3 Deploy to staging',
+    '    ○ 3.1 Add the secrets',
+    '    ○ 3.2 Run the migration',
+  ])
+
+  // Turn 2: 1.1 done, 1.2 started. 2 and 3 are idle, and their steps were there when the turn began.
+  await begin()
+  await call($, { op: 'done', ids: ['1.1'] })
+  await call($, { op: 'focus', id: '1.2' })
+  expect(await end()).toEqual([
+    '⌄ ▶ 1 Research the SSO providers',
+    '    ✔ 1.1 Compare Okta and Auth0',
+    '    ▶ 1.2 Pick a provider',
+    '› ○ 2 Build the callback route (2)',
+    '› ○ 3 Deploy to staging (2)',
+  ])
+
+  // Turn 3: 1.2 and 1 done; 2.1 started, with a new detour under it. Mid-turn, nothing collapses yet,
+  // and the current step is revealed at once.
+  await begin()
+  await call($, { op: 'done', ids: ['1.2', '1'] })
+  await call($, { op: 'focus', id: '2.1' })
+  await call($, { op: 'add', parent: '2.1', kind: 'work', titles: ['Fix CORS on dev proxy'], focus: true })
+  expect((await rows()).slice(0, 4)).toEqual(['⌄ ✔ 1 Research the SSO providers', '    ✔ 1.1 Compare Okta and Auth0', '    ✔ 1.2 Pick a provider', '⌄ ▶ 2 Build the callback route'])
+  expect(await end()).toEqual([
+    '› ✔ 1 Research the SSO providers (2)',
+    '⌄ ▶ 2 Build the callback route',
+    '  ⌄ ▶ 2.1 Parse the token',
+    '      ▶ 2.1.1 ⤷ Fix CORS on dev proxy',
+    '    ○ 2.2 Validate the state param',
+    '› ○ 3 Deploy to staging (2)',
+  ])
+
+  // Turn 4: 2.1.1 and 2.1 done, 2.2 started, and a background subagent takes 3.1, which shows at once.
+  await begin()
+  await call($, { op: 'done', ids: ['2.1.1', '2.1'] })
+  await call($, { op: 'focus', id: '2.2' })
+  await $.agent.spawn({ ...SPAWN, description: '3.1: Add the secrets' } as never)
+  await call($, { op: 'show' })
+  expect((await rows()).slice(-3)).toEqual(['⌄ ▶ 3 Deploy to staging', '    ▶ 3.1 Add the secrets', '    ○ 3.2 Run the migration'])
+  expect(await end()).toEqual([
+    '› ✔ 1 Research the SSO providers (2)',
+    '⌄ ▶ 2 Build the callback route',
+    '  › ✔ 2.1 Parse the token (1)',
+    '    ▶ 2.2 Validate the state param',
+    '⌄ ▶ 3 Deploy to staging',
+    '    ▶ 3.1 Add the secrets',
+    '    ○ 3.2 Run the migration',
+  ])
+})
+
+test('a press holds until the next turn’s end, where the rules decide again; a turn ends once', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const begin = () => $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  const end = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  const row4 = async () => (await drawPane($)).rows.find(row => row.includes(' 4 Ship'))
+
+  await begin()
+  await end()
+  // 4 is idle, and its step was there when the turn began: collapsed.
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+  // Expanded by hand, it stays so until a turn ends; a second stop of the same turn changes nothing.
+  await pressRow($, '4')
+  expect(await row4()).toBe('⌄ ○ 4 Ship')
+  await end()
+  expect(await row4()).toBe('⌄ ○ 4 Ship')
+  // At the next turn's end the rules decide again.
+  await begin()
+  await end()
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+})
+
 test('a plan call draws its change lines; expanded, it draws the normal row', async ($, on) => {
   const { disk } = world(on)
   disk.files.set(file('ship-oauth-login'), SPEC)

@@ -9,6 +9,12 @@ import { findStep, shownState, type Goal, type Shown, type Step } from './plan-t
 /** The drawn goal's collapsed steps: the goal's slug, and the IDs of its collapsed steps. */
 export type Collapsed = { goal: string; ids: string[] }
 
+/**
+ * The tree drawn when a turn began, for the rules at its end: the drawn goal's slug (null with none) and
+ * its tree (null when it could not be read).
+ */
+export type Turn = { goal: string | null; tree: Goal | null }
+
 /** Whether the step is listed: by its ID, or by an old ID that a move left as its alias. */
 export function isCollapsed(step: Step, ids: readonly string[]): boolean {
   return ids.includes(step.id) || step.aliases.some(alias => ids.includes(alias))

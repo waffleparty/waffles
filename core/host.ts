@@ -1,4 +1,4 @@
-import type { Collapsed } from './plan-collapse.ts'
+import type { Collapsed, Turn } from './plan-collapse.ts'
 import type { Goal } from './plan-tree.ts'
 
 /**
@@ -198,6 +198,8 @@ export type SessionState = {
   planChanged: string[]
   /** The drawn goal's collapsed steps, for drawing: view state, in no goal file. Null when none is collapsed. */
   planCollapsed: Collapsed | null
+  /** The tree drawn when the person's last prompt began the turn; null once the turn's end ran the collapse rules. */
+  planTurn: Turn | null
   /** The session looked for the plan outline's copy on the remote, at its first poll or call in a repository. */
   planFetched: boolean
 }
@@ -219,6 +221,7 @@ export const INITIAL: SessionState = {
   planOthers: [],
   planChanged: [],
   planCollapsed: null,
+  planTurn: null,
   planFetched: false,
 }
 
