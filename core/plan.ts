@@ -318,14 +318,20 @@ async function drawnSlug($: Host): Promise<string | null> {
  * tree when it began is the one before. A later stop with no turn of the person's open (a turn a
  * notification started) runs only the rules that expand, on what changed since the rules last ran. A
  * tree of another goal counts as none, so each step of this one is new. The tree now is kept for the next.
+ * With no tree drawn now (a goal file that does not read), no rule runs, and the kept tree stays for the
+ * next boundary to compare with.
  */
 async function finishTurn($: Host, isStop: boolean) {
   const turn = await $.state.get('planTurn')
   if (!isStop && turn?.isOpen !== true) return
   const tree = await $.state.get('planTree')
   const slug = await drawnSlug($)
+  if (tree === null || slug === null) {
+    if (turn?.isOpen) await $.state.set('planTurn', { ...turn, isOpen: false })
+    return
+  }
   await $.state.set('planTurn', { goal: slug, tree, isOpen: false })
-  if (turn === null || tree === null || slug === null) return
+  if (turn === null) return
   const before = turn.goal === slug ? turn.tree : null
   const kept = await $.state.get('planCollapsed')
   // Pressed steps of another goal hold nothing here.

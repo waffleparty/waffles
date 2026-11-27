@@ -490,6 +490,33 @@ test('a click during a turn holds through that turn’s end, and the rules decid
   expect(await row4()).toBe('› ○ 4 Ship (1)')
 })
 
+test('a stop while the goal file does not read keeps the tree to compare with: no step counts as new after it', async ($, on) => {
+  const { disk, clock } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await start($)
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const stop = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await stop()
+  expect((await drawPane($)).rows).toContain('› ○ 4 Ship (1)')
+
+  // The file does not read for a poll, and a turn a notification started stops then.
+  const saved = disk.files.get(file('ship-oauth-login'))!
+  disk.files.set(file('ship-oauth-login'), '---\ngoal: Ship OAuth login\nnonsense\n')
+  await clock.advance(5_000)
+  await stop()
+  disk.files.set(file('ship-oauth-login'), saved)
+  await clock.advance(5_000)
+  // The next such stop compares with the tree before: nothing is new, so 4 stays collapsed.
+  await stop()
+  expect((await drawPane($)).rows).toContain('› ○ 4 Ship (1)')
+})
+
 test('a step pressed in one goal holds nothing in another goal the turn switches to', async ($, on) => {
   const { disk, state } = world(on)
   on('prompt.submit', ($, e) => ({ text: e.text }))
