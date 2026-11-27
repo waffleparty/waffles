@@ -450,6 +450,14 @@ test("a click on a parent step's row, through the server part's RPC, collapses a
   await cleanup()
 })
 
+test('a click that is the first event of a session after a restart starts the core for it', async () => {
+  const { registered, entries, cleanup } = await fakeContext()
+  assert.equal(entries.get('s1')?.has('waffles-mode') ?? false, false)
+  assert.deepEqual(await registered.rpcs['waffles.plan']!.press!({ sessionID: 's1', id: '1' }), {})
+  assert.equal(entries.get('s1')?.has('waffles-mode'), true)
+  await cleanup()
+})
+
 test("at the main session's turn end the collapse rules run once, and the metadata holds what they collapsed", async () => {
   const { registered, sessions, emit, cleanup } = await fakeContext()
   const tool = registered.tools[0]!

@@ -375,7 +375,10 @@ const plugin: Plugin.Plugin = {
           press: async input => {
             const press = pressOf(input)
             const session = press ? await sessionOf(press.sessionID).catch(() => null) : null
-            if (press && session && !session.isChild && session.started) await pressPlan(session.$, press.id)
+            if (!press || !session || session.isChild) return {}
+            // After a restart of the server, the session's first event may be the click: the core starts for it, as for a tool call.
+            await started(press.sessionID, session)
+            await pressPlan(session.$, press.id)
             return {}
           },
         }),

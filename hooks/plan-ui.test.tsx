@@ -462,6 +462,25 @@ test('a press holds until the next turn’s end, where the rules decide again; a
   expect(await row4()).toBe('› ○ 4 Ship (1)')
 })
 
+test('after /clear the kept tree is drawn with every step expanded, and no turn is open', async ($, on) => {
+  const { disk, state } = world(on)
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  await start($)
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await pressRow($, '4')
+  expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+  expect(state.planTurn).not.toBe(null)
+
+  await $.session.end({ reason: 'clear', sessionId: ME, resume: { id: ME } })
+
+  expect(state.planCollapsed).toBe(null)
+  expect(state.planTurn).toBe(null)
+  expect((await drawPane($)).rows).toContain('⌄ ○ 4 Ship')
+})
+
 test('a plan call draws its change lines; expanded, it draws the normal row', async ($, on) => {
   const { disk } = world(on)
   disk.files.set(file('ship-oauth-login'), SPEC)

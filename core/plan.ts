@@ -828,6 +828,9 @@ export async function endPlan($: Host, sessionId: string, isProcessKept: boolean
   if (slug !== null) await lose($, slug)
   if ((await $.state.get('planError')) !== null) await $.state.set('planError', null)
   if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
+  // The collapsed steps and the turn are the ended session's view: the new one starts with every step expanded.
+  if ((await $.state.get('planCollapsed')) !== null) await $.state.set('planCollapsed', null)
+  if ((await $.state.get('planTurn')) !== null) await $.state.set('planTurn', null)
 }
 
 /**
