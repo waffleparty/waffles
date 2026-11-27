@@ -1,3 +1,5 @@
 node_modules/
 .release-version
 .DS_Store
+__pycache__/
+.claude/worktrees/

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "waffles": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/adapters/mcp/server.ts"],
+      "env": {
+        "WAFFLES_ASK_TOOL": "request_user_input",
+        "WAFFLES_SKILL_PREFIX": "waffles:",
+        "WAFFLES_RUN_COMMAND": "/waffles:non-interactive",
+        "WAFFLES_HOOKS": "1"
+      }
+    }
+  }
+}

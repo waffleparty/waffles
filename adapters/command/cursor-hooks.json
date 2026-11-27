@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/adapters/command/cli.ts\" cursor sessionStart",
+        "timeout": 30
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/adapters/command/cli.ts\" cursor beforeSubmitPrompt",
+        "timeout": 30
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/adapters/command/cli.ts\" cursor postToolUse",
+        "timeout": 90
+      }
+    ],
+    "stop": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/adapters/command/cli.ts\" cursor stop",
+        "timeout": 30
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/adapters/command/cli.ts\" cursor sessionEnd",
+        "timeout": 5
+      }
+    ]
+  }
+}
