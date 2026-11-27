@@ -7,7 +7,7 @@ Skills, agents, and hooks for coding agents. Waffles gives a coding session a ba
 | Agent | Command |
 | --- | --- |
 | Claude Code | `/plugin marketplace add waffleparty/marketplace`, then `/plugin install waffles@waffleparty` |
-| OpenCode 2 | Clone this repo and add its absolute path to `plugins` in `~/.config/opencode/opencode.jsonc`. See [OpenCode](docs/opencode.md). |
+| OpenCode 2 | `opencode plugin add @waffleparty/waffles`, the npm package. See [OpenCode](docs/opencode.md). |
 | Codex | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/codex.md](docs/codex.md). |
 | Cursor | Not in a marketplace yet. Skills, the modes, the plan outline tool, and the checkpoint: see [docs/cursor.md](docs/cursor.md). For local use, put this repo at `~/.cursor/plugins/local/waffles` and reload the window. |
 | Antigravity | Not in a marketplace yet. `agy plugin install https://github.com/waffleparty/waffles`. Skills, the modes, unattended runs, the plan outline tool, and the checkpoint: see [docs/antigravity.md](docs/antigravity.md). |
@@ -130,7 +130,8 @@ waffles/
 ├── adapters/command/            The adapter for platforms whose hooks run a command per event, with a table per platform
 ├── adapters/mcp/                The MCP server that offers the plan outline tool and the core's tools
 ├── scripts/                     Command-line wrappers over the core's tools, test-slot, and their tests (*.spec.ts)
-│   └── bump-version.sh          Writes or checks the version in every manifest
+│   ├── bump-version.sh          Writes or checks the version in every manifest
+│   └── build-npm.ts             Compiles the npm package into dist/, which is not in git
 ├── types/                       Type declarations for the hooks
 ├── docs/                        User documentation
 └── .version-bump.json           The files and fields that hold the version
@@ -149,7 +150,7 @@ Releases are automatic. On each push to `main`, [semantic-release](https://seman
 | `!` after the type, or a `BREAKING CHANGE:` footer | Major |
 | `docs:`, `chore:`, `ci:`, `test:`, `refactor:`, `style:`, `build:` | None |
 
-When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffles` entry to the new tag.
+When a release is due, `scripts/bump-version.sh` writes the version into every file in `.version-bump.json`. semantic-release then commits those files to `main` as `chore(release): X.Y.Z`, tags that commit `X.Y.Z` (no `v` prefix), and creates the GitHub release. The release workflow then compiles the npm package `@waffleparty/waffles` at the new tag (`npm run build:npm`) and publishes it to npm with [trusted publishing](https://docs.npmjs.com/trusted-publishers), with no token secret. A pull request on [waffleparty/marketplace](https://github.com/waffleparty/marketplace) then moves the `waffles` entry to the new tag.
 
 Do not edit `version` fields by hand. To add a file that holds the version, add it to `.version-bump.json` and to the `@semantic-release/git` `assets` in `.releaserc.json`; `scripts/bump-version.sh --check` fails until both lists agree.
 
@@ -171,6 +172,7 @@ claude plugin validate .                                     # the manifests, sk
 claude plugin test                                           # the Claude Code adapter's tests
 npm run typecheck                                            # the core, the adapters, and the scripts
 npm run test:node                                            # their tests, on Node.js
+npm run build:npm                                            # the npm package, into dist/
 claude --plugin-dir .                                        # try the plugin from this checkout
 ```
 

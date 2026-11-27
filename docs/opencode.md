@@ -4,7 +4,28 @@ Waffles runs in OpenCode 2 as a plugin with 2 parts: a server part (`adapters/op
 
 ## Install
 
-Clone the repo and name the clone in your global OpenCode config.
+Install the npm package `@waffleparty/waffles`:
+
+```sh
+opencode plugin add @waffleparty/waffles
+```
+
+Or name it in your global OpenCode config:
+
+```jsonc
+// ~/.config/opencode/opencode.jsonc
+{
+  "plugins": ["@waffleparty/waffles"]
+}
+```
+
+OpenCode loads both parts from the package's `package.json` (`.` is the server part, `./tui` the terminal UI part), so the terminal needs no `cli.json` entry. OpenCode supplies `@opencode/plugin`, and the plugin uses Node.js built-ins only. To use waffles in one project only, put the same entry in that project's `opencode.jsonc`. Restart OpenCode after an update (`opencode service restart`).
+
+The package holds JavaScript, not the repo's TypeScript: an install puts it under a `node_modules` folder, and Node.js refuses to run TypeScript files there (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). The release workflow compiles it with `scripts/build-npm.ts` at each release tag, and its skills name the compiled scripts (`scripts/builders.js`, `watch.js`). The compiled files are not in git.
+
+### From a clone
+
+To run waffles from its source, as when you change it, clone the repo and name the clone's absolute path in place of the package:
 
 ```sh
 git clone https://github.com/waffleparty/waffles.git ~/src/waffles
@@ -17,13 +38,7 @@ git clone https://github.com/waffleparty/waffles.git ~/src/waffles
 }
 ```
 
-Use the clone's absolute path. A relative path resolves from the config file that holds it. OpenCode loads both parts from the clone's `package.json` (`.` is the server part, `./tui` the terminal UI part), so the terminal needs no `cli.json` entry. The clone needs no `npm install`: the plugin uses Node.js built-ins only, and OpenCode supplies `@opencode/plugin`. To update, pull the clone and restart OpenCode (`opencode service restart`).
-
-To use waffles in one project only, put the same entry in that project's `opencode.jsonc`.
-
-### Why not `opencode plugin add`
-
-`opencode plugin add` with a Git spec (such as `github:waffleparty/waffles`) installs the plugin, and both parts load. But OpenCode installs a Git package under a `node_modules` folder (`~/.cache/opencode/npm/<name>/<time>/node_modules/waffles`), and Node.js refuses to run TypeScript files under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). The tools (builders, the merge queue, the review branch, the backlog queue, and the checkpoint) run inside OpenCode's process and work in that install. What still runs `node <plugin>/...ts` from the shell fails there: each builder's test runs (`scripts/builders.ts test-slot`, which wraps the test command and holds a test slot while it runs), the wait for a merge queue (a shell loop over `scripts/merge-queue.ts state`), and the CI watcher of `@watch-ci` (`skills/watch-ci/watch.ts`). A clone named in the config has no `node_modules` in its path, and those scripts run.
+A relative path resolves from the config file that holds it. The clone needs no `npm install`. Do not install the repo with a Git spec (`opencode plugin add github:waffleparty/waffles`): that puts the TypeScript under `node_modules`, and the scripts that skills run from the shell fail there (builders' test runs, the merge queue's wait, the CI watcher). To update a clone, pull it and restart OpenCode.
 
 ## What works
 
@@ -77,4 +92,4 @@ OpenCode's `subagent` tool always runs in the background. When the main session 
 | The dev servers footer item | Claude Code only. |
 | Effort in the footer | Not shown. `/auto-effort` says the state. |
 | A reply to `/prod`, `/rapid`, and `/backlog-entry` | Not shown. The footer shows the new mode. |
-| A plugin installed with `opencode plugin add` | The tools work; the scripts that skills run from the shell fail (builders' test runs, the merge queue's wait, the CI watcher). Install from a clone, as above. |
+| A plugin installed from a Git spec (`opencode plugin add github:waffleparty/waffles`) | The tools work; the scripts that skills run from the shell fail (builders' test runs, the merge queue's wait, the CI watcher). Install the npm package or a clone, as above. |
