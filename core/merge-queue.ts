@@ -1,3 +1,4 @@
+import { notStarted } from './commands.ts'
 import type { Host } from './host.ts'
 import type { CoreTool, Json, ToolAnswer } from './tools.ts'
 
@@ -80,7 +81,7 @@ async function run($: Host, args: string[]) {
   try {
     return await $.process.run(['gh', ...args], { cwd: await $.session.cwd(), timeoutMs: GH_MS })
   } catch (error) {
-    throw new Failed(`gh could not run: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Failed(notStarted('gh', error))
   }
 }
 

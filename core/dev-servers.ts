@@ -39,8 +39,9 @@ function parseCwds(out: string): Map<string, string> {
 
 /** The project's folder, with links followed: the checkout's top level, else the working directory. */
 export async function projectRoot($: Host): Promise<string> {
-  const git = await $.process.run(['git', 'rev-parse', '--show-toplevel'])
-  const root = git.exitCode === 0 ? git.stdout.trim() : await $.session.cwd()
+  // With no git to run, as outside a checkout, the project is the working directory.
+  const git = await $.process.run(['git', 'rev-parse', '--show-toplevel']).catch(() => null)
+  const root = git?.exitCode === 0 ? git.stdout.trim() : await $.session.cwd()
   return $.fs.realPath(root)
 }
 

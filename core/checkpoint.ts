@@ -1,3 +1,4 @@
+import { notStarted } from './commands.ts'
 import type { Host, RunResult } from './host.ts'
 import { absolute } from './paths.ts'
 import { dropPlan, mirrorPlan } from './plan-mirror.ts'
@@ -85,6 +86,9 @@ class Failure extends Error {}
 /** A command whose stdout the platform cut: a failure, never an answer such as "no pull request". */
 class Cut extends Failure {}
 
+/** A command that could not start: a failure, never an answer such as "no pull request". */
+class NotStarted extends Failure {}
+
 /** The checkout the checkpoint runs in, and when its time runs out (ms since the epoch); null for no limit. */
 type Checkout = { $: Host; folder: string; deadline: number | null }
 
@@ -99,7 +103,7 @@ async function run(c: Checkout, argv: string[], stdin?: string): Promise<string>
   try {
     done = await c.$.process.run(argv, { cwd: c.folder, stdin, timeoutMs })
   } catch (error) {
-    throw new Failure(`${argv[0]} could not run: ${error instanceof Error ? error.message : String(error)}`)
+    throw new NotStarted(notStarted(argv[0]!, error))
   }
   if (done.exitCode !== 0) throw new Failure(`${argv.slice(0, 3).join(' ')} failed: ${strip(universal(done.stderr)) || strip(universal(done.stdout))}`)
   // A description read in part would be written back in part.
@@ -364,7 +368,7 @@ export async function checkpoint($: Host, folder: string, options: CheckpointOpt
       try {
         view = await run(c, ['gh', 'pr', 'view', ...(pr ? [pr] : []), '--json', 'number,url,body,headRefName,state'])
       } catch (error) {
-        if (!(error instanceof Failure) || error instanceof Cut) throw error
+        if (!(error instanceof Failure) || error instanceof Cut || error instanceof NotStarted) throw error
         return out(`No pull request for ${pr ? `#${pr}` : `the branch ${branch}`}: nothing to update.`)
       }
       const info: unknown = JSON.parse(view)

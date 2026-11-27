@@ -1,3 +1,4 @@
+import { notStarted } from './commands.ts'
 import type { Host, RunResult } from './host.ts'
 import { outlineIn, stateIn } from './plan-store.ts'
 
@@ -70,7 +71,7 @@ async function git(g: Git, args: readonly string[], stdin?: string): Promise<str
   try {
     done = await g.$.process.run(['git', ...args], { cwd: g.cwd, stdin, timeoutMs })
   } catch (error) {
-    throw new GitError(`git ${command} could not run: ${messageOf(error)}`)
+    throw new GitError(notStarted(`git ${command}`, error))
   }
   if (done.exitCode !== 0) throw new GitError(`git ${command} failed: ${firstLine(done.stderr) || firstLine(done.stdout) || `exit code ${done.exitCode}`}`)
   return done.stdout

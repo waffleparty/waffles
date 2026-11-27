@@ -1,6 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, RenderInput } from 'claude-code'
 
+import { notStarted } from '../core/commands.ts'
 import { findDevServers, openUrl, POLL_MS, projectRoot } from '../core/dev-servers.ts'
 import { hostOf } from './host'
 
@@ -19,13 +20,18 @@ function openServers($: EngineInterface, count: number) {
 export async function startDevServers($: EngineInterface) {
   const root = await projectRoot(hostOf($))
   let isPolling = false
+  // lsof could not start: the session has no dev servers' menu, says so once in the debug log, and asks no more.
+  let isOff = false
   const poll = async () => {
-    if (isPolling) return
+    if (isPolling || isOff) return
     isPolling = true
     try {
       const found = await findDevServers(hostOf($), root, command => SELF.test(command))
       const prev = await read($, urls)
       if (found.join() !== prev.join()) await update($, urls, () => found)
+    } catch (error) {
+      isOff = true
+      $.ui.log(`waffles: no dev servers' menu in this session: ${notStarted('lsof', error)}`, { to: 'debug' })
     } finally {
       isPolling = false
     }

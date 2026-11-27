@@ -500,7 +500,10 @@ export function execute(argv: Argv, timeout: number, verbatim = false): Promise<
       if (child.exitCode !== null || child.signalCode !== null) expire()
       else child.once('exit', expire)
     }, timeout * 1000)
-    child.once('error', (error) => finish(() => failed(error)))
+    // A program that is not installed is named as that, not as `spawn gh ENOENT`.
+    child.once('error', (error: NodeJS.ErrnoException) =>
+      finish(() => failed(error.code === 'ENOENT' ? new Error(`${file} is not installed, or not on the PATH`) : error)),
+    )
     child.once('close', (code, signal) =>
       finish(() => {
         const status = code ?? 128 + (signal ? constants.signals[signal] : 0)

@@ -75,7 +75,9 @@ test("mode: a plan with no rulesets has no queue, and any other failure of gh is
 
 test('a gh that cannot start is a refusal, not a failure of the tool', async () => {
   const $ = fakeHost({ run: () => new Error('spawn gh ENOENT') })
-  assert.deepEqual(await mergeQueue($, { op: 'state', pr: '12' }), { refusal: 'gh could not run: spawn gh ENOENT' })
+  assert.deepEqual(await mergeQueue($, { op: 'state', pr: '12' }), {
+    refusal: 'gh is not installed, or not on the PATH. Install the GitHub CLI (https://cli.github.com) and sign in with `gh auth login`.',
+  })
 })
 
 test('state: removed with GitHub’s reason, and the query sends owner and name as strings', async () => {

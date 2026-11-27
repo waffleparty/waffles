@@ -504,3 +504,15 @@ test('a stdout the platform cut is a failure, not "no pull request"', async () =
   const done = await checkpoint($, '/work')
   assert.deepEqual(done, { exitCode: 1, stdout: '', stderr: 'checkpoint: gh pr view printed more than the platform passes on, so the checkpoint does not go on from a part of it\n' })
 })
+
+test('a gh that is not installed is a failure that says so, not "no pull request"', async () => {
+  const $ = fakeHost({
+    run: argv => (argv[0] === 'git' ? { stdout: argv.includes('--git-dir') ? '/work/.git\n' : 'feat\n' } : Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })),
+  })
+  const done = await checkpoint($, '/work')
+  assert.deepEqual(done, {
+    exitCode: 1,
+    stdout: '',
+    stderr: 'checkpoint: gh is not installed, or not on the PATH. Install the GitHub CLI (https://cli.github.com) and sign in with `gh auth login`.\n',
+  })
+})

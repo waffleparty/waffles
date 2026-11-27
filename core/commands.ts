@@ -32,6 +32,27 @@ export async function outcomeOf<T>(work: () => Promise<T>): Promise<Outcome<T>> 
   }
 }
 
+// What to do about a program that is not there, for the ones waffles names.
+const INSTALL: Record<string, string> = {
+  gh: 'Install the GitHub CLI (https://cli.github.com) and sign in with `gh auth login`.',
+  git: 'Install git.',
+  lsof: 'Install lsof.',
+}
+
+/** The platform could not start the program because no such program is on the PATH. */
+const isAbsent = (error: unknown) =>
+  (error as { code?: unknown } | null)?.code === 'ENOENT' || /\bENOENT\b|command not found|No such file or directory/i.test(messageOf(error))
+
+/**
+ * Why a command did not start, from what the platform's run rejected with. A program that is not installed is
+ * named as that, with what to install; `command` is the program with its first words, as the other messages name it.
+ */
+export function notStarted(command: string, error: unknown): string {
+  const program = command.split(' ')[0]!
+  if (isAbsent(error)) return `${program} is not installed, or not on the PATH. ${INSTALL[program] ?? `Install ${program}.`}`
+  return `${command} could not run: ${messageOf(error)}`
+}
+
 /** An outcome as the model reads it: a refusal starts "Refused: ", as the command line prints it. */
 export const answerOf = (outcome: Outcome<unknown>): ToolAnswer =>
   'value' in outcome ? { value: outcome.value } : { refusal: 'refused' in outcome ? `Refused: ${outcome.refused}` : outcome.failed }
@@ -58,7 +79,7 @@ export async function run($: Host, argv: readonly string[], { cwd, timeoutMs, de
   try {
     done = await $.process.run(argv, { cwd, timeoutMs: Math.min(timeoutMs, left), ...(stdin === undefined ? {} : { stdin }) })
   } catch (error) {
-    throw new Failed(`${argv.slice(0, 2).join(' ')} could not run: ${messageOf(error)}`)
+    throw new Failed(notStarted(argv.slice(0, 2).join(' '), error))
   }
   if (isWhole && done.isTruncated) {
     throw new Failed(`${argv.slice(0, 3).join(' ')} printed more than the platform passes on, so nothing is answered from a part of it`)
