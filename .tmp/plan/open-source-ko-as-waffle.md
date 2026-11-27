@@ -3,7 +3,7 @@ goal: Open-source ko as waffle
 status: open
 current: 6.14
 created: 2026-11-24T23:34:29.342Z
-updated: 2026-11-26T23:31:30.312Z
+updated: 2026-11-27T00:44:12.024Z
 ---
 - [x] 1 Review ko's contents before the move
   - [x] 1.1 Review the hooks
@@ -97,3 +97,4 @@ updated: 2026-11-26T23:31:30.312Z
     - [ ] 6.14.4 Look into a plan outline view through MCP Apps
   - [x] 6.15 Clean up after the parallel adapter work
   - [x] 6.16 Make the texts the model reads take each platform's names
+  - [x] 6.17 ⤷ Fix the small defects named in the reports

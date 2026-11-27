@@ -20,6 +20,11 @@ export type Host = {
     stat(path: string): Promise<FileStat>
     /** Removes a file, or with `recursive` a folder and all it holds; one that isn't there is nothing to remove. */
     remove(path: string, options?: { recursive?: boolean }): Promise<void>
+    /**
+     * Moves a file to another path in the same folder, in place of what is there. It is one step: a reader sees the
+     * old file or the new one, never a part of either.
+     */
+    rename(from: string, to: string): Promise<void>
     /** The path with every link in it followed. */
     realPath(path: string): Promise<string>
   }

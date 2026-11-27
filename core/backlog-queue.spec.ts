@@ -121,3 +121,24 @@ test('on Node.js: 2 sessions that add at once lose nothing, and a folder that ca
     await fs.rm(root, { recursive: true, force: true })
   }
 })
+
+test('a write that stops before its rename leaves the queue as it was', async () => {
+  const $ = repo()
+  await call($, { op: 'add', step: 'note', item: 'ITEM-1', why: 'no network' })
+  const before = $.files.get('/repo/.backlog/queue.json')
+  const rename = $.fs.rename
+  $.fs.rename = async () => {
+    throw new Error('the session ended')
+  }
+
+  const failed = await call($, { op: 'add', step: 'note', item: 'ITEM-2', why: 'no network' })
+
+  assert.ok(!('value' in failed))
+  assert.equal($.files.get('/repo/.backlog/queue.json'), before)
+  // The next write replaces what the stopped one left.
+  $.fs.rename = rename
+  assert.ok('value' in (await call($, { op: 'add', step: 'note', item: 'ITEM-3', why: 'no network' })))
+  assert.equal($.files.has('/repo/.backlog/.queue-new'), false)
+  const listed = await call($, { op: 'list' })
+  assert.deepEqual('value' in listed && (listed.value as { entries: Entry[] }).entries.map(e => e.item), ['ITEM-1', 'ITEM-3'])
+})

@@ -154,6 +154,7 @@ export function nodeHost({ sessionId, cwd, names, stateFolder: folder = stateFol
         return { kind: kindOf(stat), size: stat.size, mtimeMs: stat.mtimeMs }
       },
       remove: (path, options) => fs.rm(path, { force: true, recursive: options?.recursive ?? false }),
+      rename: (from, to) => fs.rename(from, to),
       realPath: path => fs.realpath(path),
     },
     process: {

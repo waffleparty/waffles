@@ -131,6 +131,14 @@ function answers(disk: Disk) {
         if (argv[1] === '-rf') for (const file of under(path)) disk.files.delete(file)
         return done(0, '')
       }
+      if (argv[0] === 'mv') {
+        const [from = '', to = ''] = argv.slice(-2)
+        const text = disk.files.get(from)
+        if (text === undefined) return { ...done(1, ''), stderr: `mv: ${from}: No such file or directory` }
+        this.write(to, text)
+        disk.files.delete(from)
+        return done(0, '')
+      }
       disk.ran.push([...argv])
       if (argv[0] !== 'git') return done(0, '')
       if (disk.gitGate) await disk.gitGate
@@ -195,6 +203,9 @@ export function fakeStoreDisk(): Disk & { $: StoreEngine } {
       stat: async path => at.stat(path, false),
       remove: async (path, options) => {
         await at.run(['rm', options?.recursive ? '-rf' : '-f', path])
+      },
+      rename: async (from, to) => {
+        await at.run(['mv', '-f', from, to])
       },
       realPath: async path => path,
     },

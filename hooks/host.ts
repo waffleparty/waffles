@@ -154,6 +154,11 @@ export function hostOf($: EngineInterface): Host {
         const r = await $.process.run(['rm', '-rf', path], { timeoutMs: 120_000 })
         if (r.exitCode !== 0) throw new Error(`cannot remove ${path}: ${r.stderr.trim() || `rm exited with ${r.exitCode}`}`)
       },
+      // `$.fs` moves nothing; `mv` within a folder is the system's rename.
+      rename: async (from, to) => {
+        const r = await $.process.run(['mv', '-f', from, to])
+        if (r.exitCode !== 0) throw new Error(`cannot move ${from} to ${to}: ${r.stderr.trim() || `mv exited with ${r.exitCode}`}`)
+      },
       realPath: async path => (await $.fs.stat(path, { resolve: true })).realPath ?? path,
     },
     process: {

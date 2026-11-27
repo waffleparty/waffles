@@ -109,6 +109,12 @@ export function fakeHost({ run, files = {}, cwd = '/work', sessionId = 'test', n
           disk.delete(file)
         }
       },
+      rename: async (from, to) => {
+        const text = disk.get(from)
+        if (text === undefined) throw missing(from)
+        put(to, text)
+        disk.delete(from)
+      },
       realPath: async path => path,
     },
     process: {

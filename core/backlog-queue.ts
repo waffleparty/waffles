@@ -29,8 +29,9 @@ import type { CoreTool, Json } from './tools.ts'
  * machine. It never calls the tracker, and changes nothing but the queue file, that exclude line, its lock file
  * (.backlog/.queue-lock, there only while a session holds it; core/lock.ts), and, at a raise's done, the item files.
  *
- * Every read and write of the queue holds the lock, so 2 sessions never write it at once. The Host has no rename, so
- * a write replaces the queue file's text in place, under the lock. A folder that can't be written takes no lock file,
+ * Every read and write of the queue holds the lock, so 2 sessions never write it at once. A write goes to a file beside the
+ * queue (.backlog/.queue-new, which the second exclude line covers) that then takes the queue's place by rename, so a session that ends during a write
+ * leaves the queue whole. A folder that can't be written takes no lock file,
  * and can't be changed either: there a list reads the queue without the lock, and add and done fail.
  *
  * The backlog folder is the one given (absolute, or from the session's folder), else .backlog/ of the main checkout:
@@ -127,7 +128,11 @@ async function writeQueue($: Host, backlog: string, entries: Entry[]): Promise<v
   const path = join(backlog, QUEUE)
   try {
     if (entries.length === 0) await $.fs.remove(path)
-    else await $.fs.write(path, `${JSON.stringify(entries, null, 2)}\n`)
+    else {
+      const next = join(backlog, '.queue-new')
+      await $.fs.write(next, `${JSON.stringify(entries, null, 2)}\n`)
+      await $.fs.rename(next, path)
+    }
   } catch (error) {
     throw new Failed(`cannot write ${path}: ${messageOf(error)}`)
   }

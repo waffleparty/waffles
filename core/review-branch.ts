@@ -90,7 +90,7 @@ async function refuseOwnCommits(c: Checkout): Promise<void> {
 }
 
 async function waiting(c: Checkout): Promise<number[]> {
-  const argv = ['gh', 'pr', 'list', '--state', 'open', '--search', 'review-requested:@me', '--json', 'number,isDraft']
+  const argv = ['gh', 'pr', 'list', '--state', 'open', '--search', 'review-requested:@me', '--limit', '1000', '--json', 'number,isDraft']
   const done = await run(c.$, argv, { cwd: c.main, timeoutMs: GH_MS, deadline: c.deadline, isWhole: true })
   if (done.exitCode !== 0) throw new Failed(`gh pr list failed: ${done.stderr.trim()}`)
   const prs = JSON.parse(done.stdout) as { number: number; isDraft?: boolean }[]
