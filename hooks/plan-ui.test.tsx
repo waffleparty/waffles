@@ -508,14 +508,17 @@ test('a turn a notification starts, with no prompt typed, reveals the steps it a
   expect(await rows()).toContain('  › ▶ 3.2 Callback route (1)')
 
   // A subagent's notification starts a turn: no typed prompt. Claude adds a step under 4, not current.
-  await $.prompt.submit({ origin: { kind: 'task-notification' }, wait: false, text: 'Agent finished' } as never)
+  const notification = () => $.prompt.submit({ origin: { kind: 'task-notification' }, wait: false, text: 'Agent finished' } as never)
+  await notification()
   await call($, { op: 'add', parent: '4', titles: ['Release'] })
-  await pressRow($, '3.2')
   await stop()
   expect(await rows()).toContain('⌄ ○ 4 Ship')
   expect(await rows()).toContain('    ○ 4.2 Release')
-  // 3.2 was expanded by a click: such a stop collapses nothing, so it stays as the click left it.
-  expect(await rows()).toContain('  ⌄ ▶ 3.2 Callback route')
+  // Another such turn changes nothing: 4 is now idle and its steps old, which the end of a person's
+  // turn would collapse. Its stop collapses nothing.
+  await notification()
+  await stop()
+  expect(await rows()).toContain('⌄ ○ 4 Ship')
 })
 
 test('a prompt typed into a running turn ends no turn: steps added before it count as new at the stop', async ($, on) => {

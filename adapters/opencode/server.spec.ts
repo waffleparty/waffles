@@ -461,13 +461,25 @@ test('a prompt typed during a running turn, or a skill command, ends no turn of 
   await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
   await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
   await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
-  // Typed while the turn runs, and a skill named between turns: neither begins a turn.
+  // Typed while the turn runs: it begins no turn.
   await registered.hooks['session.prompt']!(prompt('s1', 'also this') as never)
-  await registered.hooks['session.prompt']!(prompt('s1', '@ask', ['ask']) as never)
   await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
   await tool.execute({ op: 'show' }, { sessionID: 's1' })
   // 2.1 was added this turn, so 2 stays expanded.
   assert.equal(collapsed(), null)
+
+  // A skill named between turns begins no turn either: its turn's stop only expands, so the idle 2 stays.
+  await registered.hooks['session.prompt']!(prompt('s1', '@ask', ['ask']) as never)
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  assert.equal(collapsed(), null)
+  // A prompt typed between turns begins one: at its end the idle 2 collapses.
+  await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
   await cleanup()
 })
 
