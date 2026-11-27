@@ -36,17 +36,18 @@ test('the panel lists the goal and its steps, with the marks and colors Claude C
   const planTree = goal()
   const next = closeSteps(addSteps(planTree, '2', 'work', ['Fix'], NOW, { focus: false }).goal, ['1'], 'done', false, NOW).goal
   const rows = outlineRows({ waffles: { planTree: next } }, 40)
-  assert.deepEqual(textOf(rows), ['Ship it', '✔ 1 Build', '▶ 2 Test', '  ○ 2.1 ⤷ Fix'])
-  // The done mark is green, the current step cyan, an open step's mark amber.
-  assert.equal(rows[1]?.[0]?.color, 'success')
-  assert.equal(rows[2]?.[0]?.color, 'cyan')
+  assert.deepEqual(textOf(rows), ['Ship it', '  ✔ 1 Build', '⌄ ▶ 2 Test', '    ○ 2.1 ⤷ Fix'])
+  // The done mark is green, the current step cyan, an open step's mark amber; a parent's glyph is dim.
+  assert.equal(rows[1]?.[1]?.color, 'success')
+  assert.equal(rows[2]?.[0]?.isDim, true)
+  assert.equal(rows[2]?.[1]?.color, 'cyan')
   assert.equal(rows[3]?.[1]?.color, 'warning')
   for (const row of rows) for (const piece of row) if (piece.color) assert.ok(PIECE_COLORS[piece.color], piece.color)
 })
 
 test('a row is cut to the panel\'s width', () => {
   const planTree = newGoal('Ship it', [{ title: 'Build the whole thing from the ground up, twice', kind: 'planned' }], NOW)
-  assert.deepEqual(textOf(outlineRows({ waffles: { planTree } }, 20)), ['Ship it', '▶ 1 Build the whole…'])
+  assert.deepEqual(textOf(outlineRows({ waffles: { planTree } }, 20)), ['Ship it', '  ▶ 1 Build the who…'])
 })
 
 test("a command's line shows once, by the time it was left", () => {

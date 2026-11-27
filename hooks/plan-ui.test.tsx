@@ -172,14 +172,14 @@ test('the pane draws the spec example with markers and the current path active',
 
     expect(rows).toEqual([
       'Ship OAuth login',
-      '✔ 1 Spec',
-      '✔ 2 Design',
-      '▶ 3 Build',
-      '  ✔ 3.1 Provider config',
-      '  ▶ 3.2 Callback route',
-      '    ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
-      '  ✗ 3.3 ? Try implicit flow',
-      '○ 4 Ship',
+      '  ✔ 1 Spec',
+      '  ✔ 2 Design',
+      '⌄ ▶ 3 Build',
+      '    ✔ 3.1 Provider config',
+      '  ⌄ ▶ 3.2 Callback route',
+      '      ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
+      '    ✗ 3.3 ? Try implicit flow',
+      '  ○ 4 Ship',
       ' ',
       '1 other goal parked',
     ])
@@ -198,7 +198,7 @@ test('steps changed since the last prompt are italic, with no dot and their inde
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toContain('    ○ 3.2.2 ⤷ Retry token exchange')
+  expect(rows).toContain('      ○ 3.2.2 ⤷ Retry token exchange')
   expect(rows.some(row => row.includes('•'))).toBe(false)
   const added = texts.find(t => t.text.includes('Retry token exchange'))
   expect(added?.props.italic).toBe(true)
@@ -213,7 +213,7 @@ test('state markers are colored: done green, open amber, the main thread’s ste
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toContain('✔ 1 Spec')
+  expect(rows).toContain('  ✔ 1 Spec')
   const marks = (glyph: string) => texts.filter(t => t.text === glyph).map(t => t.props.color)
   expect(marks('✔').length).toBeGreaterThan(0)
   expect(marks('✔').every(c => c === 'success')).toBe(true)
@@ -244,7 +244,7 @@ test('changed top-level steps stay aligned with the rest', async ($, on) => {
   await call($, { op: 'goal', title: 'Ship OAuth login', steps: [{ title: 'Spec' }, { title: 'Build' }] })
 
   const { rows, texts } = await drawPane($)
-  expect(rows).toEqual(['Ship OAuth login', '▶ 1 Spec', '○ 2 Build'])
+  expect(rows).toEqual(['Ship OAuth login', '  ▶ 1 Spec', '  ○ 2 Build'])
   expect(texts.find(t => t.text.includes('Build'))?.props.italic).toBe(true)
 })
 
@@ -279,15 +279,15 @@ test('a 24-column pane cuts titles with … and keeps markers and IDs', async ($
 
   expect(rows).toEqual([
     'Ship OAuth login',
-    '✔ 1 Spec',
-    '✔ 2 Design',
-    '▶ 3 Build',
-    '  ✔ 3.1 Provider config',
-    '  ▶ 3.2 Callback route',
-    '    ✔ 3.2.1 ⤷ Fix CORS…',
-    '    ○ 3.2.2 ? Compare P…',
-    '  ✗ 3.3 ? Try implicit…',
-    '○ 4 Ship',
+    '  ✔ 1 Spec',
+    '  ✔ 2 Design',
+    '⌄ ▶ 3 Build',
+    '    ✔ 3.1 Provider conf…',
+    '  ⌄ ▶ 3.2 Callback route',
+    '      ✔ 3.2.1 ⤷ Fix COR…',
+    '      ○ 3.2.2 ? Compare…',
+    '    ✗ 3.3 ? Try implici…',
+    '  ○ 4 Ship',
     ' ',
     '1 other goal parked',
   ])
@@ -684,7 +684,7 @@ test('after done ends the goal the pane keeps its tree with a dim done row, the 
   await call($, { op: 'goal', title: 'Ship', steps: [{ title: 'Spec' }, { title: 'Build' }] })
   await call($, { op: 'done', ids: ['1', '2'] })
 
-  const ended = ['Ship', 'done', '✔ 1 Spec', '✔ 2 Build']
+  const ended = ['Ship', 'done', '  ✔ 1 Spec', '  ✔ 2 Build']
   const { rows, texts } = await drawPane($)
   expect(rows).toEqual(ended)
   expect(texts.find(t => t.text === 'done')?.props.dimColor).toBe(true)
@@ -696,7 +696,7 @@ test('after done ends the goal the pane keeps its tree with a dim done row, the 
   expect((await drawPane($)).rows).toEqual(ended)
 
   await call($, { op: 'goal', title: 'Next', steps: [{ title: 'Repro' }] })
-  expect((await drawPane($)).rows).toEqual(['Next', '▶ 1 Repro'])
+  expect((await drawPane($)).rows).toEqual(['Next', '  ▶ 1 Repro'])
 })
 
 test('after /clear the pane keeps the tree marked not active, the poll keeps it, and a switch makes it active again', async ($, on) => {
@@ -710,14 +710,14 @@ test('after /clear the pane keeps the tree marked not active, the poll keeps it,
   const kept = [
     'Ship OAuth login',
     'not active',
-    '✔ 1 Spec',
-    '✔ 2 Design',
-    '▶ 3 Build',
-    '  ✔ 3.1 Provider config',
-    '  ▶ 3.2 Callback route',
-    '    ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
-    '  ✗ 3.3 ? Try implicit flow',
-    '○ 4 Ship',
+    '  ✔ 1 Spec',
+    '  ✔ 2 Design',
+    '⌄ ▶ 3 Build',
+    '    ✔ 3.1 Provider config',
+    '  ⌄ ▶ 3.2 Callback route',
+    '      ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
+    '    ✗ 3.3 ? Try implicit flow',
+    '  ○ 4 Ship',
     ' ',
     '1 other goal parked',
   ]
@@ -731,7 +731,7 @@ test('after /clear the pane keeps the tree marked not active, the poll keeps it,
   expect((await drawPane($)).rows).toEqual(kept)
 
   await call($, { op: 'goal', switch: 'ship-oauth-login' })
-  expect((await drawPane($)).rows.slice(0, 2)).toEqual(['Ship OAuth login', '✔ 1 Spec'])
+  expect((await drawPane($)).rows.slice(0, 2)).toEqual(['Ship OAuth login', '  ✔ 1 Spec'])
 })
 
 test('a new goal’s tree drawn a moment before it is active, with no goal kept, has no not-active row', async ($, on) => {
@@ -740,7 +740,7 @@ test('a new goal’s tree drawn a moment before it is active, with no goal kept,
   const tree = newGoal('Fix flaky test', [{ title: 'Repro' }], ISO)
   on('state.get', ($, e, next) => (e.key === 'planTree' ? ({ value: { version: 1, value: tree } } as never) : next(e)))
 
-  expect((await drawPane($)).rows).toEqual(['Fix flaky test', '▶ 1 Repro'])
+  expect((await drawPane($)).rows).toEqual(['Fix flaky test', '  ▶ 1 Repro'])
 })
 
 test('the dim row under a kept goal says its file is missing or unreadable, and returns to normal when it reads again', async ($, on) => {
@@ -836,7 +836,7 @@ test('the pane and footer cut wide titles to their cells, and their Texts trunca
   const { rows, texts } = await drawPane($, 20)
   expect(rows.every(row => width(row) <= 20)).toBe(true)
   expect(rows[0]).toBe('日本語のタイトルを…')
-  expect(rows[1]).toBe('▶ 1 日本語のタイト…')
+  expect(rows[1]).toBe('  ▶ 1 日本語のタイ…')
   expect(texts.length).toBeGreaterThan(0)
   expect(texts.every(t => t.props.wrap === 'truncate-end')).toBe(true)
 
@@ -928,7 +928,7 @@ updated: ${ISO}
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toEqual(['Ship the APIs', '▶ 1 Survey the queue', '▶ 2 Fix the APIs', '  ▶ 2.1 Merge the 2 API fixes', '  ◐ 2.2 Archive ITEM-91', '  ○ 2.3 Close the epic'])
+  expect(rows).toEqual(['Ship the APIs', '  ▶ 1 Survey the queue', '⌄ ▶ 2 Fix the APIs', '    ▶ 2.1 Merge the 2 API fixes', '    ◐ 2.2 Archive ITEM-91', '    ○ 2.3 Close the epic'])
   const style = (text: string) => {
     const props = texts.find(t => t.text === text)?.props ?? {}
     return [props.color, props.bold]

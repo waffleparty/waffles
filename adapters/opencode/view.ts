@@ -75,5 +75,5 @@ export function noticeOf(metadata: unknown, seen: number | null): { text: string
 /** The plan outline's rows for a panel `room` columns wide, as on Claude Code; empty with no goal drawn. */
 export function outlineRows(metadata: unknown, room: number): Piece[][] {
   const goal = goalOf(keptOf(metadata))
-  return goal ? paneRows(goal, true, false, null, null, [], [], room) : []
+  return goal ? paneRows(goal, true, false, null, null, [], [], [], room) : []
 }

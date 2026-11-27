@@ -199,7 +199,7 @@ export function registerPlanUi(on: On): void {
     const changed = await read($, planChanged)
     noteLayout(e.viewport?.isFullscreen)
     const { Box, Text } = $.ui.resolve(e)
-    const rows = paneRows(goal, isActive, isKept, error, issue, others, changed, e.props.bodyColumns)
+    const rows = paneRows(goal, isActive, isKept, error, issue, others, changed, [], e.props.bodyColumns)
     return (
       <Box flexDirection="column">
         {rows.map(pieces => (

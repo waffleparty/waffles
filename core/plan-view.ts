@@ -1,3 +1,4 @@
+import { isCollapsed, reveal } from './plan-collapse.ts'
 import { MARKER, SHOWN, shownState, type Goal, type Shown, type Step } from './plan-tree.ts'
 
 /**
@@ -14,8 +15,18 @@ export const MAIN = 'cyan'
 const AGENT = 'magenta'
 const REVIEW = 'yellow'
 
-/** A run of text in one style. `color` is a name: `success`, `warning`, `cyan`, `magenta`, or `yellow`. */
-export type Piece = { text: string; color?: string; isDim?: boolean; isBold?: boolean; isItalic?: boolean }
+/**
+ * A run of text in one style. `color` is a name: `success`, `warning`, `cyan`, `magenta`, or `yellow`.
+ * `toggle`, on a parent step's disclosure glyph, is the ID of the step a press on its row collapses or expands.
+ */
+export type Piece = { text: string; color?: string; isDim?: boolean; isBold?: boolean; isItalic?: boolean; toggle?: string }
+
+// A parent step's disclosure glyph, dim, in a gutter of 2 columns before the state mark: `›` collapsed,
+// `⌄` expanded, then a space. A step with no children has 2 blank columns there, so the state marks of
+// one depth line up.
+const COLLAPSED = '›'
+const EXPANDED = '⌄'
+const GUTTER = '  '
 
 // Terminal cells, not code points: wide characters take 2 and combining marks 0, and a cut never splits a grapheme.
 const ZERO = /^[\p{M}\u200B-\u200D\u2060\uFEFF\uFE00-\uFE0F]$/u
@@ -65,24 +76,33 @@ export function cut(text: string, room: number): string {
 // The step where work happens takes its owner's color, its marker bold: the main thread's current step
 // cyan, a subagent's step magenta, a step whose report waits yellow. A step with that work under it is
 // bold in the text color. A step changed since the person's last prompt is italic. None moves the row.
-export function stepRow(goal: Goal, step: Step, depth: number, isChanged: boolean, room: number): Piece[] {
+// A collapsed step's row ends with the count of the steps right under it, dim: `Build (5)`.
+export function stepRow(goal: Goal, step: Step, depth: number, isChanged: boolean, isShut: boolean, room: number): Piece[] {
   const state = shownState(goal, step)
+  const hasChildren = step.children.length > 0
   const indent = '  '.repeat(depth)
+  const gutter = hasChildren ? `${isShut ? COLLAPSED : EXPANDED} ` : GUTTER
   const mark = SHOWN[state]
   const head = ` ${step.id} ${MARKER[step.kind]}`
-  const title = cut(step.title, room - width(indent) - width(mark) - width(head))
+  const count = hasChildren && isShut ? ` (${step.children.length})` : ''
+  const title = cut(step.title, room - width(indent) - width(gutter) - width(mark) - width(head))
   const color = state === 'running' ? AGENT : state === 'review' ? REVIEW : state === 'active' && step.id === goal.current ? MAIN : undefined
   const isParent = state === 'active' && color === undefined
   const isDim = state === 'dropped'
   const isItalic = isChanged || undefined
   return [
-    ...(indent ? [{ text: indent }] : []),
+    ...(hasChildren ? [...(indent ? [{ text: indent }] : []), { text: gutter, isDim: true, toggle: step.id }] : [{ text: indent + gutter }]),
     { text: mark, color: isDim ? undefined : (color ?? MARK_COLOR[state]), isDim, isBold: color !== undefined || isParent, isItalic },
     { text: head + title, color, isDim, isBold: isParent, isItalic },
+    ...(count ? [{ text: count, isDim: true }] : []),
   ]
 }
 
-/** The pane's rows: the goal's title, a note when it is not active, each step, then the count of other goals. `room` is the width in columns. */
+/**
+ * The pane's rows: the goal's title, a note when it is not active, each step, then the count of other
+ * goals. `collapsed` holds the IDs of the collapsed steps, whose children are not drawn; work in progress
+ * is drawn even under one (core/plan-collapse.ts's `reveal`). `room` is the width in columns.
+ */
 export function paneRows(
   goal: Goal | null,
   isActive: boolean,
@@ -91,6 +111,7 @@ export function paneRows(
   issue: 'missing' | 'unreadable' | null,
   others: readonly { inUse: boolean }[],
   changed: readonly string[],
+  collapsed: readonly string[],
   room: number,
 ): Piece[][] {
   if (error !== null) return [[{ text: cut(error, room) }]]
@@ -102,10 +123,12 @@ export function paneRows(
     const note = issue === 'missing' ? ' · file missing' : issue === 'unreadable' ? " · can't read the file" : ''
     rows.push([{ text: cut(`${goal.status === 'done' ? 'done' : 'not active'}${note}`, room), isDim: true }])
   }
+  const shut = reveal(goal, collapsed)
   const walk = (steps: readonly Step[], depth: number) => {
     for (const step of steps) {
-      rows.push(stepRow(goal, step, depth, changed.includes(step.id), room))
-      walk(step.children, depth + 1)
+      const isShut = step.children.length > 0 && isCollapsed(step, shut)
+      rows.push(stepRow(goal, step, depth, changed.includes(step.id), isShut, room))
+      if (!isShut) walk(step.children, depth + 1)
     }
   }
   walk(goal.steps, 0)
