@@ -17,6 +17,7 @@ import {
   type GoalFile,
   type Where,
 } from './plan-store.ts'
+import { collapsedFor, collapsedOf, endTurn, newIds, reveal, toggle } from './plan-collapse.ts'
 import { restorePlan } from './plan-mirror.ts'
 import type { CoreTool } from './tools.ts'
 import {
@@ -26,6 +27,7 @@ import {
   deferStep,
   describe,
   endAgent,
+  findStep,
   focusStep,
   markRunning,
   moveGoalInto,
@@ -285,11 +287,57 @@ async function refresh(
   }
   if (slug !== null || isRead) {
     const tree = isRead ? mine.goal : null
+    // Before the tree, so a tree is never drawn with the collapsed steps of another goal.
+    if (tree !== null && shown !== null && !isEnded()) await syncCollapsed($, shown, tree)
     if (!isEnded() && !same(await $.state.get('planTree'), tree)) await $.state.set('planTree', tree)
   }
   if (!isEnded() && (await $.state.get('planKeptIssue')) !== issue) await $.state.set('planKeptIssue', issue)
   if (!isEnded() && (await $.state.get('planError')) !== error) await $.state.set('planError', error)
   if (!isEnded() && !same(await $.state.get('planOthers'), others)) await $.state.set('planOthers', others)
+}
+
+/**
+ * Keeps the collapsed steps in step with the tree drawn: none for a goal other than the one they were
+ * kept for, and each named by its ID in the tree, so a moved step keeps its state under its new ID. Work
+ * that became active is revealed at once, mid-turn too; a step collapses only at a turn's end or a press.
+ */
+async function syncCollapsed($: Host, slug: string, tree: Goal) {
+  const kept = await $.state.get('planCollapsed')
+  const next = collapsedOf(slug, reveal(tree, collapsedFor(kept, slug)))
+  if (!same(kept, next)) await $.state.set('planCollapsed', next)
+}
+
+/** The slug of the goal drawn: the active one, else the kept one; null with neither. */
+async function drawnSlug($: Host): Promise<string | null> {
+  return (await $.state.get('planGoal')) ?? (await $.state.get('planKept'))
+}
+
+/**
+ * Runs the collapse rules (core/plan-collapse.ts's `endTurn`) at a turn boundary: a stop (`isStop`), or a
+ * prompt that begins a turn. The person's turn is ended once: at its stop, else at the next prompt; the
+ * tree when it began is the one before. A later stop with no turn of the person's open (a turn a
+ * notification started) runs only the rules that expand, on what changed since the rules last ran. A
+ * tree of another goal counts as none, so each step of this one is new. The tree now is kept for the next.
+ * With no tree drawn now (a goal file that does not read), no rule runs, and the kept tree stays for the
+ * next boundary to compare with.
+ */
+async function finishTurn($: Host, isStop: boolean) {
+  const turn = await $.state.get('planTurn')
+  if (!isStop && turn?.isOpen !== true) return
+  const tree = await $.state.get('planTree')
+  const slug = await drawnSlug($)
+  if (tree === null || slug === null) {
+    if (turn?.isOpen) await $.state.set('planTurn', { ...turn, isOpen: false })
+    return
+  }
+  await $.state.set('planTurn', { goal: slug, tree, isOpen: false })
+  if (turn === null) return
+  const before = turn.goal === slug ? turn.tree : null
+  const kept = await $.state.get('planCollapsed')
+  // Pressed steps of another goal hold nothing here.
+  const held = collapsedFor(await $.state.get('planPressed'), slug)
+  const next = collapsedOf(slug, endTurn(before, tree, collapsedFor(kept, slug), newIds(before, tree), { isExpandOnly: !turn.isOpen, held }))
+  if (!same(kept, next)) await $.state.set('planCollapsed', next)
 }
 
 /** Sets the goal whose tree the pane keeps while no goal is active; null once one is. */
@@ -733,13 +781,50 @@ export async function activeGoal($: Host): Promise<string | null> {
 
 /**
  * The person typed a prompt. The highlights mark what changed since they last typed, so it clears
- * them; an adapter leaves out a notification, a trigger and a slash command. The reset waits its turn
- * behind a poll or a call, so it is not awaited: the prompt never waits on the plan outline.
+ * them; an adapter leaves out a notification, a trigger and a slash command. With `isTurn`, a prompt
+ * typed between turns and no command, a new turn begins: the turn before ends here if its stop did not
+ * end it, and the tree drawn now is kept for the rules at this turn's end. A prompt delivered into a
+ * running turn begins none, so the rules never run in the middle of one. The work waits its turn behind
+ * a poll or a call, so it is not awaited: the prompt never waits on the plan outline.
  */
-export function submitPlan($: Host): void {
+export function submitPlan($: Host, isTurn: boolean): void {
   void serial($, async () => {
     if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
+    if (!isTurn) return
+    await finishTurn($, false)
+    await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree'), isOpen: true })
+    // A press holds through the end of the turn it was made in; at this turn's end the rules decide again.
+    if ((await $.state.get('planPressed')) !== null) await $.state.set('planPressed', null)
   }).catch(() => undefined)
+}
+
+/**
+ * The main thread's turn stopped, also one a notification started: the collapse rules run for it.
+ * Queued, not awaited, as submitPlan is.
+ */
+export function stopPlan($: Host): void {
+  void serial($, () => finishTurn($, true)).catch(error => logFailure($, "couldn't collapse the plan outline at the turn's end", error))
+}
+
+/**
+ * A press on a parent step's row in a view: the step collapses or expands now, unless that would hide
+ * work in progress. Made during a turn, it holds through that turn's end, and the automatic rules decide
+ * again at the end of the next turn. Made between turns, it holds until the end of the next turn, where
+ * the rules decide again. Queued behind a poll or a call, so a redraw never writes over the press.
+ */
+export async function pressPlan($: Host, id: string): Promise<void> {
+  await serial($, async () => {
+    const tree = await $.state.get('planTree')
+    const slug = await drawnSlug($)
+    if (tree === null || slug === null) return
+    const kept = await $.state.get('planCollapsed')
+    const next = collapsedOf(slug, toggle(tree, collapsedFor(kept, slug), id))
+    if (same(kept, next)) return
+    await $.state.set('planCollapsed', next)
+    const step = findStep(tree, id)
+    const pressed = collapsedFor(await $.state.get('planPressed'), slug)
+    if (step && !pressed.includes(step.id)) await $.state.set('planPressed', collapsedOf(slug, [...pressed, step.id]))
+  })
 }
 
 /**
@@ -764,6 +849,10 @@ export async function endPlan($: Host, sessionId: string, isProcessKept: boolean
   if (slug !== null) await lose($, slug)
   if ((await $.state.get('planError')) !== null) await $.state.set('planError', null)
   if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
+  // The collapsed steps and the turn are the ended session's view: the new one starts with every step expanded.
+  if ((await $.state.get('planCollapsed')) !== null) await $.state.set('planCollapsed', null)
+  if ((await $.state.get('planTurn')) !== null) await $.state.set('planTurn', null)
+  if ((await $.state.get('planPressed')) !== null) await $.state.set('planPressed', null)
 }
 
 /**

@@ -148,7 +148,7 @@ test('add with focus makes the first new step current in one row, parking the ol
 
   const away = await call($, { op: 'add', parent: '2', kind: 'research', titles: ['Compare PKCE libraries'], focus: true })
   expect(away).toEqual({
-    result: '+ 2.1 ? Compare PKCE libraries under 2 → current\n⏸ 1 Spec\n⏸ 1.1 Fix CORS on dev proxy\n\nPath: 2 Build › 2.1 Compare PKCE libraries',
+    result: '+ 2.1 ? Compare PKCE libraries under 2 → current\n⏸\uFE0E 1 Spec\n⏸\uFE0E 1.1 Fix CORS on dev proxy\n\nPath: 2 Build › 2.1 Compare PKCE libraries',
   })
   const saved = parseGoal(disk.files.get(file('ship-oauth-login'))!, 'x')
   expect(saved.current).toBe('2.1')
@@ -737,7 +737,7 @@ test('a step move highlights the whole moved subtree by its new IDs and the step
 
   const r = await call($, { op: 'move', id: '1.1', to: '2' })
 
-  expect(r).toEqual({ result: 'moved 1.1 → 2.1\n⏸ 1 Spec\n\nPath: 2 Build › 2.1 Draft' })
+  expect(r).toEqual({ result: 'moved 1.1 → 2.1\n⏸\uFE0E 1 Spec\n\nPath: 2 Build › 2.1 Draft' })
   const saved = parseGoal(disk.files.get(file('ship-oauth-login'))!, 'x')
   expect(saved.steps[1]?.children[0]?.children.map(s => s.id)).toEqual(['2.1.1'])
   expect(state.planChanged).toEqual(['2.1', '2.1.1', '1'])

@@ -36,7 +36,7 @@ updated: ${ISO}
 type Pane = { id: string; title: string; isShown: boolean; isFocused: boolean; isPlaced: boolean }
 
 // The disk, the session's ID, a clock and a store beneath the plugin, and an engine that keeps the
-// open panes: `opened` holds each `ui.open`, `panes` what `$.ui.panes()` lists.
+// open panes: `opened` holds each `ui.open`, `panes` what `$.ui.panes()` lists; `state` the session's values.
 function world(on: On, stored: Record<string, unknown> = {}) {
   const disk = fakeDisk(on)
   on('session.id', () => ({ value: ME }) as never)
@@ -73,7 +73,10 @@ function world(on: On, stored: Record<string, unknown> = {}) {
   on('command.register', ($, e) => (commands.push(e), { value: { command: e.name } }) as never)
   on('settings.read', () => ({ value: {} }) as never)
   on('session.start', ($, e) => ({ cwd: e.cwd }) as never)
-  return { disk, clock, opened, panes, store, commands, fails, during }
+  // The last value the plugin wrote to each session key.
+  const state: Record<string, unknown> = {}
+  on('state.set', ($, e, next) => ((state[e.key] = e.value), next(e)))
+  return { disk, clock, opened, panes, store, commands, fails, during, state }
 }
 
 const start = ($: Engine) => $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
@@ -172,14 +175,14 @@ test('the pane draws the spec example with markers and the current path active',
 
     expect(rows).toEqual([
       'Ship OAuth login',
-      '✔ 1 Spec',
-      '✔ 2 Design',
-      '▶ 3 Build',
-      '  ✔ 3.1 Provider config',
-      '  ▶ 3.2 Callback route',
-      '    ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
-      '  ✗ 3.3 ? Try implicit flow',
-      '○ 4 Ship',
+      '  ✔ 1 Spec',
+      '  ✔ 2 Design',
+      '⌄ ▶ 3 Build',
+      '    ✔ 3.1 Provider config',
+      '  ⌄ ▶ 3.2 Callback route',
+      '      ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
+      '    ✗ 3.3 ? Try implicit flow',
+      '  ○ 4 Ship',
       ' ',
       '1 other goal parked',
     ])
@@ -198,7 +201,7 @@ test('steps changed since the last prompt are italic, with no dot and their inde
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toContain('    ○ 3.2.2 ⤷ Retry token exchange')
+  expect(rows).toContain('      ○ 3.2.2 ⤷ Retry token exchange')
   expect(rows.some(row => row.includes('•'))).toBe(false)
   const added = texts.find(t => t.text.includes('Retry token exchange'))
   expect(added?.props.italic).toBe(true)
@@ -213,7 +216,7 @@ test('state markers are colored: done green, open amber, the main thread’s ste
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toContain('✔ 1 Spec')
+  expect(rows).toContain('  ✔ 1 Spec')
   const marks = (glyph: string) => texts.filter(t => t.text === glyph).map(t => t.props.color)
   expect(marks('✔').length).toBeGreaterThan(0)
   expect(marks('✔').every(c => c === 'success')).toBe(true)
@@ -244,7 +247,7 @@ test('changed top-level steps stay aligned with the rest', async ($, on) => {
   await call($, { op: 'goal', title: 'Ship OAuth login', steps: [{ title: 'Spec' }, { title: 'Build' }] })
 
   const { rows, texts } = await drawPane($)
-  expect(rows).toEqual(['Ship OAuth login', '▶ 1 Spec', '○ 2 Build'])
+  expect(rows).toEqual(['Ship OAuth login', '  ▶ 1 Spec', '  ○ 2 Build'])
   expect(texts.find(t => t.text.includes('Build'))?.props.italic).toBe(true)
 })
 
@@ -279,20 +282,331 @@ test('a 24-column pane cuts titles with … and keeps markers and IDs', async ($
 
   expect(rows).toEqual([
     'Ship OAuth login',
-    '✔ 1 Spec',
-    '✔ 2 Design',
-    '▶ 3 Build',
-    '  ✔ 3.1 Provider config',
-    '  ▶ 3.2 Callback route',
-    '    ✔ 3.2.1 ⤷ Fix CORS…',
-    '    ○ 3.2.2 ? Compare P…',
-    '  ✗ 3.3 ? Try implicit…',
-    '○ 4 Ship',
+    '  ✔ 1 Spec',
+    '  ✔ 2 Design',
+    '⌄ ▶ 3 Build',
+    '    ✔ 3.1 Provider conf…',
+    '  ⌄ ▶ 3.2 Callback route',
+    '      ✔ 3.2.1 ⤷ Fix COR…',
+    '      ○ 3.2.2 ? Compare…',
+    '    ✗ 3.3 ? Try implici…',
+    '  ○ 4 Ship',
     ' ',
     '1 other goal parked',
   ])
   expect(rows.every(row => [...row].length <= 24)).toBe(true)
   expect((await drawPane($, 12)).rows[0]).toBe('Ship OAuth…')
+})
+
+/** Presses a parent step's row in the pane, as a click on it does. */
+async function pressRow($: Engine, id: string) {
+  const ui = await $.ui.mount({ plugin: 'waffles', component: 'Pane', requestId: 'plan-outline', surface: 'terminal', props: paneProps(40) })
+  await ui.press({ key: `plan-step-${id}` })
+  await ui.unmount()
+}
+
+test('a parent step’s row is a Button: a press collapses it to its count, and another expands it', async ($, on) => {
+  const { disk } = world(on)
+  await specExample($, disk)
+  await call($, { op: 'focus', id: '4' })
+  await call($, { op: 'add', parent: '4', titles: ['Tag', 'Release'] })
+
+  const ui = await $.ui.mount({ plugin: 'waffles', component: 'Pane', requestId: 'plan-outline', surface: 'terminal', props: paneProps(40) })
+  const buttons = await ui.findAll({ type: 'Button' })
+  await ui.unmount()
+  // A Button for each parent, 3, 3.2 and 4, and none for a leaf.
+  expect(buttons.map(b => b.key)).toEqual(['plan-step-3', 'plan-step-3.2', 'plan-step-4'])
+
+  await pressRow($, '3')
+  expect((await drawPane($)).rows.slice(1, 6)).toEqual(['  ✔ 1 Spec', '  ✔ 2 Design', '› ⏸\uFE0E 3 Build (3)', '⌄ ▶ 4 Ship', '    ○ 4.1 Tag'])
+  await pressRow($, '3')
+  expect((await drawPane($)).rows[3]).toBe('⌄ ⏸\uFE0E 3 Build')
+  expect((await drawPane($)).rows[5]).toBe('  ⌄ ⏸\uFE0E 3.2 Callback route')
+})
+
+test('a press that would hide the current step changes nothing; on the current step it hides the steps under it', async ($, on) => {
+  const { disk, state } = world(on)
+  await specExample($, disk)
+
+  // 3 holds the current step, 3.2.
+  await pressRow($, '3')
+  expect((await drawPane($)).rows[3]).toBe('⌄ ▶ 3 Build')
+  expect(state.planCollapsed ?? null).toBe(null)
+
+  await pressRow($, '3.2')
+  expect((await drawPane($)).rows.slice(3, 7)).toEqual(['⌄ ▶ 3 Build', '    ✔ 3.1 Provider config', '  › ▶ 3.2 Callback route (1)', '    ✗ 3.3 ? Try implicit flow'])
+})
+
+test('a collapsed step stays collapsed under its new ID after a move, and another goal starts expanded', async ($, on) => {
+  const { disk, state } = world(on)
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  await pressRow($, '4')
+  expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+
+  await call($, { op: 'move', id: '4', to: '3' })
+  expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['3.4'] })
+  expect((await drawPane($)).rows).toContain('  › ○ 3.4 Ship (1)')
+
+  await call($, { op: 'goal', switch: 'fix-flaky-test' })
+  expect(state.planCollapsed).toBe(null)
+})
+
+// A main-thread turn's end and a background subagent's start, as the engine raises them; the test answers both beneath the plugin.
+const FINISHED = { answer: 'Done.', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as const
+const SPAWN = { prompt: 'Do it', subagentType: 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'opus', fork: false, background: true }
+
+test('the pane collapses and expands steps by itself at each turn’s end, as in the mockups’ 4 turns', async ($, on) => {
+  world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('agent.spawn', () => ({ model: 'haiku', agentId: 'agent-1' }) as never)
+  const rows = async () => (await drawPane($, 60)).rows.slice(1)
+  const begin = () => $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  // The turn's end is queued behind plan outline work: a call waits for it.
+  const end = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+    return rows()
+  }
+
+  // Turn 1: the goal starts with 1, 2, 3 and their steps, and 1.1 starts. Every step is new.
+  await begin()
+  await call($, { op: 'goal', title: 'Add SSO login', steps: [{ title: 'Research the SSO providers' }, { title: 'Build the callback route' }, { title: 'Deploy to staging' }] })
+  await call($, { op: 'add', parent: '1', titles: ['Compare Okta and Auth0', 'Pick a provider'], focus: true })
+  await call($, { op: 'add', parent: '2', titles: ['Parse the token', 'Validate the state param'] })
+  await call($, { op: 'add', parent: '3', titles: ['Add the secrets', 'Run the migration'] })
+  expect(await end()).toEqual([
+    '⌄ ▶ 1 Research the SSO providers',
+    '    ▶ 1.1 Compare Okta and Auth0',
+    '    ○ 1.2 Pick a provider',
+    '⌄ ○ 2 Build the callback route',
+    '    ○ 2.1 Parse the token',
+    '    ○ 2.2 Validate the state param',
+    '⌄ ○ 3 Deploy to staging',
+    '    ○ 3.1 Add the secrets',
+    '    ○ 3.2 Run the migration',
+  ])
+
+  // Turn 2: 1.1 done, 1.2 started. 2 and 3 are idle, and their steps were there when the turn began.
+  await begin()
+  await call($, { op: 'done', ids: ['1.1'] })
+  await call($, { op: 'focus', id: '1.2' })
+  expect(await end()).toEqual([
+    '⌄ ▶ 1 Research the SSO providers',
+    '    ✔ 1.1 Compare Okta and Auth0',
+    '    ▶ 1.2 Pick a provider',
+    '› ○ 2 Build the callback route (2)',
+    '› ○ 3 Deploy to staging (2)',
+  ])
+
+  // Turn 3: 1.2 and 1 done; 2.1 started, with a new detour under it. Mid-turn, nothing collapses yet,
+  // and the current step is revealed at once.
+  await begin()
+  await call($, { op: 'done', ids: ['1.2', '1'] })
+  await call($, { op: 'focus', id: '2.1' })
+  await call($, { op: 'add', parent: '2.1', kind: 'work', titles: ['Fix CORS on dev proxy'], focus: true })
+  expect((await rows()).slice(0, 4)).toEqual(['⌄ ✔ 1 Research the SSO providers', '    ✔ 1.1 Compare Okta and Auth0', '    ✔ 1.2 Pick a provider', '⌄ ▶ 2 Build the callback route'])
+  expect(await end()).toEqual([
+    '› ✔ 1 Research the SSO providers (2)',
+    '⌄ ▶ 2 Build the callback route',
+    '  ⌄ ▶ 2.1 Parse the token',
+    '      ▶ 2.1.1 ⤷ Fix CORS on dev proxy',
+    '    ○ 2.2 Validate the state param',
+    '› ○ 3 Deploy to staging (2)',
+  ])
+
+  // Turn 4: 2.1.1 and 2.1 done, 2.2 started, and a background subagent takes 3.1, which shows at once.
+  await begin()
+  await call($, { op: 'done', ids: ['2.1.1', '2.1'] })
+  await call($, { op: 'focus', id: '2.2' })
+  await $.agent.spawn({ ...SPAWN, description: '3.1: Add the secrets' } as never)
+  await call($, { op: 'show' })
+  expect((await rows()).slice(-3)).toEqual(['⌄ ▶ 3 Deploy to staging', '    ▶ 3.1 Add the secrets', '    ○ 3.2 Run the migration'])
+  expect(await end()).toEqual([
+    '› ✔ 1 Research the SSO providers (2)',
+    '⌄ ▶ 2 Build the callback route',
+    '  › ✔ 2.1 Parse the token (1)',
+    '    ▶ 2.2 Validate the state param',
+    '⌄ ▶ 3 Deploy to staging',
+    '    ▶ 3.1 Add the secrets',
+    '    ○ 3.2 Run the migration',
+  ])
+})
+
+test('a press holds until the next turn’s end, where the rules decide again; a turn ends once', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const begin = () => $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  const end = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  const row4 = async () => (await drawPane($)).rows.find(row => row.includes(' 4 Ship'))
+
+  await begin()
+  await end()
+  // 4 is idle, and its step was there when the turn began: collapsed.
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+  // Expanded by hand, it stays so until a turn ends; a second stop of the same turn changes nothing.
+  await pressRow($, '4')
+  expect(await row4()).toBe('⌄ ○ 4 Ship')
+  await end()
+  expect(await row4()).toBe('⌄ ○ 4 Ship')
+  // At the next turn's end the rules decide again.
+  await begin()
+  await end()
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+})
+
+test('a click during a turn holds through that turn’s end, and the rules decide again at the end of the next', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const begin = () => $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  const end = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  const row4 = async () => (await drawPane($)).rows.find(row => row.includes(' 4 Ship'))
+  await begin()
+  await end()
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+
+  // Expanded by a click while the next turn runs: that turn's end leaves it so.
+  await begin()
+  await call($, { op: 'rename', id: '1', title: 'Spec it' })
+  await pressRow($, '4')
+  await end()
+  expect(await row4()).toBe('⌄ ○ 4 Ship')
+  // At the end of the turn after, the rules decide again: 4 is idle and old.
+  await begin()
+  await end()
+  expect(await row4()).toBe('› ○ 4 Ship (1)')
+})
+
+test('a stop while the goal file does not read keeps the tree to compare with: no step counts as new after it', async ($, on) => {
+  const { disk, clock } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await start($)
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const stop = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await stop()
+  expect((await drawPane($)).rows).toContain('› ○ 4 Ship (1)')
+
+  // The file does not read for a poll, and a turn a notification started stops then.
+  const saved = disk.files.get(file('ship-oauth-login'))!
+  disk.files.set(file('ship-oauth-login'), '---\ngoal: Ship OAuth login\nnonsense\n')
+  await clock.advance(5_000)
+  await stop()
+  disk.files.set(file('ship-oauth-login'), saved)
+  await clock.advance(5_000)
+  // The next such stop compares with the tree before: nothing is new, so 4 stays collapsed.
+  await stop()
+  expect((await drawPane($)).rows).toContain('› ○ 4 Ship (1)')
+})
+
+test('a step pressed in one goal holds nothing in another goal the turn switches to', async ($, on) => {
+  const { disk, state } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  // Another goal with a step 4 too, whose steps are all done: the rules collapse it.
+  disk.files.set(
+    file('fix-flaky-test'),
+    `---\ngoal: Fix flaky test\nstatus: open\ncurrent: 1\ncreated: ${ISO}\nupdated: ${ISO}\n---\n- [ ] 1 Repro\n- [ ] 2 Bisect\n- [ ] 3 Fix\n- [ ] 4 Ship\n  - [x] 4.1 Tag\n`,
+  )
+
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await pressRow($, '4')
+  expect(state.planPressed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+  await call($, { op: 'goal', switch: 'fix-flaky-test' })
+  await $.turn.complete(FINISHED)
+  await call($, { op: 'show' })
+
+  expect((await drawPane($)).rows).toContain('› ○ 4 Ship (1)')
+})
+
+test('a turn a notification starts, with no prompt typed, reveals the steps it adds but collapses nothing', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  const stop = async () => {
+    await $.turn.complete(FINISHED)
+    await call($, { op: 'show' })
+  }
+  const rows = async () => (await drawPane($)).rows
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await stop()
+  expect(await rows()).toContain('› ○ 4 Ship (1)')
+  // 3.2's steps are all done: collapsed too.
+  expect(await rows()).toContain('  › ▶ 3.2 Callback route (1)')
+
+  // A subagent's notification starts a turn: no typed prompt. Claude adds a step under 4, not current.
+  const notification = () => $.prompt.submit({ origin: { kind: 'task-notification' }, wait: false, text: 'Agent finished' } as never)
+  await notification()
+  await call($, { op: 'add', parent: '4', titles: ['Release'] })
+  await stop()
+  expect(await rows()).toContain('⌄ ○ 4 Ship')
+  expect(await rows()).toContain('    ○ 4.2 Release')
+  // Another such turn changes nothing: 4 is now idle and its steps old, which the end of a person's
+  // turn would collapse. Its stop collapses nothing.
+  await notification()
+  await stop()
+  expect(await rows()).toContain('⌄ ○ 4 Ship')
+})
+
+test('a prompt typed into a running turn ends no turn: steps added before it count as new at the stop', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await call($, { op: 'add', parent: '4', titles: ['Tag', 'Release'] })
+
+  // Delivered into the running turn: it has the turn's ID.
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Also this', turnId: 't1' } as never)
+  await call($, { op: 'show' })
+  await $.turn.complete(FINISHED)
+  await call($, { op: 'show' })
+
+  // 4's steps were added this turn, so 4 stays expanded.
+  expect((await drawPane($)).rows.slice(-5, -2)).toEqual(['⌄ ○ 4 Ship', '    ○ 4.1 Tag', '    ○ 4.2 Release'])
+})
+
+test('after /clear the kept tree is drawn with every step expanded, and no turn is open', async ($, on) => {
+  const { disk, state } = world(on)
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  await start($)
+  await specExample($, disk)
+  await call($, { op: 'add', parent: '4', titles: ['Tag'] })
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await pressRow($, '4')
+  expect(state.planCollapsed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+  expect(state.planTurn).not.toBe(null)
+  expect(state.planPressed).toEqual({ goal: 'ship-oauth-login', ids: ['4'] })
+
+  await $.session.end({ reason: 'clear', sessionId: ME, resume: { id: ME } })
+
+  expect(state.planCollapsed).toBe(null)
+  expect(state.planTurn).toBe(null)
+  expect(state.planPressed).toBe(null)
+  expect((await drawPane($)).rows).toContain('⌄ ○ 4 Ship')
 })
 
 test('a plan call draws its change lines; expanded, it draws the normal row', async ($, on) => {
@@ -369,6 +683,10 @@ test('every result shape a plan call returns draws once: in the row, not again i
   shapes.tree = await resultOf({ op: 'show' })
   shapes.openFirst = await resultOf({ op: 'show', goal: 'later' })
   shapes.noSteps = await resultOf({ op: 'show', goal: 'empty' })
+  // A parked step's mark is 2 code points (⏸ and U+FE0E): the row is still a tree row.
+  await resultOf({ op: 'add', parent: '1', titles: ['Draft'], focus: true })
+  await resultOf({ op: 'focus', id: '2' })
+  shapes.parked = await resultOf({ op: 'show' })
 
   expect(shapes).toEqual({
     none: 'No active goal and no open goals.',
@@ -378,6 +696,7 @@ test('every result shape a plan call returns draws once: in the row, not again i
     tree: '▶ 1 Spec\n○ 2 Build\n\nOther open goals:\n- empty: Empty, at no step\n- later: Later, at 2 B',
     openFirst: '○ 1 A\n▶ 2 B\n\nOther open goals:\n- empty: Empty, at no step\n- ship: Ship, at 1 Spec',
     noSteps: 'Empty: no steps.\n\nOther open goals:\n- later: Later, at 2 B\n- ship: Ship, at 1 Spec',
+    parked: '⏸\uFE0E 1 Spec\n  ⏸\uFE0E 1.1 Draft\n▶ 2 Build\n\nOther open goals:\n- empty: Empty, at no step\n- later: Later, at 2 B',
   })
   for (const output of Object.values(shapes)) {
     const row = (await drawCall($, { output })).texts.map(t => t.text)
@@ -679,7 +998,7 @@ test('after done ends the goal the pane keeps its tree with a dim done row, the 
   await call($, { op: 'goal', title: 'Ship', steps: [{ title: 'Spec' }, { title: 'Build' }] })
   await call($, { op: 'done', ids: ['1', '2'] })
 
-  const ended = ['Ship', 'done', '✔ 1 Spec', '✔ 2 Build']
+  const ended = ['Ship', 'done', '  ✔ 1 Spec', '  ✔ 2 Build']
   const { rows, texts } = await drawPane($)
   expect(rows).toEqual(ended)
   expect(texts.find(t => t.text === 'done')?.props.dimColor).toBe(true)
@@ -691,7 +1010,7 @@ test('after done ends the goal the pane keeps its tree with a dim done row, the 
   expect((await drawPane($)).rows).toEqual(ended)
 
   await call($, { op: 'goal', title: 'Next', steps: [{ title: 'Repro' }] })
-  expect((await drawPane($)).rows).toEqual(['Next', '▶ 1 Repro'])
+  expect((await drawPane($)).rows).toEqual(['Next', '  ▶ 1 Repro'])
 })
 
 test('after /clear the pane keeps the tree marked not active, the poll keeps it, and a switch makes it active again', async ($, on) => {
@@ -705,14 +1024,14 @@ test('after /clear the pane keeps the tree marked not active, the poll keeps it,
   const kept = [
     'Ship OAuth login',
     'not active',
-    '✔ 1 Spec',
-    '✔ 2 Design',
-    '▶ 3 Build',
-    '  ✔ 3.1 Provider config',
-    '  ▶ 3.2 Callback route',
-    '    ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
-    '  ✗ 3.3 ? Try implicit flow',
-    '○ 4 Ship',
+    '  ✔ 1 Spec',
+    '  ✔ 2 Design',
+    '⌄ ▶ 3 Build',
+    '    ✔ 3.1 Provider config',
+    '  ⌄ ▶ 3.2 Callback route',
+    '      ✔ 3.2.1 ⤷ Fix CORS on dev proxy',
+    '    ✗ 3.3 ? Try implicit flow',
+    '  ○ 4 Ship',
     ' ',
     '1 other goal parked',
   ]
@@ -726,7 +1045,7 @@ test('after /clear the pane keeps the tree marked not active, the poll keeps it,
   expect((await drawPane($)).rows).toEqual(kept)
 
   await call($, { op: 'goal', switch: 'ship-oauth-login' })
-  expect((await drawPane($)).rows.slice(0, 2)).toEqual(['Ship OAuth login', '✔ 1 Spec'])
+  expect((await drawPane($)).rows.slice(0, 2)).toEqual(['Ship OAuth login', '  ✔ 1 Spec'])
 })
 
 test('a new goal’s tree drawn a moment before it is active, with no goal kept, has no not-active row', async ($, on) => {
@@ -735,7 +1054,7 @@ test('a new goal’s tree drawn a moment before it is active, with no goal kept,
   const tree = newGoal('Fix flaky test', [{ title: 'Repro' }], ISO)
   on('state.get', ($, e, next) => (e.key === 'planTree' ? ({ value: { version: 1, value: tree } } as never) : next(e)))
 
-  expect((await drawPane($)).rows).toEqual(['Fix flaky test', '▶ 1 Repro'])
+  expect((await drawPane($)).rows).toEqual(['Fix flaky test', '  ▶ 1 Repro'])
 })
 
 test('the dim row under a kept goal says its file is missing or unreadable, and returns to normal when it reads again', async ($, on) => {
@@ -811,7 +1130,7 @@ test('widths count terminal cells: wide characters 2, marks and joiners 0, and a
   expect(width('👨‍👩‍👧')).toBe(2)
   expect(width('🇯🇵')).toBe(2)
   expect(width('❤️')).toBe(2)
-  expect(width('✔▶⏸')).toBe(3)
+  expect(width('✔▶⏸\uFE0E')).toBe(3)
 
   expect(cut('日本語日本語', 6)).toBe('日本…')
   expect(cut('日本語日本語', 5)).toBe('日本…')
@@ -831,7 +1150,7 @@ test('the pane and footer cut wide titles to their cells, and their Texts trunca
   const { rows, texts } = await drawPane($, 20)
   expect(rows.every(row => width(row) <= 20)).toBe(true)
   expect(rows[0]).toBe('日本語のタイトルを…')
-  expect(rows[1]).toBe('▶ 1 日本語のタイト…')
+  expect(rows[1]).toBe('  ▶ 1 日本語のタイ…')
   expect(texts.length).toBeGreaterThan(0)
   expect(texts.every(t => t.props.wrap === 'truncate-end')).toBe(true)
 
@@ -881,7 +1200,7 @@ test('a result block of an interrupted or unknown-shape call is the engine’s; 
   // An interrupt's notice has text, but not the change-lines shape.
   expect(await drawResult($, { output: "The user doesn't want to proceed with this tool use. The tool use was rejected." })).toEqual({ texts: [], isEngine: true })
   expect(await drawResult($, { output: [{ type: 'text', text: 'Interrupted by user' }] })).toEqual({ texts: [], isEngine: true })
-  for (const line of ['+ 3.2.2 Fix', '✔ 1 Spec', '✗ 3.3 x', '↗ 3 Build', '⏸ paused', '◇ new goal: Ship', '▶ 2 Next', 'moved 3.2 under 4', 'renamed 3 to Y']) {
+  for (const line of ['+ 3.2.2 Fix', '✔ 1 Spec', '✗ 3.3 x', '↗ 3 Build', '⏸\uFE0E paused', '◇ new goal: Ship', '▶ 2 Next', 'moved 3.2 under 4', 'renamed 3 to Y']) {
     expect(await drawResult($, { output: `${line}\n\nPath: none` })).toEqual({ texts: [], isEngine: false })
   }
   expect(await drawResult($, { output: [{ type: 'text', text: '✔ 1 Spec\n\nPath: none' }] })).toEqual({ texts: [], isEngine: false })
@@ -923,7 +1242,7 @@ updated: ${ISO}
 
   const { rows, texts } = await drawPane($)
 
-  expect(rows).toEqual(['Ship the APIs', '▶ 1 Survey the queue', '▶ 2 Fix the APIs', '  ▶ 2.1 Merge the 2 API fixes', '  ◐ 2.2 Archive ITEM-91', '  ○ 2.3 Close the epic'])
+  expect(rows).toEqual(['Ship the APIs', '  ▶ 1 Survey the queue', '⌄ ▶ 2 Fix the APIs', '    ▶ 2.1 Merge the 2 API fixes', '    ◐ 2.2 Archive ITEM-91', '    ○ 2.3 Close the epic'])
   const style = (text: string) => {
     const props = texts.find(t => t.text === text)?.props ?? {}
     return [props.color, props.bold]

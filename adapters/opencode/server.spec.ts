@@ -8,10 +8,13 @@ import type { Entry } from '../../core/backlog-queue.ts'
 import { MERGE_QUEUE_TOOL } from '../../core/merge-queue.ts'
 import { modesText } from '../../core/modes.ts'
 import { SUBAGENT } from '../../core/plan.ts'
+import { addSteps, newGoal, serializeGoal } from '../../core/plan-tree.ts'
 import { TOOLS } from '../../core/tools.ts'
 import plugin, { NAMES, pluginRoot, readSkills, sessionState, skillHeader } from './server.ts'
 
 type Json = Record<string, unknown>
+
+const NOW = '2026-11-15T12:00:00.000Z'
 
 type Tool = {
   name: string
@@ -24,7 +27,7 @@ type Tool = {
 // A stand-in for OpenCode's plugin context: it keeps what the plugin registers, and a session record per ID.
 // `emit` sends an event to the plugin's subscription; `question` is OpenCode's built-in question tool,
 // which answers `answer` unless its signal aborts first.
-async function fakeContext(sessionInfo: Record<string, { parentID?: string; time?: { busy?: number; idle?: number } }> = { s1: {} }) {
+async function fakeContext(sessionInfo: Record<string, { parentID?: string; time?: { busy?: number; idle?: number }; metadata?: Json }> = { s1: {} }) {
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'waffles-opencode-')))
   const sessions = new Map<string, { id: string; parentID?: string; metadata?: Json; time: { busy?: number; idle?: number }; location: { directory: string } }>()
   for (const [id, info] of Object.entries(sessionInfo)) sessions.set(id, { id, time: {}, ...info, location: { directory: root } })
@@ -41,6 +44,8 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string; time
     answer: '{"level": "low", "why": "a lookup"}',
     // The session's messages, as session.context gives them.
     messages: [] as Json[],
+    // The RPCs registered, by ID: their methods.
+    rpcs: {} as Record<string, Record<string, (input: unknown) => Promise<unknown>>>,
   }
   const question: Tool & { answer: Promise<{ content: string }> | null } = {
     name: 'question',
@@ -111,6 +116,12 @@ async function fakeContext(sessionInfo: Record<string, { parentID?: string; time
     },
     command: { transform: async (edit: (editor: Json) => void) => edit({ add: (command: never) => registered.commands.push(command) }) },
     permission: { hook: hook('permission') },
+    rpc: {
+      register: async (definition: { id: string }, handlers: Record<string, (input: unknown) => Promise<unknown>>) => {
+        registered.rpcs[definition.id] = handlers
+        return { dispose: async () => undefined, events: { emit: async () => undefined } }
+      },
+    },
     event: {
       subscribe: ({ signal }: { signal: AbortSignal }) => ({
         async *[Symbol.asyncIterator]() {
@@ -159,10 +170,12 @@ test('the session keeps its mode on its record, and the values a view draws from
   await state.set('planChanged', ['1'])
   // Another plugin's metadata stays, and only the kept values are written.
   assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid' } })
-  // The plan outline's tree is written for the terminal UI part, and not read back.
+  // The plan outline's tree is written for the terminal UI part, and not read back; its collapsed steps are read back.
   await state.set('planTree', null)
-  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planTree: null } })
+  await state.set('planCollapsed', { goal: 'g', ids: ['2'] })
+  assert.deepEqual(record.metadata, { other: 1, waffles: { mode: 'rapid', planCollapsed: { goal: 'g', ids: ['2'] }, planTree: null } })
   assert.equal(await sessionState(ctx as never, 's1').get('planTree'), null)
+  assert.deepEqual(await sessionState(ctx as never, 's1').get('planCollapsed'), { goal: 'g', ids: ['2'] })
   assert.deepEqual(await state.get('planChanged'), ['1'])
   // A reopened session reads its mode back from the record.
   assert.equal(await sessionState(ctx as never, 's1').get('mode'), 'rapid')
@@ -419,6 +432,101 @@ test("the core's sweep sees each child session, running while its last turn has 
   const steps = await treeWhen(sessions, all => all[0]?.agent === undefined)
   assert.equal(steps[0]?.state, 'review')
   assert.equal(steps[1]?.agent, 'working')
+  await cleanup()
+})
+
+test("a click on a parent step's row, through the server part's RPC, collapses and expands it in the session's metadata", async () => {
+  const { registered, sessions, cleanup } = await fakeContext({ s1: {}, child: { parentID: 's1' } })
+  const tool = registered.tools[0]!
+  await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+  const press = registered.rpcs['waffles.plan']!.press!
+
+  assert.deepEqual(await press({ sessionID: 's1', id: '2' }), {})
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
+  await press({ sessionID: 's1', id: '2' })
+  assert.equal(collapsed(), null)
+  // A subagent's session, an unknown session, and no press change nothing.
+  for (const input of [{ sessionID: 'child', id: '2' }, { sessionID: 'none', id: '2' }, { id: '2' }]) assert.deepEqual(await press(input), {})
+  assert.equal(collapsed(), null)
+  await cleanup()
+})
+
+test('a prompt typed during a running turn, or a skill command, ends no turn of the plan outline', async () => {
+  const { registered, sessions, emit, cleanup } = await fakeContext()
+  const tool = registered.tools[0]!
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+  await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
+  // Typed while the turn runs: it begins no turn.
+  await registered.hooks['session.prompt']!(prompt('s1', 'also this') as never)
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  // 2.1 was added this turn, so 2 stays expanded.
+  assert.equal(collapsed(), null)
+
+  // A skill named between turns begins no turn either: its turn's stop only expands, so the idle 2 stays.
+  await registered.hooks['session.prompt']!(prompt('s1', '@ask', ['ask']) as never)
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  assert.equal(collapsed(), null)
+  // A prompt typed between turns begins one: at its end the idle 2 collapses.
+  await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
+  await cleanup()
+})
+
+test('after a restart the collapsed steps are read back from the record, so a first click toggles what the panel shows', async () => {
+  // What the server part wrote before the restart: 2 collapsed.
+  const { root, registered, sessions, cleanup } = await fakeContext({ s1: { metadata: { waffles: { planCollapsed: { goal: 'ship-it', ids: ['2'] } } } } })
+  const goal = addSteps(newGoal('Ship it', [{ title: 'Build' }, { title: 'Test' }], NOW), '2', 'planned', ['Unit'], NOW).goal
+  await fs.mkdir(join(root, '.waffles', 'plan'), { recursive: true })
+  await fs.writeFile(join(root, '.waffles', 'plan', 'ship-it.md'), serializeGoal(goal))
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+
+  await registered.tools[0]!.execute({ op: 'goal', switch: 'ship-it' }, { sessionID: 's1' })
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
+  await registered.rpcs['waffles.plan']!.press!({ sessionID: 's1', id: '2' })
+  assert.equal(collapsed(), null)
+  await cleanup()
+})
+
+test('a click that is the first event of a session after a restart starts the core for it', async () => {
+  const { registered, entries, cleanup } = await fakeContext()
+  assert.equal(entries.get('s1')?.has('waffles-mode') ?? false, false)
+  assert.deepEqual(await registered.rpcs['waffles.plan']!.press!({ sessionID: 's1', id: '1' }), {})
+  assert.equal(entries.get('s1')?.has('waffles-mode'), true)
+  await cleanup()
+})
+
+test("at the main session's turn end the collapse rules run once, and the metadata holds what they collapsed", async () => {
+  const { registered, sessions, emit, cleanup } = await fakeContext()
+  const tool = registered.tools[0]!
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+  const until = async (ready: () => boolean) => {
+    for (let i = 0; i < 100 && !ready(); i++) await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  // Turn 1 starts the goal: every step is new, so nothing collapses.
+  await registered.hooks['session.prompt']!(prompt('s1', 'ship it') as never)
+  await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  assert.equal(collapsed(), null)
+  // Turn 2 leaves 2 idle, and its step was there when the turn began: 2 collapses at the turn's end.
+  await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
+  await tool.execute({ op: 'rename', id: '1', title: 'Build it' }, { sessionID: 's1' })
+  assert.equal(collapsed(), null)
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await until(() => collapsed() !== null)
+  assert.deepEqual(collapsed(), { goal: 'ship-it', ids: ['2'] })
   await cleanup()
 })
 

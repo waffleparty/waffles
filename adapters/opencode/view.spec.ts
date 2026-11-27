@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { addSteps, closeSteps, newGoal } from '../../core/plan-tree.ts'
-import { footerParts, noticeOf, outlineRows, PIECE_COLORS } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS, pressOf, pressOptions, toggleOf } from './view.ts'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 const goal = () => newGoal('Ship it', [{ title: 'Build', kind: 'planned' }, { title: 'Test', kind: 'planned' }], NOW)
@@ -36,17 +36,18 @@ test('the panel lists the goal and its steps, with the marks and colors Claude C
   const planTree = goal()
   const next = closeSteps(addSteps(planTree, '2', 'work', ['Fix'], NOW, { focus: false }).goal, ['1'], 'done', false, NOW).goal
   const rows = outlineRows({ waffles: { planTree: next } }, 40)
-  assert.deepEqual(textOf(rows), ['Ship it', '✔ 1 Build', '▶ 2 Test', '  ○ 2.1 ⤷ Fix'])
-  // The done mark is green, the current step cyan, an open step's mark amber.
-  assert.equal(rows[1]?.[0]?.color, 'success')
-  assert.equal(rows[2]?.[0]?.color, 'cyan')
+  assert.deepEqual(textOf(rows), ['Ship it', '  ✔ 1 Build', '⌄ ▶ 2 Test', '    ○ 2.1 ⤷ Fix'])
+  // The done mark is green, the current step cyan, an open step's mark amber; a parent's glyph is dim.
+  assert.equal(rows[1]?.[1]?.color, 'success')
+  assert.equal(rows[2]?.[0]?.isDim, true)
+  assert.equal(rows[2]?.[1]?.color, 'cyan')
   assert.equal(rows[3]?.[1]?.color, 'warning')
   for (const row of rows) for (const piece of row) if (piece.color) assert.ok(PIECE_COLORS[piece.color], piece.color)
 })
 
 test('a row is cut to the panel\'s width', () => {
   const planTree = newGoal('Ship it', [{ title: 'Build the whole thing from the ground up, twice', kind: 'planned' }], NOW)
-  assert.deepEqual(textOf(outlineRows({ waffles: { planTree } }, 20)), ['Ship it', '▶ 1 Build the whole…'])
+  assert.deepEqual(textOf(outlineRows({ waffles: { planTree } }, 20)), ['Ship it', '  ▶ 1 Build the who…'])
 })
 
 test("a command's line shows once, by the time it was left", () => {
@@ -59,4 +60,27 @@ test("a command's line shows once, by the time it was left", () => {
 
 test('a tree that is not a goal draws nothing', () => {
   assert.deepEqual(outlineRows({ waffles: { planTree: { title: 'x' } } }, 40), [])
+})
+
+test('the panel draws the collapsed steps the server part keeps, and a parent row names the step a click toggles', () => {
+  const planTree = addSteps(addSteps(goal(), '2', 'work', ['Fix', 'Lint'], NOW).goal, '1', 'planned', ['Parse'], NOW).goal
+  const rows = outlineRows({ waffles: { planTree, planCollapsed: { goal: 'ship-it', ids: ['2'] } } }, 40)
+  assert.deepEqual(textOf(rows), ['Ship it', '⌄ ▶ 1 Build', '    ○ 1.1 Parse', '› ○ 2 Test (2)'])
+  assert.deepEqual(rows.map(toggleOf), [undefined, '1', undefined, '2'])
+  // The current step's row stays cyan, for the panel's scroll to find.
+  assert.ok(rows.some(row => row.some(piece => piece.color === 'cyan')))
+  // Collapsed steps that are not a list of IDs are none.
+  for (const planCollapsed of [null, {}, { ids: 'x' }, { ids: [2] }]) {
+    assert.deepEqual(textOf(outlineRows({ waffles: { planTree, planCollapsed } }, 40)).at(-1), '    ○ 2.2 ⤷ Lint')
+  }
+})
+
+test('a press names its session and its step, or is no press', () => {
+  assert.deepEqual(pressOf({ sessionID: 's1', id: '2' }), { sessionID: 's1', id: '2' })
+  for (const input of [undefined, null, {}, { sessionID: 's1' }, { sessionID: 1, id: '2' }]) assert.equal(pressOf(input), null)
+})
+
+test("a press goes to the session's folder, and to the client's own where the folder is unknown", () => {
+  assert.deepEqual(pressOptions({ id: 's1', location: { directory: '/work/tree-2' } }), { location: { directory: '/work/tree-2' } })
+  for (const session of [undefined, null, {}, { location: {} }, { location: { directory: 3 } }]) assert.equal(pressOptions(session), undefined)
 })

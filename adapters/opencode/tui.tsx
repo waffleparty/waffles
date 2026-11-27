@@ -1,12 +1,12 @@
 // The waffles plugin's terminal UI part for OpenCode 2: the mode and the plan outline's current step in
-// the footer under the prompt, the plan outline in a session panel, and a command's line for the person
-// as a toast. It draws only what the server
+// the footer under the prompt, the plan outline in a session panel (a click on a parent step's row
+// collapses or expands it), and a command's line for the person as a toast. It draws only what the server
 // part keeps in the session's metadata (see view.ts), so it works with a remote server too. OpenCode
 // compiles this file; the type check and the tests cover view.ts.
 import { Plugin } from '@opencode/plugin/tui'
 import { createEffect, For, Show } from 'solid-js'
 
-import { footerParts, noticeOf, outlineRows, PIECE_COLORS } from './view.ts'
+import { footerParts, noticeOf, outlineRows, PIECE_COLORS, PLAN_RPC, pressOptions, toggleOf } from './view.ts'
 
 // The panel's name: OpenCode shares one panel between plugins, and each draws under its own name.
 const PANEL = 'waffles.plan'
@@ -43,6 +43,16 @@ export default Plugin.define({
       bold: piece.isBold === true,
       italic: piece.isItalic === true,
     })
+
+    // A click on a parent step's row collapses or expands it: the server part changes the session's
+    // collapsed steps, and the metadata it writes draws the panel again. The call goes to the session's
+    // folder, whose server part holds the session.
+    const plan = context.client.rpc(PLAN_RPC)
+    const press = (sessionID, row) => {
+      const id = toggleOf(row)
+      if (!sessionID || id === undefined) return
+      void plan.press({ sessionID, id }, pressOptions(context.data.session.get(sessionID))).catch(() => undefined)
+    }
 
     const panel = context.ui.slot({
       append: 'session.panel',
@@ -81,7 +91,7 @@ export default Plugin.define({
                 <scrollbox ref={(el) => (box = el)} flexGrow={1} minHeight={0} focused={input.focused}>
                   <For each={rows()}>
                     {(row) => (
-                      <text wrapMode="none">
+                      <text wrapMode="none" onMouseUp={() => press(input.sessionID, row)}>
                         <For each={row}>{(piece) => <span style={styleOf(piece)}>{piece.text}</span>}</For>
                       </text>
                     )}

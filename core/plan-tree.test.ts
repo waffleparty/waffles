@@ -290,9 +290,9 @@ test('add with focus makes the first new step current in the same call, parking 
   expect(away.changes.map(describe)).toEqual([
     '+ 4.1 Deploy under 4 → current',
     '+ 4.2 Announce under 4',
-    '⏸ 3 Build',
-    '⏸ 3.2 Callback route',
-    '⏸ 3.2.1 Fix CORS on dev proxy',
+    '⏸\uFE0E 3 Build',
+    '⏸\uFE0E 3.2 Callback route',
+    '⏸\uFE0E 3.2.1 Fix CORS on dev proxy',
   ])
   // Without focus the current step stays.
   expect(addSteps(tree(), '4', 'planned', ['Deploy'], T).goal.current).toBe('3.2.1')
@@ -358,9 +358,9 @@ test('rule 4: moving focus parks started steps and leaves never-started steps op
   for (const id of ['3', '3.2', '3.2.1']) expect(at(goal, id)).toMatchObject({ state: 'parked', parkedAt: T })
   expect(at(goal, '3.3').state).toBe('open')
   expect(changes.map(describe)).toEqual([
-    '⏸ 3 Build',
-    '⏸ 3.2 Callback route',
-    '⏸ 3.2.1 Fix CORS on dev proxy',
+    '⏸\uFE0E 3 Build',
+    '⏸\uFE0E 3.2 Callback route',
+    '⏸\uFE0E 3.2.1 Fix CORS on dev proxy',
     '▶ 4 Ship',
   ])
 })
@@ -568,7 +568,7 @@ test('moving the current subtree parks the old ancestors it left, and rule 5 ret
   expect(at(goal, '3')).toMatchObject({ state: 'parked', parkedAt: T })
   expect(at(goal, '3.2')).toMatchObject({ state: 'parked', parkedAt: T })
   expect(at(goal, '4')).toMatchObject({ state: 'open' })
-  expect(changes.map(describe)).toEqual(['moved 3.2.1 → 4.1', '⏸ 3 Build', '⏸ 3.2 Callback route'])
+  expect(changes.map(describe)).toEqual(['moved 3.2.1 → 4.1', '⏸\uFE0E 3 Build', '⏸\uFE0E 3.2 Callback route'])
 
   const back = closeSteps(goal, ['4'], 'done', true, LATER)
   expect(back.goal.current).toBe('3.2')
@@ -586,7 +586,7 @@ test('moving the current subtree to the top level parks its old parent', async (
   const { goal, changes } = moveStep(tree(), '3.2', null, T)
 
   expect(at(goal, '3')).toMatchObject({ state: 'parked', parkedAt: T })
-  expect(changes.map(describe)).toEqual(['moved 3.2 → 6', '⏸ 3 Build'])
+  expect(changes.map(describe)).toEqual(['moved 3.2 → 6', '⏸\uFE0E 3 Build'])
   expect(goal.current).toBe('6.1')
 })
 
