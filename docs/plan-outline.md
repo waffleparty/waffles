@@ -130,7 +130,7 @@ A turn that Claude starts with no prompt of yours (after a background subagent f
 
 Work in progress is always visible: the main thread's current step, a step a background subagent works on, and a step waiting for review. No step above them stays collapsed, and work that starts during a turn shows at once. Steps collapse only at the end of a turn, or by a click.
 
-A click on a parent step's row collapses or expands it at once. In Claude Code's pane, Tab to the row and Enter does the same while the pane has the keyboard. The click holds through the end of the turn it is made in (made between turns, through the end of the next turn). At the end of the turn after that, the rules decide again: a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
+A click on a parent step's row collapses or expands it at once. In Claude Code's pane, Tab to the row and Enter does the same while the pane has the keyboard. A click made during a turn holds through that turn's end; at the end of the next turn, the rules decide again. A click made between turns holds until the end of the next turn, where the rules decide again. When they do, a step that no rule changes keeps the state you gave it. A click that would hide work in progress does nothing. Claude Code's pane and the OpenCode panel both take clicks.
 
 The collapsed steps are view state: each session keeps its own, and no goal file holds them. `/clear` and `/resume` start the new conversation with every step expanded. A step that is not known is expanded. A moved step keeps its state under its new ID. Another goal starts with every step expanded.
 

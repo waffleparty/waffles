@@ -801,9 +801,9 @@ export function stopPlan($: Host): void {
 
 /**
  * A press on a parent step's row in a view: the step collapses or expands now, unless that would hide
- * work in progress. It holds through the end of the turn it is made in (between turns, the next one);
- * at the end of the turn after, the automatic rules decide again. Queued behind a poll or a call, so a
- * redraw never writes over the press.
+ * work in progress. Made during a turn, it holds through that turn's end, and the automatic rules decide
+ * again at the end of the next turn. Made between turns, it holds until the end of the next turn, where
+ * the rules decide again. Queued behind a poll or a call, so a redraw never writes over the press.
  */
 export async function pressPlan($: Host, id: string): Promise<void> {
   await serial($, async () => {
