@@ -450,6 +450,24 @@ test("a click on a parent step's row, through the server part's RPC, collapses a
   await cleanup()
 })
 
+test('a prompt typed during a running turn, or a skill command, ends no turn of the plan outline', async () => {
+  const { registered, sessions, emit, cleanup } = await fakeContext()
+  const tool = registered.tools[0]!
+  const collapsed = () => (sessions.get('s1')?.metadata?.waffles as Json | undefined)?.planCollapsed ?? null
+  await tool.execute({ op: 'goal', title: 'Ship it', steps: [{ title: 'Build' }, { title: 'Test' }] }, { sessionID: 's1' })
+  await registered.hooks['session.prompt']!(prompt('s1', 'go on') as never)
+  await emit({ type: 'session.execution.started', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'add', parent: '2', titles: ['Unit'] }, { sessionID: 's1' })
+  // Typed while the turn runs, and a skill named between turns: neither begins a turn.
+  await registered.hooks['session.prompt']!(prompt('s1', 'also this') as never)
+  await registered.hooks['session.prompt']!(prompt('s1', '@ask', ['ask']) as never)
+  await emit({ type: 'session.execution.succeeded', data: { sessionID: 's1' } })
+  await tool.execute({ op: 'show' }, { sessionID: 's1' })
+  // 2.1 was added this turn, so 2 stays expanded.
+  assert.equal(collapsed(), null)
+  await cleanup()
+})
+
 test('a click that is the first event of a session after a restart starts the core for it', async () => {
   const { registered, entries, cleanup } = await fakeContext()
   assert.equal(entries.get('s1')?.has('waffles-mode') ?? false, false)

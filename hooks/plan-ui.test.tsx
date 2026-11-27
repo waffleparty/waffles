@@ -462,6 +462,24 @@ test('a press holds until the next turn’s end, where the rules decide again; a
   expect(await row4()).toBe('› ○ 4 Ship (1)')
 })
 
+test('a prompt typed into a running turn ends no turn: steps added before it count as new at the stop', async ($, on) => {
+  const { disk } = world(on)
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  await specExample($, disk)
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Go on' })
+  await call($, { op: 'add', parent: '4', titles: ['Tag', 'Release'] })
+
+  // Delivered into the running turn: it has the turn's ID.
+  await $.prompt.submit({ origin: { kind: 'composer' }, wait: false, text: 'Also this', turnId: 't1' } as never)
+  await call($, { op: 'show' })
+  await $.turn.complete(FINISHED)
+  await call($, { op: 'show' })
+
+  // 4's steps were added this turn, so 4 stays expanded.
+  expect((await drawPane($)).rows.slice(-5, -2)).toEqual(['⌄ ○ 4 Ship', '    ○ 4.1 Tag', '    ○ 4.2 Release'])
+})
+
 test('after /clear the kept tree is drawn with every step expanded, and no turn is open', async ($, on) => {
   const { disk, state } = world(on)
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))

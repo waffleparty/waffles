@@ -106,7 +106,8 @@ async function prompt($: Host, text: string): Promise<NeutralAnswer> {
   // Read before the prompt starts or ends a run, so the model is told of the change.
   const before = await wafflesMode($)
   await submitUnattended($, typed)
-  submitPlan($)
+  // These platforms deliver no prompt into a running turn: a prompt that is no command begins a turn.
+  submitPlan($, typed.command === undefined)
   const line = await submitMode($, typed, before)
   // The poll waits behind the reset `submitPlan` queued, so both are done before the process ends.
   await tickPlan($)

@@ -29,10 +29,11 @@ export type PlanShapes = [Holds<Equal<Goal, PlanGoal>>, Holds<Equal<Step, PlanSt
 
 // The module's one prompt.submit hook calls this. Only a prompt the person typed clears the
 // highlights: a notification, a trigger or a slash command (/waffles:plan opens the pane that shows them) leaves them.
+// A prompt delivered into a running turn (it has the turn's ID) begins no turn of the plan outline's.
 export function submitPlan($: EngineInterface, e: PromptSubmitInput): void {
   if (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') return
   if (e.command || e.isMeta) return
-  submit(hostOf($))
+  submit(hostOf($), !e.turnId)
 }
 
 // The module's one session.end hook calls this. After /clear the process goes on under a new ID with

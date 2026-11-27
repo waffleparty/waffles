@@ -770,14 +770,16 @@ export async function activeGoal($: Host): Promise<string | null> {
 
 /**
  * The person typed a prompt. The highlights mark what changed since they last typed, so it clears
- * them; an adapter leaves out a notification, a trigger and a slash command. A new turn begins: the turn
- * before ends here if its stop did not end it, and the tree drawn now is kept for the rules at this
- * turn's end. The work waits its turn behind a poll or a call, so it is not awaited: the prompt never
- * waits on the plan outline.
+ * them; an adapter leaves out a notification, a trigger and a slash command. With `isTurn`, a prompt
+ * typed between turns and no command, a new turn begins: the turn before ends here if its stop did not
+ * end it, and the tree drawn now is kept for the rules at this turn's end. A prompt delivered into a
+ * running turn begins none, so the rules never run in the middle of one. The work waits its turn behind
+ * a poll or a call, so it is not awaited: the prompt never waits on the plan outline.
  */
-export function submitPlan($: Host): void {
+export function submitPlan($: Host, isTurn: boolean): void {
   void serial($, async () => {
     if ((await $.state.get('planChanged')).length) await $.state.set('planChanged', [])
+    if (!isTurn) return
     await finishTurn($)
     await $.state.set('planTurn', { goal: await drawnSlug($), tree: await $.state.get('planTree') })
   }).catch(() => undefined)

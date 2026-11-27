@@ -411,7 +411,8 @@ const plugin: Plugin.Plugin = {
       const before = await wafflesMode($)
       await submitUnattended($, typed)
       effort.submit(event.sessionID, typed)
-      submitPlan($)
+      // Only a prompt typed between turns, and no command, begins a turn of the plan outline's.
+      submitPlan($, typed.isTyped && command === undefined)
       // The line that states backlog mode beside a prompt is not added here: the mode block always holds the current mode.
       await submitMode($, typed, before)
     })
